@@ -1,2 +1,204 @@
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
 @import "tailwindcss";
 @import "tw-animate-css";
+
+/* ------------------------------------------------------------------ *
+ * Armin design tokens — see DESIGN.md ("The Study Notebook").
+ * Warmth lives in clay + ink; the page stays cool-neutral paper.
+ * ------------------------------------------------------------------ */
+@theme {
+  /* Brand */
+  --color-clay: oklch(0.52 0.13 47);
+  --color-clay-deep: oklch(0.46 0.135 46);
+  --color-clay-tint: oklch(0.95 0.03 55);
+
+  /* Accent */
+  --color-petrol: oklch(0.4 0.09 220);
+  --color-petrol-deep: oklch(0.34 0.085 220);
+  --color-petrol-tint: oklch(0.95 0.025 220);
+
+  /* Neutrals */
+  --color-bg: oklch(0.985 0.002 250);
+  --color-surface: oklch(1 0 0);
+  --color-surface-sunken: oklch(0.965 0.003 250);
+  --color-border: oklch(0.92 0.003 250);
+  --color-border-strong: oklch(0.87 0.004 250);
+  --color-ink: oklch(0.26 0.008 60);
+  --color-muted: oklch(0.48 0.006 60);
+
+  /* Study semantics — ratings (solid, white text) */
+  --color-again: oklch(0.55 0.17 27);
+  --color-again-deep: oklch(0.49 0.175 27);
+  --color-hard: oklch(0.62 0.14 70);
+  --color-hard-deep: oklch(0.56 0.14 68);
+  --color-good: oklch(0.56 0.13 150);
+  --color-good-deep: oklch(0.5 0.13 150);
+  --color-easy: oklch(0.55 0.13 245);
+  --color-easy-deep: oklch(0.49 0.13 245);
+
+  /* Card states — soft (pale bg + dark same-hue text) */
+  --color-new: oklch(0.42 0.1 245);
+  --color-new-bg: oklch(0.95 0.03 245);
+  --color-learning: oklch(0.47 0.1 70);
+  --color-learning-bg: oklch(0.95 0.045 78);
+  --color-review: oklch(0.42 0.1 150);
+  --color-review-bg: oklch(0.95 0.04 150);
+  --color-relearning: oklch(0.47 0.14 35);
+  --color-relearning-bg: oklch(0.95 0.045 40);
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Type */
+  --font-sans:
+    "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-mono:
+    "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular,
+    Menlo, monospace;
+
+  /* Elevation — shadows only on floating elements */
+  --shadow-lift:
+    0 1px 2px oklch(0.26 0.008 60 / 0.05), 0 1px 3px oklch(0.26 0.008 60 / 0.06);
+  --shadow-overlay: 0 12px 40px -8px oklch(0.26 0.008 60 / 0.22);
+
+  /* Motion */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--color-clay-tint);
+    color: var(--color-clay-deep);
+  }
+
+  /* Quiet, paper-calm scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--color-border-strong);
+    border: 3px solid var(--color-bg);
+    border-radius: 9999px;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Motion. Every animation has a reduced-motion fallback below.
+ * ------------------------------------------------------------------ */
+@layer utilities {
+  @keyframes a-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes a-rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes a-pop {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  @keyframes a-flip-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes a-shimmer {
+    to {
+      background-position-x: -200%;
+    }
+  }
+
+  .animate-fade-in {
+    animation: a-fade-in 0.2s var(--ease-out-quart) both;
+  }
+  .animate-rise {
+    animation: a-rise 0.32s var(--ease-out-quart) both;
+  }
+  .animate-pop {
+    animation: a-pop 0.2s var(--ease-out-quart) both;
+  }
+  .animate-flip-in {
+    animation: a-flip-in 0.28s var(--ease-out-quart) both;
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      100deg,
+      var(--color-surface-sunken) 30%,
+      var(--color-border) 50%,
+      var(--color-surface-sunken) 70%
+    );
+    background-size: 200% 100%;
+    animation: a-shimmer 1.4s ease-in-out infinite;
+  }
+
+  .titlebar-drag {
+    -webkit-app-region: drag;
+  }
+  .titlebar-no-drag {
+    -webkit-app-region: no-drag;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .skeleton {
+    animation: none;
+    background: var(--color-surface-sunken);
+  }
+}

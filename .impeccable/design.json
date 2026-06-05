@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-04T00:00:00.000Z",
+  "title": "Design System: Armin",
+  "extensions": {
+    "colorMeta": {
+      "clay": {
+        "role": "primary",
+        "displayName": "Clay",
+        "canonical": "oklch(0.52 0.13 47)",
+        "tonalRamp": [
+          "oklch(0.20 0.06 47)",
+          "oklch(0.30 0.09 47)",
+          "oklch(0.40 0.115 47)",
+          "oklch(0.46 0.135 46)",
+          "oklch(0.52 0.13 47)",
+          "oklch(0.66 0.11 50)",
+          "oklch(0.82 0.06 53)",
+          "oklch(0.95 0.03 55)"
+        ]
+      },
+      "petrol": {
+        "role": "secondary",
+        "displayName": "Petrol",
+        "canonical": "oklch(0.40 0.09 220)",
+        "tonalRamp": [
+          "oklch(0.18 0.05 220)",
+          "oklch(0.28 0.07 220)",
+          "oklch(0.40 0.09 220)",
+          "oklch(0.50 0.085 220)",
+          "oklch(0.62 0.07 220)",
+          "oklch(0.74 0.05 220)",
+          "oklch(0.86 0.035 220)",
+          "oklch(0.95 0.025 220)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.26 0.008 60)",
+        "tonalRamp": [
+          "oklch(0.26 0.008 60)",
+          "oklch(0.36 0.007 60)",
+          "oklch(0.48 0.006 60)",
+          "oklch(0.60 0.005 60)",
+          "oklch(0.72 0.004 60)",
+          "oklch(0.87 0.004 250)",
+          "oklch(0.92 0.003 250)",
+          "oklch(0.985 0.002 250)"
+        ]
+      },
+      "good": {
+        "role": "tertiary",
+        "displayName": "Good Green",
+        "canonical": "oklch(0.56 0.13 150)",
+        "tonalRamp": [
+          "oklch(0.22 0.06 150)",
+          "oklch(0.34 0.09 150)",
+          "oklch(0.43 0.10 150)",
+          "oklch(0.56 0.13 150)",
+          "oklch(0.68 0.11 150)",
+          "oklch(0.80 0.07 150)",
+          "oklch(0.90 0.05 150)",
+          "oklch(0.95 0.04 150)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page titles only (Decks, deck name)." },
+      "title": { "displayName": "Title", "purpose": "The card front in review, the focal prompt." },
+      "body-lg": { "displayName": "Body Large", "purpose": "The card back answer and longer reading." },
+      "label": { "displayName": "Label", "purpose": "State chips, field labels, meta, stat counts. Sentence case." },
+      "mono": { "displayName": "Mono", "purpose": "Code on cards, keyboard hints, interval previews, card IDs." }
+    },
+    "shadows": [
+      { "name": "lift", "value": "0 1px 2px oklch(0.26 0.008 60 / 0.05), 0 1px 3px oklch(0.26 0.008 60 / 0.06)", "purpose": "The single resting elevation, reserved for the review card." },
+      { "name": "overlay", "value": "0 12px 40px -8px oklch(0.26 0.008 60 / 0.22)", "purpose": "Dialogs and popovers. Soft, warm-tinted, never a hard black drop." }
+    ],
+    "motion": [
+      { "name": "ease-out-quart", "value": "cubic-bezier(0.25, 1, 0.5, 1)", "purpose": "Default easing for state transitions and reveals." },
+      { "name": "duration-fast", "value": "150ms", "purpose": "Color/hover state changes." },
+      { "name": "duration-base", "value": "200ms", "purpose": "Card flip, dialog enter, focus ring." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Brand primary action: clay fill, white text.",
+      "html": "<button class=\"ds-btn-primary\">Review</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border: none; border-radius: 8px; background: oklch(0.52 0.13 47); color: #fff; font: 500 0.875rem/1 Inter, system-ui, sans-serif; cursor: pointer; transition: background 150ms cubic-bezier(0.25,1,0.5,1); } .ds-btn-primary:hover { background: oklch(0.46 0.135 46); } .ds-btn-primary:focus-visible { outline: 2px solid oklch(0.40 0.09 220); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; pointer-events: none; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action: white surface, strong border, ink text.",
+      "html": "<button class=\"ds-btn-outline\">Open</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border: 1px solid oklch(0.87 0.004 250); border-radius: 8px; background: #fff; color: oklch(0.26 0.008 60); font: 500 0.875rem/1 Inter, system-ui, sans-serif; cursor: pointer; transition: background 150ms ease; } .ds-btn-outline:hover { background: oklch(0.965 0.003 250); } .ds-btn-outline:focus-visible { outline: 2px solid oklch(0.40 0.09 220); outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Icon Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-emphasis and icon actions (edit, delete).",
+      "html": "<button class=\"ds-btn-ghost\" aria-label=\"Edit card\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 20h9\"/><path d=\"M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z\"/></svg></button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: none; border-radius: 8px; background: transparent; color: oklch(0.26 0.008 60); cursor: pointer; transition: background 150ms ease; } .ds-btn-ghost:hover { background: oklch(0.965 0.003 250); } .ds-btn-ghost:focus-visible { outline: 2px solid oklch(0.40 0.09 220); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Single-line field; clay focus border + tint ring.",
+      "html": "<input class=\"ds-input\" placeholder=\"Deck name\" />",
+      "css": ".ds-input { width: 100%; height: 36px; padding: 0 12px; border: 1px solid oklch(0.87 0.004 250); border-radius: 8px; background: #fff; color: oklch(0.26 0.008 60); font: 400 0.875rem/1 Inter, system-ui, sans-serif; transition: border-color 150ms ease, box-shadow 150ms ease; } .ds-input::placeholder { color: oklch(0.48 0.006 60); } .ds-input:focus-visible { outline: none; border-color: oklch(0.52 0.13 47); box-shadow: 0 0 0 2px oklch(0.95 0.03 55); }"
+    },
+    {
+      "name": "State Chip",
+      "kind": "chip",
+      "refersTo": "state-chip",
+      "description": "Soft labelled card-state tag (New / Learning / Review / Relearning). Color always paired with text.",
+      "html": "<span class=\"ds-chip-review\">Review</span>",
+      "css": ".ds-chip-review { display: inline-block; padding: 2px 8px; border-radius: 6px; background: oklch(0.95 0.04 150); color: oklch(0.43 0.10 150); font: 500 0.75rem/1.4 Inter, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Rating Button (Good)",
+      "kind": "custom",
+      "refersTo": "rating-grid",
+      "description": "One cell of the FSRS rating grid. Filled semantic color, white text, mono interval sub-label. Keys 1-4.",
+      "html": "<button class=\"ds-rating-good\"><span>Good</span><span class=\"ds-rating-interval\">4 days</span></button>",
+      "css": ".ds-rating-good { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 12px; border: none; border-radius: 8px; background: oklch(0.56 0.13 150); color: #fff; font: 500 0.875rem/1.2 Inter, system-ui, sans-serif; cursor: pointer; transition: background 150ms ease; } .ds-rating-good:hover { background: oklch(0.50 0.13 150); } .ds-rating-good:focus-visible { outline: 2px solid oklch(0.26 0.008 60); outline-offset: 2px; } .ds-rating-interval { font: 400 0.75rem/1 JetBrains Mono, ui-monospace, monospace; opacity: 0.85; }"
+    },
+    {
+      "name": "Deck Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat white card, hairline border, no resting shadow.",
+      "html": "<div class=\"ds-deck-card\"><a class=\"ds-deck-title\" href=\"#\">JavaScript Fundamentals</a><p class=\"ds-deck-desc\">Core language before the frameworks.</p><div class=\"ds-deck-meta\"><span>24 cards</span><span class=\"ds-chip-review\">8 due</span></div></div>",
+      "css": ".ds-deck-card { display: flex; flex-direction: column; gap: 4px; padding: 20px; border: 1px solid oklch(0.92 0.003 250); border-radius: 12px; background: #fff; transition: border-color 150ms ease; } .ds-deck-card:hover { border-color: oklch(0.87 0.004 250); } .ds-deck-title { color: oklch(0.26 0.008 60); font: 600 0.875rem/1.3 Inter, system-ui, sans-serif; text-decoration: none; } .ds-deck-title:hover { text-decoration: underline; } .ds-deck-desc { margin: 0; color: oklch(0.48 0.006 60); font: 400 0.875rem/1.5 Inter, system-ui, sans-serif; } .ds-deck-meta { margin-top: 12px; display: flex; align-items: center; gap: 12px; color: oklch(0.48 0.006 60); font: 500 0.75rem/1.4 Inter, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Review Card",
+      "kind": "card",
+      "refersTo": "review-card",
+      "description": "The focal study surface. 16px radius, generous padding, the only surface granted the Lift shadow.",
+      "html": "<div class=\"ds-review-card\"><p class=\"ds-review-front\">What does the FSRS algorithm schedule?</p><div class=\"ds-review-divider\"></div><p class=\"ds-review-back\">The next review date for each card, based on recall performance.</p></div>",
+      "css": ".ds-review-card { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 260px; padding: 40px; border: 1px solid oklch(0.92 0.003 250); border-radius: 16px; background: #fff; text-align: center; box-shadow: 0 1px 2px oklch(0.26 0.008 60 / 0.05), 0 1px 3px oklch(0.26 0.008 60 / 0.06); } .ds-review-front { margin: 0; color: oklch(0.26 0.008 60); font: 500 1.25rem/1.35 Inter, system-ui, sans-serif; } .ds-review-divider { width: 96px; height: 1px; margin: 24px 0; background: oklch(0.92 0.003 250); } .ds-review-back { margin: 0; color: oklch(0.40 0.006 60); font: 400 1.125rem/1.55 Inter, system-ui, sans-serif; }"
+    },
+    {
+      "name": "Top Navigation",
+      "kind": "nav",
+      "refersTo": "nav",
+      "description": "Sticky translucent top bar with backdrop blur (the one sanctioned glass moment), hairline bottom border, clay brand mark.",
+      "html": "<header class=\"ds-nav\"><a class=\"ds-nav-brand\" href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 5a3 3 0 1 0-5.997.142 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z\"/><path d=\"M12 5a3 3 0 1 1 5.997.142 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z\"/></svg><span>Armin</span></a><a class=\"ds-nav-link\" href=\"#\">Settings</a></header>",
+      "css": ".ds-nav { position: sticky; top: 0; display: flex; align-items: center; justify-content: space-between; height: 56px; padding: 0 24px; border-bottom: 1px solid oklch(0.92 0.003 250); background: oklch(1 0 0 / 0.8); backdrop-filter: blur(8px); } .ds-nav-brand { display: inline-flex; align-items: center; gap: 8px; color: oklch(0.26 0.008 60); text-decoration: none; font: 600 0.9375rem/1 Inter, system-ui, sans-serif; } .ds-nav-brand svg { color: oklch(0.52 0.13 47); } .ds-nav-link { padding: 4px 8px; border-radius: 8px; color: oklch(0.48 0.006 60); text-decoration: none; font: 400 0.875rem/1 Inter, system-ui, sans-serif; transition: background 150ms ease, color 150ms ease; } .ds-nav-link:hover { background: oklch(0.965 0.003 250); color: oklch(0.26 0.008 60); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Study Notebook",
+    "overview": "Armin should feel like a well-kept personal notebook, not a productivity dashboard. Paper-calm surfaces, ink-clear type, and a structure you can trust at a glance: what's due, what's learned, what's locked behind a prerequisite. The interface is a quiet place to do focused work over weeks and months, so it stays out of the way and lets the card being learned be the loudest thing on screen. Warmth is carried by a single clay accent and the typography, never by a tinted, busy background. The system rejects the generic SaaS dashboard, Anki-style clutter, the flashy marketing site, and anything gamified or childish. One warm clay carries identity and primary action; one deep petrol carries links and the prerequisite graph; the four FSRS rating colors are a reserved semantic vocabulary the brand never borrows from.",
+    "keyCharacteristics": [
+      "Paper-calm light surface; warmth comes from the clay accent and ink, not the background.",
+      "One brand color (clay) + one accent (petrol); rating and state colors are semantic, not decorative.",
+      "Flat by default: tonal layering and hairline borders, shadows only on floating elements.",
+      "Single sans for the whole UI; mono reserved for code on cards and keyboard hints.",
+      "Keyboard-first, so focus states are always visible and never subtle."
+    ],
+    "rules": [
+      { "name": "The Reserved-Semantics Rule", "body": "Red, amber, green, and blue belong to review meaning (Again / Hard / Good / Easy and the matching states). The brand never uses them decoratively, and the brand color is never one of them. If a UI element needs an accent, it is clay or petrol, never a rating hue.", "section": "colors" },
+      { "name": "The Carried-Warmth Rule", "body": "Warmth lives in clay and ink, never in the background. The page is cool-neutral paper. Tinting the bg warm to feel cozy while the primary is also warm is forbidden.", "section": "colors" },
+      { "name": "The One-Family Rule", "body": "Inter carries every label, button, heading, and paragraph. Reach for mono only when the content is code or a key. A second display typeface is prohibited.", "section": "typography" },
+      { "name": "The Sentence-Case Rule", "body": "Labels and chips are sentence case. No all-caps tracked eyebrows above sections.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest; their edge is a hairline border on a tonal step. A shadow is permission to float, granted only to the review card (Lift) and to overlays (Overlay).", "section": "elevation" }
+    ],
+    "dos": [
+      "Do make the brand clay (oklch(0.52 0.13 47)) and the accent petrol (oklch(0.40 0.09 220)) the only non-semantic colors; let everything else be neutral.",
+      "Do keep review meaning in the reserved red/amber/green/blue scale, and always pair a state color with its text label.",
+      "Do keep surfaces flat with hairline borders; grant a shadow only to the review card and to overlays.",
+      "Do keep focus rings boldly visible (2px petrol, 2px offset). This is a keyboard-first study tool.",
+      "Do size type on the fixed rem scale and let weight carry hierarchy with one sans family.",
+      "Do hold body, label, and placeholder text to at least 4.5:1; lean ink, not light gray."
+    ],
+    "donts": [
+      "Don't build a generic SaaS dashboard: no blue gradients, no hero-metric panels, no decorative card grids of icon + heading + text.",
+      "Don't get cluttered like Anki: keep depth and options behind a calm first screen.",
+      "Don't make it a flashy marketing site: no decorative motion, no gradient-as-decoration.",
+      "Don't go gamified or childish: no mascots, confetti storms, or loud badges.",
+      "Don't use the brand clay as a rating color, or a rating color as decoration.",
+      "Don't tint the page background warm to feel cozy. Warmth is clay and ink; the page stays cool-neutral paper.",
+      "Don't use border-left/border-right greater than 1px as a colored stripe, gradient text, or decorative glassmorphism. The nav backdrop-blur is the single sanctioned glass use.",
+      "Don't add all-caps tracked eyebrows above sections, or numbered 01 / 02 section markers."
+    ]
+  }
+}
