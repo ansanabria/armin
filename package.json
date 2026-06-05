@@ -10,7 +10,10 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "eslint --ext .ts,.tsx ."
+    "lint": "eslint --ext .ts,.tsx .",
+    "format": "prettier --write .",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
   },
   "keywords": [],
   "author": {
@@ -35,7 +38,8 @@
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
     "@vitejs/plugin-react": "^5.2.0",
-    "electron": "42.3.2",
+    "drizzle-kit": "^0.31.10",
+    "electron": "^42.3.3",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
     "tailwindcss": "^4.3.0",
@@ -43,17 +47,30 @@
     "vite": "^5.4.21"
   },
   "dependencies": {
+    "@base-ui/react": "^1.5.0",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@libsql/client": "^0.17.3",
+    "@tanstack/react-query": "^5.101.0",
+    "@tanstack/react-router": "^1.170.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "drizzle-orm": "^0.45.2",
     "electron-squirrel-startup": "^1.0.1",
     "lucide-react": "^1.17.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "tailwind-merge": "^3.6.0",
-    "tw-animate-css": "^1.4.0"
+    "ts-fsrs": "^5.4.1",
+    "tw-animate-css": "^1.4.0",
+    "zod": "^4.4.3"
   },
   "allowScripts": {
     "electron-winstaller@5.4.0": true,
-    "esbuild@0.21.5": true
+    "esbuild@0.21.5": true,
+    "better-sqlite3@12.10.0": true,
+    "esbuild@0.18.20": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.0": true
   }
 }
