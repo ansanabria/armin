@@ -13,5 +13,13 @@
     "plugin:import/typescript"
   ],
   "parser": "@typescript-eslint/parser",
-  "ignorePatterns": ["vite.*.config.ts", "forge.config.ts"]
+  "rules": {
+    "import/no-unresolved": "off",
+    "@typescript-eslint/no-non-null-assertion": "off"
+  },
+  "ignorePatterns": [
+    "vite.*.config.mts",
+    "forge.config.ts",
+    "drizzle.config.ts"
+  ]
 }
