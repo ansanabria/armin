@@ -6,6 +6,12 @@ const invoke = (channel: string, payload?: unknown) =>
   ipcRenderer.invoke(channel, payload);
 
 const api = {
+  profiles: {
+    list: () => invoke("profiles:list"),
+    create: (name: string) => invoke("profiles:create", { name }),
+    open: (id: string, name?: string) => invoke("profiles:open", { id, name }),
+    showPicker: () => invoke("profiles:showPicker"),
+  },
   decks: {
     list: () => invoke("decks:list"),
     get: (id: string) => invoke("decks:get", { id }),

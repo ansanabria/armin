@@ -3,7 +3,7 @@ import { Minus, Square, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const control =
-  "flex h-14 w-[46px] shrink-0 items-center justify-center rounded-none border-l border-border text-muted transition-colors duration-150 hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-petrol";
+  "flex h-14 w-[46px] shrink-0 items-center justify-center rounded-none text-muted transition-colors duration-150 hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent";
 
 function RestoreIcon() {
   return (

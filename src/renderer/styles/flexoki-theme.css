@@ -1,0 +1,84 @@
+/*
+ * Flexoki semantic tokens for Armin.
+ * Light/dark mappings follow stephango.com/flexoki base + accent tables.
+ */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  --armin-bg: var(--flexoki-paper);
+  --armin-bg-2: var(--flexoki-50);
+  --armin-surface: var(--flexoki-paper);
+  --armin-surface-sunken: var(--flexoki-50);
+  --armin-border: var(--flexoki-100);
+  --armin-border-strong: var(--flexoki-150);
+  --armin-ui-3: var(--flexoki-200);
+  --armin-ink: var(--flexoki-black);
+  --armin-muted: var(--flexoki-600);
+  --armin-faint: var(--flexoki-300);
+
+  --armin-accent: var(--flexoki-cyan-600);
+  --armin-accent-deep: var(--flexoki-cyan-700);
+  --armin-accent-tint: var(--flexoki-cyan-50);
+  --armin-on-accent: var(--flexoki-paper);
+
+  --armin-again: var(--flexoki-red-600);
+  --armin-again-deep: var(--flexoki-red-700);
+  --armin-hard: var(--flexoki-orange-600);
+  --armin-hard-deep: var(--flexoki-orange-700);
+  --armin-good: var(--flexoki-green-600);
+  --armin-good-deep: var(--flexoki-green-600);
+  --armin-easy: var(--flexoki-blue-600);
+  --armin-easy-deep: var(--flexoki-blue-600);
+
+  --armin-new: var(--flexoki-blue-600);
+  --armin-new-bg: var(--flexoki-blue-50);
+  --armin-learning: var(--flexoki-yellow-600);
+  --armin-learning-bg: var(--flexoki-yellow-50);
+  --armin-review: var(--flexoki-green-600);
+  --armin-review-bg: var(--flexoki-green-50);
+  --armin-relearning: var(--flexoki-orange-600);
+  --armin-relearning-bg: var(--flexoki-orange-50);
+
+  --armin-shadow-overlay: 0 12px 40px -8px rgb(16 15 15 / 0.18);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --armin-bg: var(--flexoki-black);
+  --armin-bg-2: var(--flexoki-950);
+  --armin-surface: var(--flexoki-black);
+  --armin-surface-sunken: var(--flexoki-950);
+  --armin-border: var(--flexoki-900);
+  --armin-border-strong: var(--flexoki-850);
+  --armin-ui-3: var(--flexoki-800);
+  --armin-ink: var(--flexoki-200);
+  --armin-muted: var(--flexoki-500);
+  --armin-faint: var(--flexoki-700);
+
+  --armin-accent: var(--flexoki-cyan-400);
+  --armin-accent-deep: var(--flexoki-cyan-300);
+  --armin-accent-tint: var(--flexoki-cyan-950);
+  --armin-on-accent: var(--flexoki-black);
+
+  --armin-again: var(--flexoki-red-400);
+  --armin-again-deep: var(--flexoki-red-600);
+  --armin-hard: var(--flexoki-orange-400);
+  --armin-hard-deep: var(--flexoki-orange-600);
+  --armin-good: var(--flexoki-green-400);
+  --armin-good-deep: var(--flexoki-green-600);
+  --armin-easy: var(--flexoki-blue-400);
+  --armin-easy-deep: var(--flexoki-blue-600);
+
+  --armin-new: var(--flexoki-blue-400);
+  --armin-new-bg: var(--flexoki-blue-950);
+  --armin-learning: var(--flexoki-yellow-400);
+  --armin-learning-bg: var(--flexoki-yellow-950);
+  --armin-review: var(--flexoki-green-400);
+  --armin-review-bg: var(--flexoki-green-950);
+  --armin-relearning: var(--flexoki-orange-400);
+  --armin-relearning-bg: var(--flexoki-orange-950);
+
+  --armin-shadow-overlay: 0 12px 40px -8px rgb(0 0 0 / 0.45);
+}

@@ -8,10 +8,13 @@ export const Textarea = React.forwardRef<
   <textarea
     ref={ref}
     className={cn(
-      "min-h-[88px] w-full resize-y rounded-md border border-border-strong bg-surface px-3 py-2 text-sm leading-relaxed text-ink transition-[border-color,box-shadow] duration-150 placeholder:text-muted focus-visible:border-clay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-clay-tint disabled:cursor-not-allowed disabled:opacity-50",
+      "min-h-[88px] w-full resize-y rounded-md border border-border-strong bg-surface px-3 py-2 text-sm leading-relaxed text-ink transition-[border-color,box-shadow] duration-150 placeholder:text-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint disabled:cursor-not-allowed disabled:opacity-50",
       className,
     )}
     {...props}
+    spellCheck={false}
+    autoCorrect="off"
+    autoCapitalize="off"
   />
 ));
 Textarea.displayName = "Textarea";

@@ -1,0 +1,198 @@
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import { StarterKit } from "@tiptap/starter-kit";
+import { Markdown } from "@tiptap/markdown";
+import { Placeholder } from "@tiptap/extension-placeholder";
+import { Image } from "@tiptap/extension-image";
+import { ImagePlus } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type MarkdownEditorProps = {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  autoFocus?: boolean;
+  className?: string;
+  "aria-label"?: string;
+};
+
+export function MarkdownEditor({
+  value,
+  onChange,
+  placeholder,
+  autoFocus,
+  className,
+  "aria-label": ariaLabel,
+}: MarkdownEditorProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const syncScrollOverflow = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (el.scrollHeight > el.clientHeight) {
+      el.dataset.overflowing = "";
+    } else {
+      delete el.dataset.overflowing;
+    }
+  }, []);
+
+  // Read dropped/pasted/picked image files and insert them inline as data
+  // URLs. (UI preview: a real backend would upload and insert a stable URL.)
+  const insertImageFiles = useCallback(
+    (editor: Editor | null, files: Iterable<File>) => {
+      if (!editor) return;
+      for (const file of files) {
+        if (!file.type.startsWith("image/")) continue;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const src = reader.result;
+          if (typeof src !== "string") return;
+          editor.chain().focus().setImage({ src, alt: file.name }).run();
+        };
+        reader.readAsDataURL(file);
+      }
+    },
+    [],
+  );
+
+  const editor = useEditor({
+    immediatelyRender: false,
+    extensions: [
+      StarterKit.configure({
+        heading: false,
+        blockquote: false,
+        codeBlock: false,
+        horizontalRule: false,
+      }),
+      Markdown,
+      Image.configure({ allowBase64: true }),
+      Placeholder.configure({
+        placeholder: placeholder ?? "",
+        emptyEditorClass: "is-editor-empty",
+      }),
+    ],
+    content: value,
+    contentType: "markdown",
+    editorProps: {
+      attributes: {
+        class: "tiptap outline-none",
+        spellcheck: "false",
+        autocorrect: "off",
+        autocapitalize: "off",
+        ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
+      },
+      handlePaste: (_view, event) => {
+        const files = event.clipboardData?.files;
+        if (
+          files?.length &&
+          Array.from(files).some((f) => f.type.startsWith("image/"))
+        ) {
+          insertImageFiles(editorRef.current, files);
+          return true;
+        }
+        return false;
+      },
+      handleDrop: (_view, event) => {
+        const files = (event as DragEvent).dataTransfer?.files;
+        if (
+          files?.length &&
+          Array.from(files).some((f) => f.type.startsWith("image/"))
+        ) {
+          event.preventDefault();
+          insertImageFiles(editorRef.current, files);
+          return true;
+        }
+        return false;
+      },
+    },
+    onUpdate: ({ editor: current }) => {
+      onChange(current.getMarkdown());
+      requestAnimationFrame(syncScrollOverflow);
+    },
+    onCreate: ({ editor: current }) => {
+      if (autoFocus) {
+        current.commands.focus("end");
+      }
+      requestAnimationFrame(syncScrollOverflow);
+    },
+  });
+
+  // editorProps capture their closure at creation time, so reach for the
+  // current instance through a ref inside the paste/drop handlers.
+  const editorRef = useRef(editor);
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor) return;
+    const current = editor.getMarkdown();
+    if (value !== current) {
+      editor.commands.setContent(value, {
+        contentType: "markdown",
+        emitUpdate: false,
+      });
+    }
+  }, [editor, value]);
+
+  useLayoutEffect(() => {
+    syncScrollOverflow();
+  }, [editor, value, syncScrollOverflow]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => syncScrollOverflow());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [syncScrollOverflow]);
+
+  const handlePick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files?.length) {
+      insertImageFiles(editor, event.target.files);
+    }
+    // Reset so the same file can be picked again.
+    event.target.value = "";
+  };
+
+  return (
+    <div
+      className={cn(
+        "rounded-md border border-border-strong bg-surface transition-[border-color,box-shadow] duration-150 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent-tint",
+        className,
+      )}
+    >
+      <div
+        ref={containerRef}
+        {...(autoFocus ? { "data-autofocus": true } : {})}
+        className="markdown-editor max-h-[220px] min-h-[88px] w-full px-3 py-2 text-sm leading-relaxed text-ink"
+      >
+        <EditorContent editor={editor} />
+      </div>
+      <div className="flex items-center justify-end border-t border-border px-2 py-1">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handlePick}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="inline-flex items-center gap-1.5 rounded-sm px-1.5 py-1 text-xs font-medium text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <ImagePlus className="h-3.5 w-3.5" aria-hidden />
+          Add image
+        </button>
+      </div>
+    </div>
+  );
+}

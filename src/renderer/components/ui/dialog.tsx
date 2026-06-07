@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const EXIT_MS = 200;
+
 /**
  * Accessible modal: portaled to <body> (escapes stacking contexts), focus is
  * trapped while open and restored on close, Escape and backdrop-click dismiss.
@@ -23,27 +25,54 @@ export function Dialog({
   className?: string;
 }) {
   const panelRef = React.useRef<HTMLDivElement>(null);
+  const onCloseRef = React.useRef(onClose);
+  const previouslyFocusedRef = React.useRef<HTMLElement | null>(null);
   const titleId = React.useId();
+  const [present, setPresent] = React.useState(open);
+  const [closing, setClosing] = React.useState(false);
 
   React.useEffect(() => {
-    if (!open) return;
-    const previouslyFocused = document.activeElement as HTMLElement | null;
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  React.useEffect(() => {
+    if (open) {
+      setPresent(true);
+      setClosing(false);
+    } else if (present) {
+      setClosing(true);
+    }
+  }, [open, present]);
+
+  React.useEffect(() => {
+    if (!present || closing) return;
+
     const panel = panelRef.current;
-    panel
-      ?.querySelector<HTMLElement>(
-        "[autofocus], input, textarea, select, button",
-      )
-      ?.focus();
+    const focusFrame = requestAnimationFrame(() => {
+      const autofocusHost =
+        panel?.querySelector<HTMLElement>("[data-autofocus]");
+      const target =
+        autofocusHost?.querySelector<HTMLElement>(
+          '[contenteditable="true"]',
+        ) ??
+        panel?.querySelector<HTMLElement>('[contenteditable="true"]') ??
+        panel?.querySelector<HTMLElement>(
+          "[autofocus], input, textarea, select",
+        );
+      target?.focus();
+    });
+
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key === "Tab" && panel) {
         const focusables = panel.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+          'a[href], button:not([disabled]), textarea, input, select, [contenteditable="true"], [tabindex]:not([tabindex="-1"])',
         );
         if (focusables.length === 0) return;
         const first = focusables[0];
@@ -61,18 +90,48 @@ export function Dialog({
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
-      previouslyFocused?.focus?.();
     };
-  }, [open, onClose]);
+  }, [present, closing]);
 
-  if (!open) return null;
+  React.useEffect(() => {
+    if (!closing) return;
+
+    let finished = false;
+    const finishClose = () => {
+      if (finished) return;
+      finished = true;
+      previouslyFocusedRef.current?.focus?.();
+      setPresent(false);
+      setClosing(false);
+    };
+
+    const panel = panelRef.current;
+    const onEnd = (event: AnimationEvent) => {
+      if (event.target !== panel) return;
+      finishClose();
+    };
+
+    panel?.addEventListener("animationend", onEnd);
+    const fallback = window.setTimeout(finishClose, EXIT_MS + 50);
+
+    return () => {
+      panel?.removeEventListener("animationend", onEnd);
+      window.clearTimeout(fallback);
+    };
+  }, [closing]);
+
+  if (!present) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-ink/35 animate-fade-in"
+        className={cn(
+          "absolute inset-0 bg-ink/35",
+          closing ? "animate-fade-out" : "animate-fade-in",
+        )}
         onClick={onClose}
         aria-hidden
       />
@@ -82,7 +141,8 @@ export function Dialog({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         className={cn(
-          "animate-pop relative z-10 w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-overlay",
+          "relative z-10 w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-overlay",
+          closing ? "animate-pop-out" : "animate-pop",
           className,
         )}
       >
@@ -99,7 +159,7 @@ export function Dialog({
             <button
               onClick={onClose}
               aria-label="Close dialog"
-              className="-mr-1.5 -mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-petrol"
+              className="-mr-1.5 -mt-1.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <X className="h-4 w-4" />
             </button>
