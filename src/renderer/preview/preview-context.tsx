@@ -42,9 +42,9 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
         <div className="w-[260px] overflow-hidden rounded-xl border border-border-strong bg-surface/90 shadow-overlay backdrop-blur">
           <button
             onClick={() => setCollapsed((c) => !c)}
-            className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-petrol"
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <FlaskConical className="h-4 w-4 text-clay" aria-hidden />
+            <FlaskConical className="h-4 w-4 text-accent" aria-hidden />
             <span className="text-[0.8125rem] font-semibold text-ink">
               Preview states
             </span>

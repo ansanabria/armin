@@ -1,26 +1,26 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Plus,
   Play,
-  Trash2,
-  Pencil,
   Layers,
   AlertTriangle,
   Share2,
-  MoreHorizontal,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CardFormDialog } from "@/components/card-form-dialog";
+import { CardTile } from "@/components/card-tile";
+import { SortControl } from "@/components/sort-control";
+import { SearchableSelect } from "@/components/ui/combobox";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog } from "@/components/ui/dialog";
-import { StateBadge } from "@/components/ui/badge";
+  CARD_SORT_OPTIONS,
+  sortCards,
+  type CardSortKey,
+} from "@/lib/sort-cards";
+import { matchesTags } from "@/lib/card-filters";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
@@ -28,9 +28,9 @@ import { usePreview } from "@/preview/preview-context";
 import {
   getDeck,
   getDeckCards,
+  getDeckTags,
   type UiCard,
 } from "@/data/fixtures";
-import { cn } from "@/lib/utils";
 
 export default function DeckPage() {
   const { deckId } = useParams({ from: "/deck/$deckId" });
@@ -43,28 +43,39 @@ export default function DeckPage() {
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<UiCard | null>(null);
-  const [front, setFront] = useState("");
-  const [back, setBack] = useState("");
+  const [sort, setSort] = useState<CardSortKey>("due-soon");
+  const [tagFilter, setTagFilter] = useState("");
+
+  const deckTags = useMemo(() => getDeckTags(deckId), [deckId]);
+  const tagOptions = useMemo(
+    () => [
+      { value: "", label: "All tags" },
+      ...deckTags.map((t) => ({ value: t, label: t })),
+    ],
+    [deckTags],
+  );
+  const tags = useMemo(() => (tagFilter ? [tagFilter] : []), [tagFilter]);
+  const sortedCards = useMemo(() => sortCards(cards, sort), [cards, sort]);
+  const visibleCards = useMemo(
+    () => sortedCards.filter((c) => matchesTags(c, tags)),
+    [sortedCards, tags],
+  );
 
   const openNew = () => {
     setEditing(null);
-    setFront("");
-    setBack("");
     setOpen(true);
   };
   const openEdit = (card: UiCard) => {
     setEditing(card);
-    setFront(card.front);
-    setBack(card.back);
     setOpen(true);
   };
-  const save = () => {
-    if (!front.trim() || !back.trim()) return;
+  const saveCard = () => {
     toast({
       tone: "success",
       title: editing ? "Card updated" : "Card added",
     });
     setOpen(false);
+    setEditing(null);
   };
 
   const dueCount = cards.filter((c) => c.dueLabel === "Due now").length;
@@ -74,7 +85,7 @@ export default function DeckPage() {
       <div>
         <Link
           to="/"
-          className="inline-flex items-center gap-1 rounded-sm text-sm text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-petrol"
+          className="inline-flex items-center gap-1 rounded-sm text-sm text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <ArrowLeft className="h-4 w-4" /> All decks
         </Link>
@@ -97,14 +108,14 @@ export default function DeckPage() {
     <div>
       <Link
         to="/"
-        className="inline-flex items-center gap-1 rounded-sm text-sm text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-petrol"
+        className="inline-flex items-center gap-1 rounded-sm text-sm text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <ArrowLeft className="h-4 w-4" /> All decks
       </Link>
 
       <header className="mb-6 mt-4 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-balance">
+          <h1 className="text-[1.75rem] font-semibold tracking-tight text-balance">
             {deck.name}
           </h1>
           <p className="mt-1 text-sm text-muted">
@@ -114,26 +125,20 @@ export default function DeckPage() {
             {dueCount > 0 && (
               <>
                 <span className="text-border-strong"> · </span>
-                <span className="font-medium text-clay">{dueCount} due now</span>
+                <span className="font-medium text-accent">{dueCount} due now</span>
               </>
             )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={() =>
-              toast({
-                title: "Prerequisite graph",
-                description: "Coming soon — the visual canvas is next.",
-              })
-            }
-          >
-            <Share2 className="h-4 w-4" /> Graph
-          </Button>
+          <Link to="/deck/$deckId/graph" params={{ deckId: deck.id }}>
+            <Button variant="outline">
+              <Share2 className="h-4 w-4" /> Graph
+            </Button>
+          </Link>
           {dueCount > 0 && (
             <Link to="/deck/$deckId/review" params={{ deckId: deck.id }}>
-              <Button variant="outline">
+              <Button>
                 <Play className="h-4 w-4" /> Review
               </Button>
             </Link>
@@ -147,7 +152,7 @@ export default function DeckPage() {
       {scenario === "loading" && <CardsSkeleton />}
 
       {scenario === "error" && (
-        <div className="flex flex-col items-center rounded-xl border border-border bg-surface px-6 py-14 text-center">
+        <div className="flex flex-col items-center rounded-xl border border-border px-6 py-14 text-center">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-relearning-bg text-relearning">
             <AlertTriangle className="h-6 w-6" strokeWidth={1.5} />
           </div>
@@ -183,121 +188,91 @@ export default function DeckPage() {
       )}
 
       {scenario === "ready" && cards.length > 0 && (
-        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {cards.map((card) => (
-            <li
-              key={card.id}
-              className={cn(
-                "group flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 transition-colors duration-150 hover:border-border-strong",
-                card.locked && "opacity-65",
+        <>
+          <div className="mb-5 border border-border bg-bg-2 px-4 py-3">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              {deckTags.length > 0 ? (
+                <FilterField
+                  className="w-44"
+                  label={
+                    <>
+                      <Tag className="h-3.5 w-3.5" aria-hidden /> Tag
+                    </>
+                  }
+                >
+                  <SearchableSelect
+                    value={tagFilter}
+                    onValueChange={setTagFilter}
+                    options={tagOptions}
+                    placeholder="All tags"
+                    searchPlaceholder="Search tags…"
+                    emptyText="No tags found."
+                    aria-label="Filter by tag"
+                  />
+                </FilterField>
+              ) : (
+                <span />
               )}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <StateBadge
-                  state={card.state}
-                  locked={card.locked}
-                  className="shrink-0"
+              <SortControl
+                fieldLayout
+                value={sort}
+                onChange={setSort}
+                options={CARD_SORT_OPTIONS}
+                triggerClassName="min-w-[11rem]"
+              />
+            </div>
+          </div>
+          {visibleCards.length > 0 ? (
+            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleCards.map((card) => (
+                <CardTile
+                  key={card.id}
+                  card={card}
+                  onOpen={() => openEdit(card)}
+                  onDelete={() =>
+                    toast({ tone: "error", title: "Card deleted" })
+                  }
                 />
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Card actions"
-                        className="-mr-1 -mt-1 shrink-0"
-                      />
-                    }
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-40">
-                    <DropdownMenuItem onClick={() => openEdit(card)}>
-                      <Pencil className="h-4 w-4" />
-                      Edit card
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={() =>
-                        toast({ tone: "error", title: "Card deleted" })
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Delete card
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <span
-                className={cn(
-                  "font-mono text-xs",
-                  card.dueLabel === "Due now" ? "text-clay" : "text-muted",
-                )}
-              >
-                {card.dueLabel}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="line-clamp-2 text-sm font-medium text-ink">
-                  {card.front}
-                </p>
-                <p className="mt-1 line-clamp-2 text-[0.8125rem] text-muted">
-                  {card.back}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
+              ))}
+            </ul>
+          ) : (
+            <p className="border border-border px-6 py-10 text-center text-sm text-muted">
+              No cards match the selected tags.
+            </p>
+          )}
+        </>
       )}
 
-      <Dialog
+      <CardFormDialog
         open={open}
-        onClose={() => setOpen(false)}
-        title={editing ? "Edit card" : "Add card"}
-      >
-        <div className="space-y-4">
-          <Field label="Front" hint="The prompt or question.">
-            <Textarea
-              autoFocus
-              value={front}
-              onChange={(e) => setFront(e.target.value)}
-              placeholder="What does `typeof null` return?"
-            />
-          </Field>
-          <Field label="Back" hint="The answer to recall.">
-            <Textarea
-              value={back}
-              onChange={(e) => setBack(e.target.value)}
-              placeholder={'`"object"` — a historical bug kept for compatibility.'}
-            />
-          </Field>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button disabled={!front.trim() || !back.trim()} onClick={save}>
-              {editing ? "Save changes" : "Add card"}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
+        onClose={() => {
+          setOpen(false);
+          setEditing(null);
+        }}
+        mode={editing ? "edit" : "create"}
+        cardId={editing?.id ?? null}
+        initialFront={editing?.front ?? ""}
+        initialBack={editing?.back ?? ""}
+        initialTags={editing?.tags ?? []}
+        onSubmit={saveCard}
+      />
     </div>
   );
 }
 
-function Field({
+function FilterField({
   label,
-  hint,
   children,
+  className,
 }: {
-  label: string;
-  hint?: string;
+  label: ReactNode;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 flex items-baseline gap-2">
-        <span className="text-sm font-medium text-ink">{label}</span>
-        {hint && <span className="text-xs text-muted">{hint}</span>}
+    <label className={cn("flex flex-col gap-1.5", className)}>
+      <span className="inline-flex h-3.5 items-center gap-1.5 text-xs font-medium text-muted">
+        {label}
       </span>
       {children}
     </label>
@@ -306,18 +281,14 @@ function Field({
 
 function CardsSkeleton() {
   return (
-    <ul className="space-y-2">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <li
-          key={i}
-          className="flex items-center gap-4 rounded-lg border border-border bg-surface p-4"
-        >
-          <Skeleton className="h-5 w-20 rounded-sm" />
-          <div className="min-w-0 flex-1">
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="mt-1.5 h-3 w-3/4" />
-          </div>
-          <Skeleton className="h-3 w-12" />
+    <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <li key={i} className="flex flex-col gap-2 border border-border p-4 pr-11">
+          <Skeleton className="h-5 w-20" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-3 w-full" />
+          <Skeleton className="h-3 w-4/5" />
+          <Skeleton className="mt-1 h-3 w-16" />
         </li>
       ))}
     </ul>

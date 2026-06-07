@@ -1,69 +1,21 @@
-import { app, BrowserWindow, Menu } from "electron";
-import path from "node:path";
+import { app, BrowserWindow, session } from "electron";
 import started from "electron-squirrel-startup";
-import { closeDb, initDb } from "./db";
-import { runMigrations } from "./db/migrate";
-import {
-  loadDevToolsExtensions,
-  registerDevToolsShortcuts,
-} from "./devtools";
+import { closeDb } from "./db";
 import { registerIpc } from "./ipc";
+import { openProfilePicker } from "./windows";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
   app.quit();
 }
 
-const createWindow = () => {
-  const isMac = process.platform === "darwin";
-  const isLinux = process.platform === "linux";
-
-  const mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    ...(isMac
-      ? { titleBarStyle: "hiddenInset" as const }
-      : {
-          frame: false,
-          ...(isLinux && { hasShadow: false }),
-        }),
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-    },
-  });
-
-  Menu.setApplicationMenu(null);
-
-  const notifyMaximized = (maximized: boolean) => {
-    mainWindow.webContents.send("shell:maximized", maximized);
-  };
-  mainWindow.on("maximize", () => notifyMaximized(true));
-  mainWindow.on("unmaximize", () => notifyMaximized(false));
-
-  // and load the index.html of the app.
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-    );
-  }
-
-  if (!app.isPackaged) {
-    registerDevToolsShortcuts(mainWindow);
-    mainWindow.webContents.openDevTools({ mode: "right" });
-  }
-};
-
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on("ready", async () => {
-  await loadDevToolsExtensions();
-  await initDb();
-  await runMigrations();
+  session.defaultSession.setSpellCheckerEnabled(false);
   registerIpc();
-  createWindow();
+  openProfilePicker();
 });
 
 app.on("quit", () => {
@@ -83,7 +35,7 @@ app.on("activate", () => {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+    openProfilePicker();
   }
 });
 

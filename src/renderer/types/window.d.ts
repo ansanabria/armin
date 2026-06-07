@@ -6,7 +6,19 @@ import type { DeckGraph } from "../../main/services/graph";
 
 export type Grade = 1 | 2 | 3 | 4;
 
+export type Profile = {
+  id: string;
+  name: string;
+  createdAt: string;
+};
+
 export interface ArminApi {
+  profiles: {
+    list(): Promise<Profile[]>;
+    create(name: string): Promise<Profile>;
+    open(id: string, name?: string): Promise<{ ok: true }>;
+    showPicker(): Promise<{ ok: true }>;
+  };
   decks: {
     list(): Promise<DeckWithStats[]>;
     get(id: string): Promise<Deck | undefined>;

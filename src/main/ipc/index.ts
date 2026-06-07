@@ -1,10 +1,15 @@
 import { BrowserWindow, ipcMain } from "electron";
 import { z } from "zod";
+import { initDb } from "../db";
+import { runMigrations } from "../db/migrate";
+import { setActiveProfileId } from "../profiles/active";
 import * as decks from "../services/decks";
 import * as cards from "../services/cards";
 import * as review from "../services/review";
 import * as graph from "../services/graph";
 import * as settings from "../services/settings";
+import * as profiles from "../services/profiles";
+import { openMainWindow, openProfilePicker } from "../windows";
 
 /** Notify all renderers that persisted data changed (e.g. via the MCP server). */
 export function notifyDataChanged() {
@@ -26,7 +31,39 @@ function register<T extends z.ZodType>(
 
 const id = z.object({ id: z.string() });
 
+let dbReady = false;
+
+async function ensureDbReady() {
+  if (dbReady) return;
+  await initDb();
+  await runMigrations();
+  dbReady = true;
+}
+
 export function registerIpc() {
+  // --- profiles (local JSON store; per-profile data dirs come later) ---
+  register("profiles:list", z.void().optional(), () => profiles.listProfiles());
+  register(
+    "profiles:create",
+    z.object({ name: z.string().min(1) }),
+    ({ name }) => profiles.createProfile(name),
+  );
+  register(
+    "profiles:open",
+    z.object({ id: z.string(), name: z.string().optional() }),
+    async ({ id, name }) => {
+      setActiveProfileId(id);
+      await ensureDbReady();
+      const profileName = name ?? profiles.getProfile(id)?.name;
+      await openMainWindow(id, profileName);
+      return { ok: true as const };
+    },
+  );
+  register("profiles:showPicker", z.void().optional(), () => {
+    openProfilePicker();
+    return { ok: true as const };
+  });
+
   // --- decks ---
   register("decks:list", z.void().optional(), () => decks.listDecks());
   register("decks:get", id, ({ id }) => decks.getDeck(id));

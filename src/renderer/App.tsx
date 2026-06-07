@@ -5,6 +5,7 @@ import { queryClient } from "@/lib/query";
 import { router } from "@/router";
 import { ToastProvider } from "@/components/ui/toast";
 import { PreviewProvider } from "@/preview/preview-context";
+import { ThemeProvider } from "@/theme/theme-provider";
 
 export default function App() {
   // Refresh all cached data when the main process signals a change
@@ -18,11 +19,13 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <PreviewProvider>
-          <RouterProvider router={router} />
-        </PreviewProvider>
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <PreviewProvider>
+            <RouterProvider router={router} />
+          </PreviewProvider>
+        </ToastProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
