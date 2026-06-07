@@ -1,20 +1,20 @@
 import { cn } from "@/lib/utils";
 
-/** Slim progress meter. Petrol fill on a sunken track. */
+/** Slim progress meter. Accent fill on a sunken track. */
 export function Progress({
   value,
   max = 100,
   className,
-  tone = "petrol",
+  tone = "accent",
 }: {
   value: number;
   max?: number;
   className?: string;
-  tone?: "petrol" | "good" | "clay";
+  tone?: "accent" | "good" | "ink";
 }) {
   const pct = max <= 0 ? 0 : Math.min(100, Math.max(0, (value / max) * 100));
   const fill =
-    tone === "good" ? "bg-good" : tone === "clay" ? "bg-clay" : "bg-petrol";
+    tone === "good" ? "bg-good" : tone === "ink" ? "bg-ink" : "bg-accent";
   return (
     <div
       className={cn(

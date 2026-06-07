@@ -1,12 +1,35 @@
 <!doctype html>
-<html>
+<html lang="en" data-theme="light" spellcheck="false">
   <head>
     <meta charset="UTF-8" />
+    <meta name="color-scheme" content="light dark" />
     <title>Armin</title>
-    <script type="module" crossorigin src="/assets/index-BPwZCkhd.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BtykBrSF.css">
+    <script>
+      (function () {
+        try {
+          var key = "armin-theme-preference";
+          var pref = localStorage.getItem(key);
+          if (pref === "light") pref = "flexoki-light";
+          var resolved =
+            pref === "flexoki-dark"
+              ? "dark"
+              : pref === "flexoki-light"
+                ? "light"
+                : window.matchMedia("(prefers-color-scheme: dark)").matches
+                  ? "dark"
+                  : "light";
+          document.documentElement.dataset.theme = resolved;
+          document.documentElement.style.colorScheme = resolved;
+        } catch (e) {
+          document.documentElement.dataset.theme = "light";
+          document.documentElement.style.colorScheme = "light";
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-DVp8sgYk.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-eUUTANv1.css">
   </head>
-  <body>
+  <body spellcheck="false">
     <div id="root"></div>
   </body>
 </html>

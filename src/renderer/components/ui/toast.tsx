@@ -18,7 +18,7 @@ export function useToast() {
 }
 
 const TONE: Record<ToastTone, { Icon: typeof Info; color: string }> = {
-  default: { Icon: Info, color: "text-petrol" },
+  default: { Icon: Info, color: "text-accent" },
   success: { Icon: CheckCircle2, color: "text-good" },
   error: { Icon: AlertCircle, color: "text-again" },
 };
