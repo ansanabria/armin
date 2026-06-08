@@ -1,5 +1,5 @@
 import type { CardState } from "@/components/ui/badge";
-import type { UiBrowseCard, UiCard } from "@/data/fixtures";
+import type { UiBrowseCard, UiCard } from "@/types/view-models";
 
 /** Selectable card states, in learning order. */
 export const STATE_OPTIONS: { value: CardState; label: string }[] = [

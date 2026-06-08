@@ -1,19 +1,46 @@
+import { useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { ReviewSession } from "@/components/review-session";
-import { usePreview } from "@/preview/preview-context";
-import { getGlobalReviewQueue, totalDueToday } from "@/data/fixtures";
+import { invalidateCoreData, reviewKeys } from "@/lib/armin-query";
+import { toUiReviewCard } from "@/types/view-models";
+import type { Grade } from "@/types/window";
+import { useToast } from "@/components/ui/toast";
 
 export default function ReviewsPage() {
-  // UI PREVIEW ONLY: `scenario` stands in for the queue query status.
-  const { scenario } = usePreview();
+  const queryClient = useQueryClient();
+  const toast = useToast();
 
-  const queue = getGlobalReviewQueue();
-  const dueCount = scenario === "ready" ? totalDueToday : 0;
+  const queueQuery = useQuery({
+    queryKey: reviewKeys.all,
+    queryFn: () => window.armin.review.queueAll(),
+  });
+  const queue = useMemo(
+    () => (queueQuery.data ?? []).map(toUiReviewCard),
+    [queueQuery.data],
+  );
+  const dueCount = queue.length;
+
+  const rate = useMutation({
+    mutationFn: ({ cardId, rating }: { cardId: string; rating: Grade }) =>
+      window.armin.review.rate(cardId, rating),
+    onSuccess: (card) => {
+      invalidateCoreData(queryClient, card.deckId);
+    },
+    onError: () => toast({ tone: "error", title: "Couldn’t save review" }),
+  });
 
   return (
     <ReviewSession
       queue={queue}
+      isLoading={queueQuery.isLoading}
+      isError={queueQuery.isError}
+      onRetry={() => void queueQuery.refetch()}
+      loadPreview={(cardId) => window.armin.review.preview(cardId)}
+      onRate={(cardId, rating) =>
+        rate.mutateAsync({ cardId, rating }).then(() => undefined)
+      }
       header={
         <h1 className="text-[1.75rem] font-semibold tracking-tight text-balance">
           Review
