@@ -1,9 +1,8 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { schema } from "../db";
 import type { Card } from "../db/schema";
 import { newCardFields } from "./scheduler";
 import type { ServiceContext } from "./context";
-import { isUnlocked } from "./graph";
 
 const { cards, cardTags, tags } = schema;
 
@@ -40,25 +39,51 @@ async function getCardTags(
   db: ServiceContext["db"],
   cardId: string,
 ): Promise<string[]> {
+  const map = await getTagsForCards(db, [cardId]);
+  return map.get(cardId) ?? [];
+}
+
+export async function getTagsForCards(
+  db: ServiceContext["db"],
+  cardIds: string[],
+): Promise<Map<string, string[]>> {
+  const uniqueIds = [...new Set(cardIds)];
+  const tagsByCardId = new Map(uniqueIds.map((id) => [id, [] as string[]]));
+  if (uniqueIds.length === 0) return tagsByCardId;
+
   const rows = await db
-    .select({ name: tags.name })
+    .select({ cardId: cardTags.cardId, name: tags.name })
     .from(cardTags)
     .innerJoin(tags, eq(cardTags.tagId, tags.id))
-    .where(eq(cardTags.cardId, cardId))
+    .where(inArray(cardTags.cardId, uniqueIds))
     .all();
 
-  return rows.map((row) => row.name).sort((a, b) => a.localeCompare(b));
+  for (const row of rows) {
+    const list = tagsByCardId.get(row.cardId) ?? [];
+    list.push(row.name);
+    tagsByCardId.set(row.cardId, list);
+  }
+
+  for (const [cardId, names] of tagsByCardId) {
+    tagsByCardId.set(
+      cardId,
+      names.sort((a, b) => a.localeCompare(b)),
+    );
+  }
+
+  return tagsByCardId;
 }
 
 export async function withCardMeta(
   ctx: ServiceContext,
   card: Card,
 ): Promise<CardWithMeta> {
-  const [tagNames, unlocked] = await Promise.all([
-    getCardTags(ctx.db, card.id),
-    isUnlocked(ctx, card.id),
-  ]);
-  return { ...card, tags: tagNames, locked: !unlocked };
+  const tagsByCardId = await getTagsForCards(ctx.db, [card.id]);
+  return {
+    ...card,
+    tags: tagsByCardId.get(card.id) ?? [],
+    locked: card.locked,
+  };
 }
 
 type TagWriteDb = Pick<ServiceContext["db"], "delete" | "insert" | "select">;
@@ -92,6 +117,22 @@ async function replaceCardTags(
   }
 }
 
+async function withCardMetaBatch(
+  ctx: ServiceContext,
+  items: Card[],
+): Promise<CardWithMeta[]> {
+  if (items.length === 0) return [];
+
+  const cardIds = items.map((card) => card.id);
+  const tagsByCardId = await getTagsForCards(ctx.db, cardIds);
+
+  return items.map((card) => ({
+    ...card,
+    tags: tagsByCardId.get(card.id) ?? [],
+    locked: card.locked,
+  }));
+}
+
 export async function listCards(
   ctx: ServiceContext,
   deckId: string,
@@ -102,7 +143,7 @@ export async function listCards(
     .where(eq(cards.deckId, deckId))
     .orderBy(cards.createdAt)
     .all();
-  return Promise.all(rows.map((card) => withCardMeta(ctx, card)));
+  return withCardMetaBatch(ctx, rows);
 }
 
 export async function listAllCards(
@@ -118,12 +159,16 @@ export async function listAllCards(
     .orderBy(cards.createdAt)
     .all();
 
-  return Promise.all(
-    rows.map(async ({ card, deckName }) => ({
-      ...(await withCardMeta(ctx, card)),
-      deckName,
-    })),
+  const withMeta = await withCardMetaBatch(
+    ctx,
+    rows.map((row) => row.card),
   );
+  const metaById = new Map(withMeta.map((card) => [card.id, card]));
+
+  return rows.map(({ card, deckName }) => ({
+    ...metaById.get(card.id)!,
+    deckName,
+  }));
 }
 
 export async function getCard(

@@ -14,6 +14,7 @@
     "mcp": "tsx src/mcp/server.ts",
     "lint": "eslint --ext .ts,.tsx .",
     "test": "vitest run",
+    "bench:deck": "tsx scripts/benchmark-deck-load.ts",
     "format": "prettier --write .",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",

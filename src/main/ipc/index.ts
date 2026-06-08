@@ -6,9 +6,12 @@ import { setActiveProfileId } from "../profiles/active";
 import type { ServiceContext } from "../services/context";
 import * as decks from "../services/decks";
 import * as cards from "../services/cards";
+import * as browse from "../services/browse";
+import { BROWSE_SORT_KEYS } from "../../shared/browse";
 import * as review from "../services/review";
 import * as graph from "../services/graph";
 import * as settings from "../services/settings";
+import * as mcp from "../services/mcp";
 import * as profiles from "../services/profiles";
 import {
   getProfileIdForWebContents,
@@ -122,6 +125,26 @@ export function registerIpc() {
   registerForProfile("cards:listAll", z.void().optional(), (ctx) =>
     cards.listAllCards(ctx),
   );
+  registerForProfile(
+    "cards:browse",
+    z.object({
+      offset: z.number().int().min(0),
+      limit: z.number().int().min(1).max(100),
+      sort: z.enum(BROWSE_SORT_KEYS),
+      state: z.number().int().min(0).max(3).optional(),
+      deckId: z.string().optional(),
+      tag: z.string().optional(),
+    }),
+    (ctx, input) => browse.listBrowsePage(ctx, input),
+  );
+  registerForProfile("cards:listTags", z.void().optional(), (ctx) =>
+    browse.listAllTagNames(ctx),
+  );
+  registerForProfile(
+    "cards:listDeckTags",
+    z.object({ deckId: z.string() }),
+    (ctx, { deckId }) => browse.listDeckTagNames(ctx, deckId),
+  );
   registerForProfile("cards:get", id, (ctx, { id }) => cards.getCard(ctx, id));
   registerForProfile(
     "cards:create",
@@ -186,6 +209,11 @@ export function registerIpc() {
       await graph.removePrereq(ctx, prereqId, dependentId);
       return { ok: true };
     },
+  );
+
+  // --- mcp ---
+  registerForProfile("mcp:getSetup", z.void().optional(), (ctx) =>
+    mcp.getMcpSetup(ctx.profileId),
   );
 
   // --- settings ---

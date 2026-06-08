@@ -8,6 +8,7 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import { StateBadge, type CardState } from "@/components/ui/badge";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 import { cn } from "@/lib/utils";
 
 export type CardNodeData = {
@@ -69,13 +70,17 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
         )}
       </div>
 
-      <p className="line-clamp-2 text-[0.8125rem] font-semibold leading-snug text-ink">
-        {data.front}
-      </p>
+      <MarkdownContent
+        content={data.front}
+        images="placeholder"
+        className="line-clamp-2 text-[0.8125rem] font-semibold leading-snug text-ink"
+      />
       {data.back && (
-        <p className="mt-1 line-clamp-2 border-t border-border/60 pt-1.5 text-[0.6875rem] leading-snug text-muted">
-          {data.back}
-        </p>
+        <MarkdownContent
+          content={data.back}
+          images="placeholder"
+          className="mt-1 line-clamp-2 border-t border-border/60 pt-1.5 text-[0.6875rem] leading-snug text-muted"
+        />
       )}
     </div>
   );
