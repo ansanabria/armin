@@ -1,10 +1,12 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MaximumIntervalInput,
+  NewCardsPerDayInput,
   RetentionInput,
+  StabilityFloorInput,
   StepsInput,
 } from "@/components/scheduling-inputs";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -15,16 +17,53 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
-import { settings as initial } from "@/data/fixtures";
+import { settingsKeys } from "@/lib/armin-query";
 import { THEME_OPTIONS, type ThemePreference } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/theme/theme-provider";
-import { Copy, Download, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { Settings } from "@/types/window";
 
 const BAR_EXIT_MS = 320;
 
-type SettingsState = typeof initial;
+type SettingsState = Pick<
+  Settings,
+  | "requestRetention"
+  | "maximumInterval"
+  | "enableFuzz"
+  | "enableShortTerm"
+  | "learningSteps"
+  | "relearningSteps"
+  | "weights"
+  | "prereqStabilityFloor"
+  | "newCardsPerDay"
+>;
+
+const initial: SettingsState = {
+  requestRetention: 0.9,
+  maximumInterval: 36500,
+  enableFuzz: true,
+  enableShortTerm: true,
+  learningSteps: "1m,10m",
+  relearningSteps: "10m",
+  weights: null,
+  prereqStabilityFloor: 2,
+  newCardsPerDay: 10,
+};
+
+function toSettingsState(settings: Settings): SettingsState {
+  return {
+    requestRetention: settings.requestRetention,
+    maximumInterval: settings.maximumInterval,
+    enableFuzz: settings.enableFuzz,
+    enableShortTerm: settings.enableShortTerm,
+    learningSteps: settings.learningSteps,
+    relearningSteps: settings.relearningSteps,
+    weights: settings.weights,
+    prereqStabilityFloor: settings.prereqStabilityFloor,
+    newCardsPerDay: settings.newCardsPerDay,
+  };
+}
 
 function settingsEqual(a: SettingsState, b: SettingsState): boolean {
   return (Object.keys(a) as (keyof SettingsState)[]).every(
@@ -34,6 +73,7 @@ function settingsEqual(a: SettingsState, b: SettingsState): boolean {
 
 export default function SettingsPage() {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const { preference: themePreference, setPreference: setThemePreference } =
     useTheme();
   const [s, setS] = useState(initial);
@@ -41,14 +81,33 @@ export default function SettingsPage() {
   const set = <K extends keyof typeof s>(key: K, value: (typeof s)[K]) =>
     setS((prev) => ({ ...prev, [key]: value }));
 
+  const settingsQuery = useQuery({
+    queryKey: settingsKeys.current,
+    queryFn: () => window.armin.settings.get(),
+  });
+
+  useEffect(() => {
+    if (!settingsQuery.data) return;
+    const next = toSettingsState(settingsQuery.data);
+    setS(next);
+    setSaved(next);
+  }, [settingsQuery.data]);
+
   const isDirty = useMemo(() => !settingsEqual(s, saved), [s, saved]);
 
-  const save = () => {
-    setSaved(s);
-    toast({ tone: "success", title: "Settings saved" });
-  };
+  const updateSettings = useMutation({
+    mutationFn: (patch: SettingsState) => window.armin.settings.update(patch),
+    onSuccess: (settings) => {
+      const next = toSettingsState(settings);
+      setS(next);
+      setSaved(next);
+      void queryClient.invalidateQueries({ queryKey: settingsKeys.current });
+      toast({ tone: "success", title: "Settings saved" });
+    },
+    onError: () => toast({ tone: "error", title: "Couldn’t save settings" }),
+  });
 
-  const mcpCommand = `claude mcp add armin -- armin-mcp --port ${s.mcpPort}`;
+  const save = () => updateSettings.mutate(s);
 
   return (
     <div className="pb-24">
@@ -57,6 +116,15 @@ export default function SettingsPage() {
           Settings
         </h1>
       </header>
+
+      {settingsQuery.isError && (
+        <div className="mb-8 flex items-center justify-between gap-4 border border-border bg-surface px-4 py-3">
+          <p className="text-sm text-muted">Couldn&apos;t load settings.</p>
+          <Button variant="outline" onClick={() => void settingsQuery.refetch()}>
+            Try again
+          </Button>
+        </div>
+      )}
 
       <div className="space-y-10">
         <Section
@@ -115,6 +183,31 @@ export default function SettingsPage() {
         </Section>
 
         <Section
+          title="Learning path"
+          description="How prerequisite cards unlock and how many new cards enter each day."
+        >
+          <Row
+            label="Prerequisite stability"
+            hint="A prereq must reach this FSRS stability in Review before dependents unlock."
+          >
+            <StabilityFloorInput
+              value={s.prereqStabilityFloor}
+              onChange={(v) => set("prereqStabilityFloor", v)}
+            />
+          </Row>
+          <Row
+            label="New cards per day"
+            hint="Maximum brand-new cards introduced from the unlock frontier each day."
+            last
+          >
+            <NewCardsPerDayInput
+              value={s.newCardsPerDay}
+              onChange={(v) => set("newCardsPerDay", v)}
+            />
+          </Row>
+        </Section>
+
+        <Section
           title="Appearance"
           description="How Armin looks on your machine."
         >
@@ -143,88 +236,24 @@ export default function SettingsPage() {
             </Select>
           </Row>
         </Section>
-
-        <Section
-          title="AI card creation"
-          description="Expose a local MCP server so your own agent can generate cards."
-        >
-          <Row
-            label="Local MCP server"
-            hint="Runs only while Armin is open. Nothing leaves your machine."
-            last={!s.mcpEnabled}
-          >
-            <Switch
-              checked={s.mcpEnabled}
-              onCheckedChange={(v) => set("mcpEnabled", v)}
-            />
-          </Row>
-          {s.mcpEnabled && (
-            <>
-              <Row
-                label="Port"
-                hint="Where the server listens locally."
-                last={false}
-              >
-                <Input
-                  type="number"
-                  value={s.mcpPort}
-                  onChange={(e) => set("mcpPort", Number(e.target.value))}
-                  className="w-36 text-right tabular-nums"
-                />
-              </Row>
-              <div className="border-t border-border px-4 py-3.5">
-                <div className="flex items-center gap-2 border border-border bg-surface-sunken py-2 pl-3 pr-2">
-                  <code className="min-w-0 flex-1 truncate font-mono text-[0.8125rem] text-ink">
-                    {mcpCommand}
-                  </code>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Copy connect command"
-                    onClick={() => {
-                      navigator.clipboard?.writeText(mcpCommand);
-                      toast({ tone: "success", title: "Copied to clipboard" });
-                    }}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </Section>
-
-        <Section
-          title="Your data"
-          description="Everything lives in a local SQLite file. Back it up any time."
-        >
-          <div className="flex flex-wrap gap-2 px-4 py-3.5">
-            <Button
-              variant="outline"
-              onClick={() => toast({ title: "Exporting deck file" })}
-            >
-              <Download className="h-4 w-4" /> Export
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => toast({ title: "Choose a file to import" })}
-            >
-              <Upload className="h-4 w-4" /> Import
-            </Button>
-          </div>
-        </Section>
       </div>
 
-      <UnsavedChangesBar open={isDirty} onSave={save} />
+      <UnsavedChangesBar
+        open={isDirty}
+        saving={updateSettings.isPending}
+        onSave={save}
+      />
     </div>
   );
 }
 
 function UnsavedChangesBar({
   open,
+  saving,
   onSave,
 }: {
   open: boolean;
+  saving: boolean;
   onSave: () => void;
 }) {
   const barRef = useRef<HTMLDivElement>(null);
@@ -285,8 +314,8 @@ function UnsavedChangesBar({
         )}
       >
         <p className="text-sm text-ink">You have unsaved changes.</p>
-        <Button size="sm" onClick={onSave}>
-          Save changes
+        <Button size="sm" disabled={saving} onClick={onSave}>
+          {saving ? "Saving…" : "Save changes"}
         </Button>
       </div>
     </div>
@@ -312,7 +341,7 @@ function Section({
           </p>
         )}
       </div>
-      <div className="border border-border">{children}</div>
+      <div className="border border-border bg-surface">{children}</div>
     </section>
   );
 }

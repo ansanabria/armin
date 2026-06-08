@@ -1,6 +1,7 @@
 import { app, BrowserWindow, session } from "electron";
 import started from "electron-squirrel-startup";
 import { closeDb } from "./db";
+import { applyLinuxDesktopEntry } from "./icon";
 import { registerIpc } from "./ipc";
 import { openProfilePicker } from "./windows";
 
@@ -13,6 +14,7 @@ if (started) {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on("ready", async () => {
+  applyLinuxDesktopEntry();
   session.defaultSession.setSpellCheckerEnabled(false);
   registerIpc();
   openProfilePicker();

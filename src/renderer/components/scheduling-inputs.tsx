@@ -5,8 +5,11 @@ import {
   formatRetentionPercent,
   formatStepsString,
   isValidMaximumInterval,
+  isValidNewCardsPerDay,
   isValidRetention,
+  isValidStabilityFloor,
   isValidStepDuration,
+  NEW_CARDS_PER_DAY_MAX,
   parseBoundedInt,
   parseDays,
   parseRetentionPercent,
@@ -224,4 +227,104 @@ export function StepsInput({ value, onChange }: StepsInputProps) {
   };
 
   return <DurationStepFields step={step} onChange={handleChange} />;
+}
+
+type StabilityFloorInputProps = {
+  value: number;
+  onChange: (value: number) => void;
+};
+
+export function StabilityFloorInput({
+  value,
+  onChange,
+}: StabilityFloorInputProps) {
+  const [draft, setDraft] = useState(String(value));
+  const [invalid, setInvalid] = useState(false);
+
+  useEffect(() => {
+    setDraft(String(value));
+    setInvalid(false);
+  }, [value]);
+
+  const handleBlur = () => {
+    const parsed = Number(draft);
+    if (isValidStabilityFloor(parsed)) {
+      setInvalid(false);
+      setDraft(String(parsed));
+      onChange(parsed);
+      return;
+    }
+    setInvalid(true);
+    setDraft(String(value));
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        inputMode="decimal"
+        value={draft}
+        onChange={(event) => {
+          setInvalid(false);
+          setDraft(event.target.value.replace(/[^\d.]/g, ""));
+        }}
+        onBlur={handleBlur}
+        aria-invalid={invalid}
+        className={cn(
+          "w-16 text-right tabular-nums",
+          invalid && invalidInputClass,
+        )}
+      />
+      <UnitLabel>days</UnitLabel>
+    </div>
+  );
+}
+
+type NewCardsPerDayInputProps = {
+  value: number;
+  onChange: (value: number) => void;
+};
+
+export function NewCardsPerDayInput({
+  value,
+  onChange,
+}: NewCardsPerDayInputProps) {
+  const [draft, setDraft] = useState(String(value));
+  const [invalid, setInvalid] = useState(false);
+
+  useEffect(() => {
+    setDraft(String(value));
+    setInvalid(false);
+  }, [value]);
+
+  const handleBlur = () => {
+    const parsed = parseBoundedInt(draft, NEW_CARDS_PER_DAY_MAX);
+    if (parsed !== null && isValidNewCardsPerDay(parsed)) {
+      setInvalid(false);
+      setDraft(String(parsed));
+      onChange(parsed);
+      return;
+    }
+    setInvalid(true);
+    setDraft(String(value));
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        inputMode="numeric"
+        value={draft}
+        onChange={(event) => {
+          setInvalid(false);
+          setDraft(event.target.value.replace(/[^\d]/g, ""));
+        }}
+        onBlur={handleBlur}
+        aria-invalid={invalid}
+        className={cn(
+          "w-16 text-right tabular-nums",
+          invalid && invalidInputClass,
+        )}
+      />
+      <UnitLabel>cards</UnitLabel>
+    </div>
+  );
 }

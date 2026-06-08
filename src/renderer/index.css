@@ -206,6 +206,16 @@
       transform: translateY(1rem);
     }
   }
+  @keyframes a-rise-out {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
   @keyframes a-shimmer {
     to {
       background-position-x: -200%;
@@ -218,6 +228,9 @@
   .animate-rise {
     animation: a-rise 0.32s var(--ease-out-quart) both;
   }
+  .animate-rise-out {
+    animation: a-rise-out 0.28s var(--ease-out-quart) both;
+  }
   .animate-pop {
     animation: a-pop 0.2s var(--ease-out-quart) both;
   }
@@ -226,6 +239,23 @@
   }
   .animate-pop-out {
     animation: a-pop-out 0.2s var(--ease-out-quart) both;
+  }
+  .card-grid {
+    position: relative;
+  }
+
+  .card-tile-collapse {
+    width: 100%;
+    align-self: start;
+  }
+
+  .card-tile-collapse[data-exiting="true"] {
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.98) translateY(-4px);
+    transition:
+      opacity 0.22s var(--ease-out-quart),
+      transform 0.32s var(--ease-out-quart);
   }
   .animate-flip-in {
     animation: a-flip-in 0.28s var(--ease-out-quart) both;
@@ -253,6 +283,17 @@
   }
   .titlebar-no-drag {
     -webkit-app-region: no-drag;
+  }
+
+  /* Ruled notebook paper — horizontal lines with a lighter vertical grid. */
+  .notebook-bg {
+    --notebook-cell: 1.5rem;
+
+    background-color: var(--color-bg);
+    background-image:
+      linear-gradient(var(--armin-grid-h) 1px, transparent 1px),
+      linear-gradient(90deg, var(--armin-grid-v) 1px, transparent 1px);
+    background-size: 100% var(--notebook-cell), var(--notebook-cell) 100%;
   }
 
   /* Same-document route transitions (TanStack Router + View Transitions API). */

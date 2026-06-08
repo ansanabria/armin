@@ -1,6 +1,7 @@
 {
   "name": "armin",
   "productName": "Armin",
+  "desktopName": "armin.desktop",
   "version": "1.0.0",
   "description": "Armin - Flashcard app",
   "main": ".vite/build/main.js",
@@ -11,9 +12,11 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
+    "test": "vitest run",
     "format": "prettier --write .",
     "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "icons": "node scripts/build-logo-svg.mjs && node scripts/generate-icons.mjs"
   },
   "keywords": [],
   "author": {
@@ -31,6 +34,7 @@
     "@electron-forge/plugin-fuses": "^7.11.2",
     "@electron-forge/plugin-vite": "^7.11.2",
     "@electron/fuses": "^1.8.0",
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.0",
     "@types/dagre": "^0.7.54",
     "@types/electron-squirrel-startup": "^1.0.2",
@@ -43,9 +47,13 @@
     "electron": "^42.3.3",
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
+    "opentype.js": "^2.0.0",
+    "png-to-ico": "^3.0.1",
+    "png2icons": "^2.0.1",
     "tailwindcss": "^4.3.0",
     "typescript": "^5.9.3",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "^4.1.8"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

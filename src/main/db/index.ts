@@ -5,33 +5,63 @@ import { createClient, type Client } from "@libsql/client";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import * as schema from "./schema";
 
-let _client: Client | null = null;
-let _db: LibSQLDatabase<typeof schema> | null = null;
+type DbHandle = {
+  client: Client;
+  db: LibSQLDatabase<typeof schema>;
+};
 
-/** Open the SQLite database via libSQL (WAL + FK enforcement). Idempotent. */
-export async function initDb() {
-  if (_db) return _db;
-  const dir = app.getPath("userData");
+const handles = new Map<string, DbHandle>();
+let testDbRoot: string | null = null;
+
+function profileDbDir(profileId: string) {
+  const safeProfileId = profileId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const root = testDbRoot ?? app.getPath("userData");
+  return path.join(root, "profiles", safeProfileId);
+}
+
+export function setDbRootForTests(root: string | null) {
+  testDbRoot = root;
+}
+
+/** Open a profile's SQLite database via libSQL (WAL + FK enforcement). */
+export async function initDb(profileId: string) {
+  const existing = handles.get(profileId);
+  if (existing) return existing.db;
+
+  const dir = profileDbDir(profileId);
   fs.mkdirSync(dir, { recursive: true });
   const client = createClient({
     url: `file:${path.join(dir, "armin.db")}`,
   });
   await client.execute("PRAGMA journal_mode = WAL;");
   await client.execute("PRAGMA foreign_keys = ON;");
-  _client = client;
-  _db = drizzle(client, { schema });
-  return _db;
+
+  const db = drizzle(client, { schema });
+  handles.set(profileId, { client, db });
+  return db;
 }
 
-export function getDb() {
-  if (!_db) throw new Error("Database not initialized — call initDb() first.");
-  return _db;
+export function getDb(profileId: string) {
+  const handle = handles.get(profileId);
+  if (!handle) {
+    throw new Error(
+      `Database for profile ${profileId} is not initialized — call initDb(profileId) first.`,
+    );
+  }
+  return handle.db;
 }
 
-export function closeDb() {
-  _client?.close();
-  _client = null;
-  _db = null;
+export function closeDb(profileId?: string) {
+  if (profileId) {
+    handles.get(profileId)?.client.close();
+    handles.delete(profileId);
+    return;
+  }
+
+  for (const handle of handles.values()) {
+    handle.client.close();
+  }
+  handles.clear();
 }
 
 export { schema };

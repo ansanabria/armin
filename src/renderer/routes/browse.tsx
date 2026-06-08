@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Tag,
@@ -24,8 +25,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
-import { usePreview } from "@/preview/preview-context";
-import { decks, getAllCards, type UiCard } from "@/data/fixtures";
+import type { CardFormValues } from "@/components/card-form-dialog";
+import { cardKeys, invalidateCoreData } from "@/lib/armin-query";
+import { toUiBrowseCard, type UiBrowseCard } from "@/types/view-models";
 import {
   BROWSE_SORT_OPTIONS,
   sortBrowseCards,
@@ -42,32 +44,63 @@ import { cn } from "@/lib/utils";
 const ALL_STATES = "all";
 
 export default function BrowsePage() {
-  // UI PREVIEW ONLY: `scenario` stands in for the cards query status.
-  const { scenario, setScenario } = usePreview();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const toast = useToast();
 
-  const all = useMemo(() => getAllCards(), []);
+  const cardsQuery = useQuery({
+    queryKey: cardKeys.all,
+    queryFn: () => window.armin.cards.listAll(),
+  });
+
+  const all = useMemo(
+    () => (cardsQuery.data ?? []).map(toUiBrowseCard),
+    [cardsQuery.data],
+  );
 
   const [sort, setSort] = useState<BrowseSortKey>("created-new");
   const [stateFilter, setStateFilter] = useState<string>(ALL_STATES);
   const [deckFilter, setDeckFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<UiCard | null>(null);
+  const [editing, setEditing] = useState<UiBrowseCard | null>(null);
 
-  const openEdit = (card: UiCard) => {
+  const openEdit = (card: UiBrowseCard) => {
     setEditing(card);
     setOpen(true);
   };
 
-  const saveCard = () => {
-    toast({
-      tone: "success",
-      title: "Card updated",
-    });
-    setOpen(false);
+  const closeDialog = () => setOpen(false);
+
+  const handleDialogExitComplete = () => {
     setEditing(null);
+  };
+
+  const updateCard = useMutation({
+    mutationFn: (values: CardFormValues & { id: string }) =>
+      window.armin.cards.update(values),
+    onSuccess: (_card, values) => {
+      invalidateCoreData(queryClient, editing?.deckId);
+      if (values.id) void queryClient.invalidateQueries({ queryKey: cardKeys.all });
+      toast({ tone: "success", title: "Card updated" });
+      closeDialog();
+    },
+    onError: () => toast({ tone: "error", title: "Couldn’t update card" }),
+  });
+
+  const deleteCard = useMutation({
+    mutationFn: (card: UiBrowseCard) =>
+      window.armin.cards.delete(card.id).then(() => card),
+    onSuccess: (card) => {
+      invalidateCoreData(queryClient, card.deckId);
+      toast({ tone: "error", title: "Card deleted" });
+    },
+    onError: () => toast({ tone: "error", title: "Couldn’t delete card" }),
+  });
+
+  const saveCard = (values: CardFormValues) => {
+    if (!editing) return;
+    updateCard.mutate({ id: editing.id, ...values });
   };
 
   const allTags = useMemo(() => {
@@ -79,9 +112,11 @@ export default function BrowsePage() {
   const deckOptions = useMemo(
     () => [
       { value: "", label: "All decks" },
-      ...decks.map((d) => ({ value: d.id, label: d.name })),
+      ...Array.from(new Map(all.map((c) => [c.deckId, c.deckName])))
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .map(([value, label]) => ({ value, label })),
     ],
-    [],
+    [all],
   );
 
   const tagOptions = useMemo(
@@ -134,10 +169,10 @@ export default function BrowsePage() {
         </p>
       </header>
 
-      {scenario === "loading" && <BrowseSkeleton />}
+      {cardsQuery.isLoading && <BrowseSkeleton />}
 
-      {scenario === "error" && (
-        <div className="flex flex-col items-center border border-border px-6 py-14 text-center">
+      {cardsQuery.isError && (
+        <div className="flex flex-col items-center border border-border bg-bg-2 px-6 py-14 text-center">
           <div className="mb-4 flex h-12 w-12 items-center justify-center bg-relearning-bg text-relearning">
             <AlertTriangle className="h-6 w-6" strokeWidth={1.5} />
           </div>
@@ -151,18 +186,18 @@ export default function BrowsePage() {
           <Button
             variant="outline"
             className="mt-5"
-            onClick={() => setScenario("ready")}
+            onClick={() => void cardsQuery.refetch()}
           >
             Try again
           </Button>
         </div>
       )}
 
-      {scenario === "empty" && (
+      {!cardsQuery.isLoading && !cardsQuery.isError && all.length === 0 && (
         <EmptyState
           icon={Library}
           title="No cards yet"
-          description="Create a deck and add cards, or generate them with your AI agent. They'll all show up here."
+          description="Create a deck and add cards. They'll all show up here."
           action={
             <Link to="/">
               <Button variant="outline">Go to decks</Button>
@@ -171,7 +206,7 @@ export default function BrowsePage() {
         />
       )}
 
-      {scenario === "ready" && (
+      {!cardsQuery.isLoading && !cardsQuery.isError && all.length > 0 && (
         <>
           <div className="mb-5 border border-border bg-bg-2 px-4 py-3">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -187,7 +222,9 @@ export default function BrowsePage() {
                   <Select
                     value={stateFilter}
                     items={stateItems}
-                    onValueChange={setStateFilter}
+                    onValueChange={(value) =>
+                      setStateFilter(value ?? ALL_STATES)
+                    }
                   >
                     <SelectTrigger
                       className="w-full border-border-strong bg-surface"
@@ -230,7 +267,7 @@ export default function BrowsePage() {
                   />
                 </FilterField>
 
-                {allTags.length > 0 && (
+                {allTags.length > 0 ? (
                   <FilterField
                     className="w-44"
                     label={
@@ -249,6 +286,17 @@ export default function BrowsePage() {
                       aria-label="Filter by tag"
                     />
                   </FilterField>
+                ) : (
+                  <FilterField
+                    className="w-44"
+                    label={
+                      <>
+                        <Tag className="h-3.5 w-3.5" aria-hidden /> Tag
+                      </>
+                    }
+                  >
+                    <p className="flex h-9 items-center text-sm text-muted">No tags</p>
+                  </FilterField>
                 )}
               </div>
               <SortControl
@@ -266,7 +314,7 @@ export default function BrowsePage() {
           </p>
 
           {visible.length > 0 ? (
-            <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <ul className="card-grid grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {visible.map((card) => (
                 <CardTile
                   key={`${card.deckId}-${card.id}`}
@@ -279,14 +327,12 @@ export default function BrowsePage() {
                       params: { deckId: card.deckId },
                     })
                   }
-                  onDelete={() =>
-                    toast({ tone: "error", title: "Card deleted" })
-                  }
+                  onDelete={() => deleteCard.mutateAsync(card)}
                 />
               ))}
             </ul>
           ) : (
-            <p className="border border-border px-6 py-10 text-center text-sm text-muted">
+            <p className="border border-border bg-bg-2 px-6 py-10 text-center text-sm text-muted">
               No cards match the current filters.
             </p>
           )}
@@ -295,10 +341,8 @@ export default function BrowsePage() {
 
       <CardFormDialog
         open={open}
-        onClose={() => {
-          setOpen(false);
-          setEditing(null);
-        }}
+        onClose={closeDialog}
+        onExitComplete={handleDialogExitComplete}
         mode="edit"
         cardId={editing?.id ?? null}
         initialFront={editing?.front ?? ""}
@@ -333,11 +377,11 @@ function BrowseSkeleton() {
   return (
     <div>
       <Skeleton className="mb-5 h-24 w-full" />
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="card-grid grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
           <li
             key={i}
-            className="flex flex-col gap-2 border border-border p-4 pr-11"
+            className="flex flex-col gap-2 border border-border bg-surface p-4 pr-11"
           >
             <Skeleton className="h-5 w-20" />
             <Skeleton className="h-4 w-full" />
