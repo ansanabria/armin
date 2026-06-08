@@ -1,12 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import {
-  Tag,
-  Layers,
-  AlertTriangle,
-  Library,
-  CircleDot,
-} from "lucide-react";
+import { Tag, Layers, AlertTriangle, Library, CircleDot } from "lucide-react";
 import { CardFormDialog } from "@/components/card-form-dialog";
 import { CardTile } from "@/components/card-tile";
 import { SortControl } from "@/components/sort-control";
@@ -106,10 +100,7 @@ export default function BrowsePage() {
     return Number.isInteger(n) ? [n as CardState] : [];
   }, [stateFilter]);
 
-  const deckIds = useMemo(
-    () => (deckFilter ? [deckFilter] : []),
-    [deckFilter],
-  );
+  const deckIds = useMemo(() => (deckFilter ? [deckFilter] : []), [deckFilter]);
 
   const tags = useMemo(() => (tagFilter ? [tagFilter] : []), [tagFilter]);
 
@@ -187,7 +178,9 @@ export default function BrowsePage() {
                   <Select
                     value={stateFilter}
                     items={stateItems}
-                    onValueChange={setStateFilter}
+                    onValueChange={(value) =>
+                      setStateFilter(value ?? ALL_STATES)
+                    }
                   >
                     <SelectTrigger
                       className="w-full border-border-strong bg-surface"
@@ -199,10 +192,7 @@ export default function BrowsePage() {
                       <SelectGroup>
                         <SelectItem value={ALL_STATES}>All states</SelectItem>
                         {STATE_OPTIONS.map((opt) => (
-                          <SelectItem
-                            key={opt.value}
-                            value={String(opt.value)}
-                          >
+                          <SelectItem key={opt.value} value={String(opt.value)}>
                             {opt.label}
                           </SelectItem>
                         ))}
