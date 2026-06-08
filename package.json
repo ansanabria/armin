@@ -10,6 +10,7 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
+    "mcp": "tsx src/mcp/server.ts",
     "lint": "eslint --ext .ts,.tsx .",
     "format": "prettier --write .",
     "db:generate": "drizzle-kit generate",
@@ -44,6 +45,7 @@
     "eslint": "^8.57.1",
     "eslint-plugin-import": "^2.32.0",
     "tailwindcss": "^4.3.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vite": "^5.4.21"
   },
@@ -54,6 +56,7 @@
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@fontsource-variable/source-serif-4": "^5.2.9",
     "@libsql/client": "^0.17.3",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-router": "^1.170.11",
     "@tiptap/core": "^3.26.0",
