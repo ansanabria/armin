@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { McpSettings } from "@/components/mcp-settings";
 import { useToast } from "@/components/ui/toast";
 import { settingsKeys } from "@/lib/armin-query";
 import { THEME_OPTIONS, type ThemePreference } from "@/lib/theme";
@@ -205,6 +206,13 @@ export default function SettingsPage() {
               onChange={(v) => set("newCardsPerDay", v)}
             />
           </Row>
+        </Section>
+
+        <Section
+          title="AI card creation"
+          description="Connect a coding agent to Armin's local MCP server so it can generate cards."
+        >
+          <McpSettings />
         </Section>
 
         <Section

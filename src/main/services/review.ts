@@ -5,7 +5,7 @@ import type { Card } from "../db/schema";
 import type { CardWithMeta, BrowseCard } from "./cards";
 import { withCardMeta } from "./cards";
 import type { ServiceContext } from "./context";
-import { activateUnlockedDependents, isUnlocked } from "./graph";
+import { activateUnlockedDependents, getLockedByCardIds } from "./graph";
 import { buildScheduler, fromFsrsCard, isPendingSchedule, State, toFsrsCard } from "./scheduler";
 import { getSettings } from "./settings";
 import { shuffle } from "./shuffle";
@@ -71,10 +71,13 @@ export async function buildSessionQueue(
 ): Promise<Card[]> {
   const now = new Date();
   const { newCardsPerDay } = await getSettings(ctx);
-  const unlocked: Card[] = [];
-  for (const card of deckCards) {
-    if (await isUnlocked(ctx, card.id)) unlocked.push(card);
-  }
+  const lockedById = await getLockedByCardIds(
+    ctx,
+    deckCards.map((card) => card.id),
+  );
+  const unlocked = deckCards.filter(
+    (card) => !(lockedById.get(card.id) ?? false),
+  );
 
   const reviews = unlocked.filter(
     (card) =>

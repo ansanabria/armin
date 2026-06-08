@@ -6,6 +6,7 @@ import { count, eq } from "drizzle-orm";
 import { closeDb, getDb, initDb, schema, setDbRootForTests } from "../db";
 import { runMigrations } from "../db/migrate";
 import type { ServiceContext } from "./context";
+import * as browse from "./browse";
 import * as cards from "./cards";
 import * as decks from "./decks";
 import * as graph from "./graph";
@@ -279,6 +280,205 @@ describe("core services", () => {
     expect(queue.map((card) => card.id).sort()).toEqual(
       [prereq.id, dependent.id].sort(),
     );
+  });
+
+  it("pages browse results with filters, sort, and batched metadata", async () => {
+    const ctx = await makeContext("browse-page");
+    const alpha = await decks.createDeck(ctx, { name: "Alpha" });
+    const beta = await decks.createDeck(ctx, { name: "Beta" });
+
+    const older = await cards.createCard({
+      ctx,
+      deckId: alpha.id,
+      front: "Alpha older",
+      back: "A",
+      tags: ["shared"],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const newer = await cards.createCard({
+      ctx,
+      deckId: beta.id,
+      front: "Beta newer",
+      back: "B",
+      tags: ["beta-only"],
+    });
+
+    expect(await browse.listAllTagNames(ctx)).toEqual(["beta-only", "shared"]);
+
+    const firstPage = await browse.listBrowsePage(ctx, {
+      offset: 0,
+      limit: 1,
+      sort: "created-new",
+    });
+    expect(firstPage.libraryTotal).toBe(2);
+    expect(firstPage.filteredTotal).toBe(2);
+    expect(firstPage.cards).toHaveLength(1);
+    expect(firstPage.cards[0].id).toBe(newer.id);
+    expect(firstPage.cards[0].tags).toEqual(["beta-only"]);
+
+    const deckFiltered = await browse.listBrowsePage(ctx, {
+      offset: 0,
+      limit: 30,
+      sort: "deck-asc",
+      deckId: alpha.id,
+    });
+    expect(deckFiltered.filteredTotal).toBe(1);
+    expect(deckFiltered.cards[0].id).toBe(older.id);
+    expect(deckFiltered.cards[0].deckName).toBe("Alpha");
+
+    const tagFiltered = await browse.listBrowsePage(ctx, {
+      offset: 0,
+      limit: 30,
+      sort: "front-asc",
+      tag: "shared",
+    });
+    expect(tagFiltered.filteredTotal).toBe(1);
+    expect(tagFiltered.cards[0].id).toBe(older.id);
+  });
+
+  it("lists deck tag names without loading all cards", async () => {
+    const ctx = await makeContext("deck-tags");
+    const deck = await decks.createDeck(ctx, { name: "Tagged" });
+    await cards.createCard({
+      ctx,
+      deckId: deck.id,
+      front: "One",
+      back: "A",
+      tags: ["alpha", "shared"],
+    });
+    await cards.createCard({
+      ctx,
+      deckId: deck.id,
+      front: "Two",
+      back: "B",
+      tags: ["beta", "shared"],
+    });
+
+    expect(await browse.listDeckTagNames(ctx, deck.id)).toEqual([
+      "alpha",
+      "beta",
+      "shared",
+    ]);
+  });
+
+  it("pages deck-scoped browse results with sort and tag filter", async () => {
+    const ctx = await makeContext("deck-browse");
+    const deck = await decks.createDeck(ctx, { name: "Paged" });
+    const tagged = await cards.createCard({
+      ctx,
+      deckId: deck.id,
+      front: "Tagged card",
+      back: "A",
+      tags: ["focus"],
+    });
+    await cards.createCard({
+      ctx,
+      deckId: deck.id,
+      front: "Other card",
+      back: "B",
+    });
+
+    const firstPage = await browse.listBrowsePage(ctx, {
+      offset: 0,
+      limit: 1,
+      sort: "front-asc",
+      deckId: deck.id,
+    });
+    expect(firstPage.filteredTotal).toBe(2);
+    expect(firstPage.cards).toHaveLength(1);
+    expect(firstPage.cards[0].deckName).toBe("Paged");
+
+    const tagFiltered = await browse.listBrowsePage(ctx, {
+      offset: 0,
+      limit: 10,
+      sort: "front-asc",
+      deckId: deck.id,
+      tag: "focus",
+    });
+    expect(tagFiltered.filteredTotal).toBe(1);
+    expect(tagFiltered.cards[0].id).toBe(tagged.id);
+    expect(tagFiltered.cards[0].tags).toEqual(["focus"]);
+  });
+
+  it("buildSessionQueue uses batched unlock lookup", async () => {
+    const ctx = await makeContext("batch-unlock");
+    const deck = await decks.createDeck(ctx, { name: "Batch" });
+    const cardsInDeck = [];
+    for (let i = 0; i < 5; i++) {
+      cardsInDeck.push(
+        await cards.createCard({
+          ctx,
+          deckId: deck.id,
+          front: `Card ${i + 1}`,
+          back: "Answer",
+        }),
+      );
+    }
+    const prereq = cardsInDeck[0];
+    const dependent = cardsInDeck[4];
+    await graph.addPrereq(ctx, prereq.id, dependent.id);
+
+    const deckRows = await ctx.db
+      .select()
+      .from(schema.cards)
+      .where(eq(schema.cards.deckId, deck.id))
+      .all();
+    const queue = await review.buildSessionQueue(ctx, deckRows, deck.id);
+    expect(queue.map((card) => card.id)).not.toContain(dependent.id);
+    expect(queue.length).toBeGreaterThan(0);
+  });
+
+  it("persists locked state when prerequisites are added", async () => {
+    const ctx = await makeContext("persist-locked");
+    const deck = await decks.createDeck(ctx, { name: "Locked" });
+    const prereq = await cards.createCard({
+      ctx,
+      deckId: deck.id,
+      front: "Foundation",
+      back: "Base",
+    });
+    const dependent = await cards.createCard({
+      ctx,
+      deckId: deck.id,
+      front: "Advanced",
+      back: "Top",
+    });
+
+    expect((await cards.getCard(ctx, dependent.id))?.locked).toBe(false);
+
+    await graph.addPrereq(ctx, prereq.id, dependent.id);
+
+    expect((await cards.getCard(ctx, dependent.id))?.locked).toBe(true);
+
+    await securePrereq(ctx, prereq.id);
+    await graph.refreshLockedAfterPrereqSecured(ctx, prereq.id);
+
+    expect((await cards.getCard(ctx, dependent.id))?.locked).toBe(false);
+  });
+
+  it("pages due-soon browse results without loading the full deck", async () => {
+    const ctx = await makeContext("due-soon-page");
+    const deck = await decks.createDeck(ctx, { name: "Due sort" });
+
+    for (let i = 0; i < 120; i++) {
+      await cards.createCard({
+        ctx,
+        deckId: deck.id,
+        front: `Card ${String(i).padStart(3, "0")}`,
+        back: "Answer",
+      });
+    }
+
+    const page = await browse.listBrowsePage(ctx, {
+      offset: 0,
+      limit: 30,
+      sort: "due-soon",
+      deckId: deck.id,
+    });
+
+    expect(page.filteredTotal).toBe(120);
+    expect(page.cards).toHaveLength(30);
+    expect(page.cards.every((card) => card.deckId === deck.id)).toBe(true);
   });
 
   it("seeds and persists scheduling settings", async () => {
