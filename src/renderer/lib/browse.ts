@@ -1,4 +1,4 @@
-import type { UiBrowseCard } from "@/data/fixtures";
+import type { UiBrowseCard } from "@/types/view-models";
 import { CARD_SORT_OPTIONS, sortCards, type CardSortKey } from "./sort-cards";
 
 /** Browse adds deck-based ordering on top of the per-deck card sorts. */

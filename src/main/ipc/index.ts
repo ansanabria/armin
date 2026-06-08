@@ -1,15 +1,20 @@
-import { BrowserWindow, ipcMain } from "electron";
+import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
-import { initDb } from "../db";
+import { getDb, initDb } from "../db";
 import { runMigrations } from "../db/migrate";
 import { setActiveProfileId } from "../profiles/active";
+import type { ServiceContext } from "../services/context";
 import * as decks from "../services/decks";
 import * as cards from "../services/cards";
 import * as review from "../services/review";
 import * as graph from "../services/graph";
 import * as settings from "../services/settings";
 import * as profiles from "../services/profiles";
-import { openMainWindow, openProfilePicker } from "../windows";
+import {
+  getProfileIdForWebContents,
+  openMainWindow,
+  openProfilePicker,
+} from "../windows";
 
 /** Notify all renderers that persisted data changed (e.g. via the MCP server). */
 export function notifyDataChanged() {
@@ -29,15 +34,37 @@ function register<T extends z.ZodType>(
   ipcMain.handle(channel, (_event, payload) => wrapped(payload));
 }
 
+function registerForProfile<T extends z.ZodType>(
+  channel: string,
+  schema: T,
+  handler: (ctx: ServiceContext, input: z.infer<T>) => unknown,
+) {
+  ipcMain.handle(channel, async (event, payload) => {
+    const ctx = await serviceContextForEvent(event);
+    return handler(ctx, schema.parse(payload));
+  });
+}
+
 const id = z.object({ id: z.string() });
 
-let dbReady = false;
+const dbReady = new Set<string>();
 
-async function ensureDbReady() {
-  if (dbReady) return;
-  await initDb();
-  await runMigrations();
-  dbReady = true;
+async function ensureDbReady(profileId: string) {
+  if (dbReady.has(profileId)) return;
+  await initDb(profileId);
+  await runMigrations(profileId);
+  dbReady.add(profileId);
+}
+
+async function serviceContextForEvent(
+  event: IpcMainInvokeEvent,
+): Promise<ServiceContext> {
+  const profileId = getProfileIdForWebContents(event.sender.id);
+  if (!profileId) {
+    throw new Error("No active profile is associated with this window.");
+  }
+  await ensureDbReady(profileId);
+  return { profileId, db: getDb(profileId) };
 }
 
 export function registerIpc() {
@@ -53,7 +80,7 @@ export function registerIpc() {
     z.object({ id: z.string(), name: z.string().optional() }),
     async ({ id, name }) => {
       setActiveProfileId(id);
-      await ensureDbReady();
+      await ensureDbReady(id);
       const profileName = name ?? profiles.getProfile(id)?.name;
       await openMainWindow(id, profileName);
       return { ok: true as const };
@@ -65,94 +92,107 @@ export function registerIpc() {
   });
 
   // --- decks ---
-  register("decks:list", z.void().optional(), () => decks.listDecks());
-  register("decks:get", id, ({ id }) => decks.getDeck(id));
-  register(
+  registerForProfile("decks:list", z.void().optional(), (ctx) =>
+    decks.listDecks(ctx),
+  );
+  registerForProfile("decks:get", id, (ctx, { id }) => decks.getDeck(ctx, id));
+  registerForProfile(
     "decks:create",
     z.object({ name: z.string().min(1), description: z.string().nullish() }),
-    (input) => decks.createDeck(input),
+    (ctx, input) => decks.createDeck(ctx, input),
   );
-  register(
+  registerForProfile(
     "decks:update",
     z.object({
       id: z.string(),
       name: z.string().min(1).optional(),
       description: z.string().nullish(),
     }),
-    ({ id, ...patch }) => decks.updateDeck(id, patch),
+    (ctx, { id, ...patch }) => decks.updateDeck(ctx, id, patch),
   );
-  register("decks:delete", id, ({ id }) => {
-    decks.deleteDeck(id);
+  registerForProfile("decks:delete", id, async (ctx, { id }) => {
+    await decks.deleteDeck(ctx, id);
     return { ok: true };
   });
 
   // --- cards ---
-  register("cards:list", z.object({ deckId: z.string() }), ({ deckId }) =>
-    cards.listCards(deckId),
+  registerForProfile("cards:list", z.object({ deckId: z.string() }), (ctx, { deckId }) =>
+    cards.listCards(ctx, deckId),
   );
-  register("cards:get", id, ({ id }) => cards.getCard(id));
-  register(
+  registerForProfile("cards:listAll", z.void().optional(), (ctx) =>
+    cards.listAllCards(ctx),
+  );
+  registerForProfile("cards:get", id, (ctx, { id }) => cards.getCard(ctx, id));
+  registerForProfile(
     "cards:create",
     z.object({
       deckId: z.string(),
       front: z.string().min(1),
       back: z.string().min(1),
       type: z.string().optional(),
+      tags: z.array(z.string()).optional(),
     }),
-    (input) => cards.createCard(input),
+    (ctx, input) => cards.createCard({ ctx, ...input }),
   );
-  register(
+  registerForProfile(
     "cards:update",
     z.object({
       id: z.string(),
       front: z.string().min(1).optional(),
       back: z.string().min(1).optional(),
       type: z.string().optional(),
+      tags: z.array(z.string()).optional(),
     }),
-    ({ id, ...patch }) => cards.updateCard(id, patch),
+    (ctx, { id, ...patch }) => cards.updateCard(ctx, id, patch),
   );
-  register("cards:delete", id, ({ id }) => {
-    cards.deleteCard(id);
+  registerForProfile("cards:delete", id, async (ctx, { id }) => {
+    await cards.deleteCard(ctx, id);
     return { ok: true };
   });
 
   // --- review ---
-  register("review:queue", z.object({ deckId: z.string() }), ({ deckId }) =>
-    review.getQueue(deckId),
+  registerForProfile("review:queue", z.object({ deckId: z.string() }), (ctx, { deckId }) =>
+    review.getQueue(ctx, deckId),
   );
-  register("review:preview", z.object({ cardId: z.string() }), ({ cardId }) =>
-    review.previewCard(cardId),
+  registerForProfile("review:queueAll", z.void().optional(), (ctx) =>
+    review.getGlobalQueue(ctx),
   );
-  register(
+  registerForProfile("review:preview", z.object({ cardId: z.string() }), (ctx, { cardId }) =>
+    review.previewCard(ctx, cardId),
+  );
+  registerForProfile(
     "review:rate",
     z.object({ cardId: z.string(), rating: z.number().int().min(1).max(4) }),
-    ({ cardId, rating }) => review.rateCard(cardId, rating as 1 | 2 | 3 | 4),
+    (ctx, { cardId, rating }) =>
+      review.rateCard(ctx, cardId, rating as 1 | 2 | 3 | 4),
   );
 
   // --- graph ---
-  register("graph:get", z.object({ deckId: z.string() }), ({ deckId }) =>
-    graph.getDeckGraph(deckId),
+  registerForProfile("graph:get", z.object({ deckId: z.string() }), (ctx, { deckId }) =>
+    graph.getDeckGraph(ctx, deckId),
   );
-  register(
+  registerForProfile(
     "graph:addPrereq",
     z.object({ prereqId: z.string(), dependentId: z.string() }),
-    ({ prereqId, dependentId }) => {
-      graph.addPrereq(prereqId, dependentId);
+    async (ctx, { prereqId, dependentId }) => {
+      await graph.addPrereq(ctx, prereqId, dependentId);
       return { ok: true };
     },
   );
-  register(
+  registerForProfile(
     "graph:removePrereq",
     z.object({ prereqId: z.string(), dependentId: z.string() }),
-    ({ prereqId, dependentId }) => {
-      graph.removePrereq(prereqId, dependentId);
+    async (ctx, { prereqId, dependentId }) => {
+      await graph.removePrereq(ctx, prereqId, dependentId);
       return { ok: true };
     },
   );
 
   // --- settings ---
-  register("settings:get", z.void().optional(), () => settings.getSettings());
-  register(
+  registerForProfile("settings:get", z.void().optional(), (ctx) =>
+    settings.getSettings(ctx),
+  );
+  registerForProfile(
     "settings:update",
     z.object({
       requestRetention: z.number().optional(),
@@ -162,8 +202,10 @@ export function registerIpc() {
       learningSteps: z.string().optional(),
       relearningSteps: z.string().optional(),
       weights: z.string().nullish(),
+      prereqStabilityFloor: z.number().optional(),
+      newCardsPerDay: z.number().int().min(0).optional(),
     }),
-    (patch) => settings.updateSettings(patch),
+    (ctx, patch) => settings.updateSettings(ctx, patch),
   );
 
   // --- shell (custom title bar controls) ---

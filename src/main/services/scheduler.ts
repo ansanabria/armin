@@ -8,6 +8,13 @@ import {
 } from "ts-fsrs";
 import type { Card as DbCard, Settings } from "../db/schema";
 import { getSettings } from "./settings";
+import type { ServiceContext } from "./context";
+
+/** Cards awaiting prerequisite unlock use a far-future due date. */
+export const PENDING_DUE = new Date("2099-01-01T00:00:00.000Z");
+
+export const DEFAULT_PREREQ_STABILITY_FLOOR = 2;
+export const DEFAULT_NEW_CARDS_PER_DAY = 10;
 
 /** The subset of card columns that hold FSRS scheduling state. */
 export type FsrsFields = Pick<
@@ -32,8 +39,11 @@ function parseSteps(csv: string): Steps {
 }
 
 /** Build an FSRS scheduler from the user's saved parameters. */
-export async function buildScheduler(settings?: Settings): Promise<FSRS> {
-  const s = settings ?? (await getSettings());
+export async function buildScheduler(
+  ctx: ServiceContext,
+  settings?: Settings,
+): Promise<FSRS> {
+  const s = settings ?? (await getSettings(ctx));
   return fsrs({
     request_retention: s.requestRetention,
     maximum_interval: s.maximumInterval,
@@ -77,9 +87,43 @@ export function fromFsrsCard(card: FsrsCard): FsrsFields {
   };
 }
 
-/** Fresh FSRS state for a brand-new card. */
+/** Fresh FSRS state for a brand-new card ready to study. */
 export function newCardFields(now: Date = new Date()): FsrsFields {
   return fromFsrsCard(createEmptyCard(now));
+}
+
+/** FSRS placeholder for cards blocked by unmet prerequisites. */
+export function pendingCardFields(): FsrsFields {
+  return {
+    due: PENDING_DUE,
+    stability: 0,
+    difficulty: 0,
+    elapsedDays: 0,
+    scheduledDays: 0,
+    learningSteps: 0,
+    reps: 0,
+    lapses: 0,
+    state: State.New,
+    lastReview: null,
+  };
+}
+
+export function isPendingSchedule(
+  card: Pick<DbCard, "due" | "lastReview" | "reps">,
+): boolean {
+  return (
+    card.reps === 0 &&
+    card.lastReview == null &&
+    card.due.getTime() >= PENDING_DUE.getTime()
+  );
+}
+
+/** A prerequisite is secured enough to unlock dependents. */
+export function isPrereqSecured(
+  card: Pick<DbCard, "state" | "stability">,
+  stabilityFloor: number,
+): boolean {
+  return card.state === State.Review && card.stability >= stabilityFloor;
 }
 
 export { State };
