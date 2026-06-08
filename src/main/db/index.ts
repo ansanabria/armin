@@ -13,9 +13,23 @@ type DbHandle = {
 const handles = new Map<string, DbHandle>();
 let testDbRoot: string | null = null;
 
+function defaultDbRoot() {
+  if (process.env.ARMIN_DATA_DIR) {
+    return process.env.ARMIN_DATA_DIR;
+  }
+
+  if (!process.versions.electron) {
+    throw new Error(
+      "ARMIN_DATA_DIR must be set when the database is initialized outside Electron.",
+    );
+  }
+
+  return app.getPath("userData");
+}
+
 function profileDbDir(profileId: string) {
   const safeProfileId = profileId.replace(/[^a-zA-Z0-9_-]/g, "_");
-  const root = testDbRoot ?? app.getPath("userData");
+  const root = testDbRoot ?? defaultDbRoot();
   return path.join(root, "profiles", safeProfileId);
 }
 

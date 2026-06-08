@@ -134,6 +134,19 @@ export async function addPrereq(
       "That edge would create a cycle in the prerequisite graph.",
     );
   }
+  const edgeCards = await ctx.db
+    .select({ id: cards.id, deckId: cards.deckId })
+    .from(cards)
+    .where(inArray(cards.id, [prereqId, dependentId]))
+    .all();
+  if (edgeCards.length !== 2) {
+    throw new Error("Both cards must exist before connecting prerequisites.");
+  }
+  const prereq = edgeCards.find((card) => card.id === prereqId);
+  const dependent = edgeCards.find((card) => card.id === dependentId);
+  if (prereq?.deckId !== dependent?.deckId) {
+    throw new Error("Prerequisite edges can only connect cards in one deck.");
+  }
   await ctx.db
     .insert(cardPrereqs)
     .values({ prereqId, dependentId })

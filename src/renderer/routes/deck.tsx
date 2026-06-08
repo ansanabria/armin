@@ -214,7 +214,9 @@ export default function DeckPage() {
             {dueCount > 0 && (
               <>
                 <span className="text-border-strong"> · </span>
-                <span className="font-medium text-accent">{dueCount} due now</span>
+                <span className="font-medium text-accent">
+                  {dueCount} due now
+                </span>
               </>
             )}
           </p>
@@ -283,7 +285,9 @@ export default function DeckPage() {
                     </>
                   }
                 >
-                  <p className="flex h-9 items-center text-sm text-muted">No tags</p>
+                  <p className="flex h-9 items-center text-sm text-muted">
+                    No tags
+                  </p>
                 </FilterField>
               )}
               <SortControl
@@ -302,7 +306,9 @@ export default function DeckPage() {
                   key={card.id}
                   card={card}
                   onOpen={() => openEdit(card)}
-                  onDelete={() => deleteCard.mutateAsync(card.id)}
+                  onDelete={async () => {
+                    await deleteCard.mutateAsync(card.id);
+                  }}
                 />
               ))}
             </ul>
@@ -352,7 +358,10 @@ function CardsSkeleton() {
   return (
     <ul className="card-grid grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }).map((_, i) => (
-        <li key={i} className="flex flex-col gap-2 border border-border bg-surface p-4 pr-11">
+        <li
+          key={i}
+          className="flex flex-col gap-2 border border-border bg-surface p-4 pr-11"
+        >
           <Skeleton className="h-5 w-20" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-3 w-full" />
