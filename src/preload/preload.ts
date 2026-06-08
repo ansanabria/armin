@@ -22,6 +22,9 @@ const api = {
   cards: {
     list: (deckId: string) => invoke("cards:list", { deckId }),
     listAll: () => invoke("cards:listAll"),
+    browse: (input: unknown) => invoke("cards:browse", input),
+    listTags: () => invoke("cards:listTags"),
+    listDeckTags: (deckId: string) => invoke("cards:listDeckTags", { deckId }),
     get: (id: string) => invoke("cards:get", { id }),
     create: (input: unknown) => invoke("cards:create", input),
     update: (input: unknown) => invoke("cards:update", input),
@@ -44,6 +47,9 @@ const api = {
   settings: {
     get: () => invoke("settings:get"),
     update: (patch: unknown) => invoke("settings:update", patch),
+  },
+  mcp: {
+    getSetup: () => invoke("mcp:getSetup"),
   },
   onDataChanged: (cb: () => void) => {
     const listener = () => cb();

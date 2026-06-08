@@ -42,8 +42,8 @@
 
   --armin-shadow-overlay: 0 12px 40px -8px rgb(16 15 15 / 0.18);
 
-  --armin-grid-h: color-mix(in srgb, var(--flexoki-150) 75%, transparent);
-  --armin-grid-v: color-mix(in srgb, var(--flexoki-100) 50%, transparent);
+  --armin-grid-h: color-mix(in srgb, var(--flexoki-150) 42%, transparent);
+  --armin-grid-v: color-mix(in srgb, var(--flexoki-100) 22%, transparent);
 }
 
 [data-theme="dark"] {
@@ -85,6 +85,6 @@
 
   --armin-shadow-overlay: 0 12px 40px -8px rgb(0 0 0 / 0.45);
 
-  --armin-grid-h: color-mix(in srgb, var(--flexoki-800) 50%, transparent);
-  --armin-grid-v: color-mix(in srgb, var(--flexoki-900) 35%, transparent);
+  --armin-grid-h: color-mix(in srgb, var(--flexoki-800) 38%, transparent);
+  --armin-grid-v: color-mix(in srgb, var(--flexoki-900) 20%, transparent);
 }

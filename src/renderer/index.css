@@ -242,11 +242,15 @@
   }
   .card-grid {
     position: relative;
+    align-items: stretch;
   }
 
   .card-tile-collapse {
+    display: flex;
     width: 100%;
-    align-self: start;
+    min-height: 100%;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 13.5rem;
   }
 
   .card-tile-collapse[data-exiting="true"] {

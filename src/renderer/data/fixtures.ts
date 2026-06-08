@@ -379,8 +379,6 @@ export const settings = {
   prereqStabilityFloor: 2,
   newCardsPerDay: 10,
   theme: "system" as "flexoki-light" | "flexoki-dark" | "system",
-  mcpEnabled: true,
-  mcpPort: 4117,
 };
 
 export const totalDueToday = decks.reduce((sum, d) => sum + d.due, 0);

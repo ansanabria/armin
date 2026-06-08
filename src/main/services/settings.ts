@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { schema } from "../db";
 import type { Settings } from "../db/schema";
 import type { ServiceContext } from "./context";
+import { refreshAllLockedStates } from "./graph";
 
 /** Read the singleton settings row, seeding defaults on first access. */
 export async function getSettings(ctx: ServiceContext): Promise<Settings> {
@@ -47,5 +48,9 @@ export async function updateSettings(
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(schema.settings.id, 1))
     .run();
-  return getSettings(ctx);
+  const saved = await getSettings(ctx);
+  if (patch.prereqStabilityFloor !== undefined) {
+    await refreshAllLockedStates(ctx);
+  }
+  return saved;
 }

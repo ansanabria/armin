@@ -62,8 +62,10 @@ export function ReviewSession({
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [rating, setRating] = useState<Grade | null>(null);
+  /** Frozen at session start so refetched queues don't shrink mid-review. */
+  const [sessionQueue, setSessionQueue] = useState<UiReviewCard[] | null>(null);
 
-  const cards = isLoading || isError ? [] : queue;
+  const cards = isLoading || isError ? [] : (sessionQueue ?? queue);
   const card = cards[index];
   const done = !isLoading && !isError && index >= cards.length && cards.length > 0;
   const empty = !isLoading && !isError && cards.length === 0;
@@ -95,7 +97,14 @@ export function ReviewSession({
   useEffect(() => {
     setIndex(0);
     setFlipped(false);
+    setSessionQueue(null);
   }, [isLoading, isError, resetKey]);
+
+  useEffect(() => {
+    if (!isLoading && !isError && sessionQueue === null) {
+      setSessionQueue(queue);
+    }
+  }, [isLoading, isError, queue, sessionQueue]);
 
   useEffect(() => {
     if (isLoading || isError || !card) return;
