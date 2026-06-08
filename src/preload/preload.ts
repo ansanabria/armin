@@ -21,6 +21,7 @@ const api = {
   },
   cards: {
     list: (deckId: string) => invoke("cards:list", { deckId }),
+    listAll: () => invoke("cards:listAll"),
     get: (id: string) => invoke("cards:get", { id }),
     create: (input: unknown) => invoke("cards:create", input),
     update: (input: unknown) => invoke("cards:update", input),
@@ -28,6 +29,7 @@ const api = {
   },
   review: {
     queue: (deckId: string) => invoke("review:queue", { deckId }),
+    queueAll: () => invoke("review:queueAll"),
     preview: (cardId: string) => invoke("review:preview", { cardId }),
     rate: (cardId: string, rating: number) =>
       invoke("review:rate", { cardId, rating }),

@@ -72,7 +72,7 @@ export default function RootLayout() {
         {/* Layout (centered vs. full-bleed) follows the rendered page via the
             `route-pad`/`route-scroll` `:has([data-fullbleed])` rules, so it
             stays in sync with <Outlet/> during view transitions. */}
-        <div className="route-scroll min-h-0 flex-1 overflow-y-auto">
+        <div className="route-scroll notebook-bg min-h-0 flex-1 overflow-y-auto">
           <div className="route-pad mx-auto w-full max-w-5xl px-6 py-8">
             <Outlet />
           </div>

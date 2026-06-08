@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import type { Card, Deck } from "../main/db/schema";
-import { getDb, schema } from "../main/db";
+import { schema } from "../main/db";
 import { getDeck } from "../main/services/decks";
 import { getDeckGraph } from "../main/services/graph";
+import type { ServiceContext } from "../main/services/context";
 import { newCardFields } from "../main/services/scheduler";
 
 export type HierarchyCardInput = {
@@ -82,6 +83,7 @@ function assertAcyclicHierarchy(cards: HierarchyCardInput[]) {
 }
 
 export async function importCardHierarchy(
+  ctx: ServiceContext,
   input: ImportHierarchyInput,
 ): Promise<ImportedHierarchy> {
   assertUniqueClientIds(input.cards);
@@ -92,7 +94,7 @@ export async function importCardHierarchy(
     throw new Error("Either deckId or deckName is required.");
   }
 
-  return getDb().transaction(async (tx) => {
+  return ctx.db.transaction(async (tx) => {
     let deck: Deck | undefined;
     if (input.deckId) {
       deck = await tx
@@ -154,14 +156,14 @@ export async function importCardHierarchy(
   });
 }
 
-export async function readDeckGraph(deckId: string) {
-  const deck = await getDeck(deckId);
+export async function readDeckGraph(ctx: ServiceContext, deckId: string) {
+  const deck = await getDeck(ctx, deckId);
   if (!deck) {
     throw new Error(`Deck not found: ${deckId}`);
   }
 
   return {
     deck,
-    graph: await getDeckGraph(deckId),
+    graph: await getDeckGraph(ctx, deckId),
   };
 }

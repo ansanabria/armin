@@ -1,6 +1,13 @@
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 import { Dialog } from "@/components/ui/dialog";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 
@@ -13,17 +20,19 @@ export type CardFormValues = {
 type CardFormDialogProps = {
   open: boolean;
   onClose: () => void;
+  onExitComplete?: () => void;
   mode: "create" | "edit";
   cardId?: string | null;
   initialFront?: string;
   initialBack?: string;
   initialTags?: string[];
-  onSubmit: (values: CardFormValues) => void;
+  onSubmit: (values: CardFormValues) => void | Promise<void>;
 };
 
 export function CardFormDialog({
   open,
   onClose,
+  onExitComplete,
   mode,
   cardId = null,
   initialFront = "",
@@ -34,26 +43,69 @@ export function CardFormDialog({
   const [front, setFront] = useState(initialFront);
   const [back, setBack] = useState(initialBack);
   const [tags, setTags] = useState<string[]>(initialTags);
+  const [displaySession, setDisplaySession] = useState({
+    mode,
+    cardId: cardId ?? null,
+  });
+  const [createSession, setCreateSession] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const wasOpenRef = useRef(open);
+  const handleSubmitRef = useRef<(() => Promise<void>) | null>(null);
+
+  useEffect(() => {
+    if (open && !wasOpenRef.current) {
+      setFront(initialFront);
+      setBack(initialBack);
+      setTags(initialTags);
+      setDisplaySession({ mode, cardId: cardId ?? null });
+      if (mode === "create") setCreateSession(0);
+    }
+    wasOpenRef.current = open;
+  }, [open, initialFront, initialBack, initialTags, cardId, mode]);
+
+  const displayMode = open ? mode : displaySession.mode;
+  const displayCardId = open ? (cardId ?? null) : displaySession.cardId;
+
+  const handleSubmit = async () => {
+    if (!front.trim() || !back.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await onSubmit({ front: front.trim(), back: back.trim(), tags });
+      if (mode === "create") {
+        setFront("");
+        setBack("");
+        setTags([]);
+        setCreateSession((session) => session + 1);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  handleSubmitRef.current = handleSubmit;
 
   useEffect(() => {
     if (!open) return;
-    setFront(initialFront);
-    setBack(initialBack);
-    setTags(initialTags);
-  }, [open, initialFront, initialBack, initialTags, cardId]);
 
-  const handleSubmit = () => {
-    if (!front.trim() || !back.trim()) return;
-    onSubmit({ front: front.trim(), back: back.trim(), tags });
-  };
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Enter" && event.ctrlKey) {
+        event.preventDefault();
+        void handleSubmitRef.current?.();
+      }
+    };
 
-  const editorKey = cardId ?? "new";
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  const editorKey = displayCardId ?? `new-${createSession}`;
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title={mode === "edit" ? "Edit card" : "Add card"}
+      onExitComplete={onExitComplete}
+      title={displayMode === "edit" ? "Edit card" : "Add card"}
     >
       <div className="space-y-4">
         <Field label="Front" hint="The prompt or question.">
@@ -78,17 +130,26 @@ export function CardFormDialog({
           />
         </Field>
         <Field label="Tags" hint="Press Enter or comma to add.">
-          <TagsInput value={tags} onChange={setTags} />
+          <TagsInput
+            key={`tags-${editorKey}`}
+            value={tags}
+            onChange={setTags}
+          />
         </Field>
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
           <Button
-            disabled={!front.trim() || !back.trim()}
-            onClick={handleSubmit}
+            disabled={!front.trim() || !back.trim() || submitting}
+            onClick={() => void handleSubmit()}
           >
-            {mode === "edit" ? "Save changes" : "Add card"}
+            {displayMode === "edit" ? "Save changes" : "Add card"}
+            {displayMode === "create" && (
+              <Kbd className="border-on-accent/25 bg-on-accent/10 text-on-accent shadow-none">
+                Ctrl+Enter
+              </Kbd>
+            )}
           </Button>
         </div>
       </div>
@@ -120,7 +181,7 @@ function TagsInput({
     onChange(value.filter((t) => t !== tag));
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter" || event.key === ",") {
       event.preventDefault();
       addTag(draft);

@@ -1,19 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
+import { app } from "electron";
 import { createClient, type Client } from "@libsql/client";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import * as schema from "./schema";
 
-let _client: Client | null = null;
-let _db: LibSQLDatabase<typeof schema> | null = null;
-
-type ElectronModule = {
-  app?: {
-    getPath(name: "userData"): string;
-  };
+type DbHandle = {
+  client: Client;
+  db: LibSQLDatabase<typeof schema>;
 };
 
-async function defaultDataDir() {
+const handles = new Map<string, DbHandle>();
+let testDbRoot: string | null = null;
+
+function defaultDbRoot() {
   if (process.env.ARMIN_DATA_DIR) {
     return process.env.ARMIN_DATA_DIR;
   }
@@ -24,40 +24,58 @@ async function defaultDataDir() {
     );
   }
 
-  const electron = (await import("electron")) as ElectronModule;
-  if (!electron.app) {
-    throw new Error(
-      "ARMIN_DATA_DIR must be set when the database is initialized outside Electron.",
-    );
-  }
-
-  return electron.app.getPath("userData");
+  return app.getPath("userData");
 }
 
-/** Open the SQLite database via libSQL (WAL + FK enforcement). Idempotent. */
-export async function initDb(options: { dataDir?: string } = {}) {
-  if (_db) return _db;
-  const dir = options.dataDir ?? (await defaultDataDir());
+function profileDbDir(profileId: string) {
+  const safeProfileId = profileId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  const root = testDbRoot ?? defaultDbRoot();
+  return path.join(root, "profiles", safeProfileId);
+}
+
+export function setDbRootForTests(root: string | null) {
+  testDbRoot = root;
+}
+
+/** Open a profile's SQLite database via libSQL (WAL + FK enforcement). */
+export async function initDb(profileId: string) {
+  const existing = handles.get(profileId);
+  if (existing) return existing.db;
+
+  const dir = profileDbDir(profileId);
   fs.mkdirSync(dir, { recursive: true });
   const client = createClient({
     url: `file:${path.join(dir, "armin.db")}`,
   });
   await client.execute("PRAGMA journal_mode = WAL;");
   await client.execute("PRAGMA foreign_keys = ON;");
-  _client = client;
-  _db = drizzle(client, { schema });
-  return _db;
+
+  const db = drizzle(client, { schema });
+  handles.set(profileId, { client, db });
+  return db;
 }
 
-export function getDb() {
-  if (!_db) throw new Error("Database not initialized — call initDb() first.");
-  return _db;
+export function getDb(profileId: string) {
+  const handle = handles.get(profileId);
+  if (!handle) {
+    throw new Error(
+      `Database for profile ${profileId} is not initialized — call initDb(profileId) first.`,
+    );
+  }
+  return handle.db;
 }
 
-export function closeDb() {
-  _client?.close();
-  _client = null;
-  _db = null;
+export function closeDb(profileId?: string) {
+  if (profileId) {
+    handles.get(profileId)?.client.close();
+    handles.delete(profileId);
+    return;
+  }
+
+  for (const handle of handles.values()) {
+    handle.client.close();
+  }
+  handles.clear();
 }
 
 export { schema };

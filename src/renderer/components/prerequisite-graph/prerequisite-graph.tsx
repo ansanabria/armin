@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Background,
+  BackgroundVariant,
   Controls,
   Panel,
   ReactFlow,
@@ -17,7 +18,7 @@ import {
   type XYPosition,
 } from "@xyflow/react";
 import { LayoutGrid, Pencil, Trash2 } from "lucide-react";
-import type { UiDeckGraph } from "@/data/fixtures";
+import type { UiDeckGraph } from "@/types/view-models";
 import { wouldCreateCycle } from "@/lib/graph-cycle";
 import {
   EDGE_MARKER_END,
@@ -339,7 +340,12 @@ function PrerequisiteGraphCanvas({
           markerEnd: EDGE_MARKER_END,
         }}
       >
-        <Background gap={20} size={1} color="var(--color-ui)" />
+        <Background
+          variant={BackgroundVariant.Cross}
+          gap={24}
+          size={1}
+          color="var(--armin-grid-v)"
+        />
         <Controls showInteractive={false} position="bottom-right" />
         <Panel position="top-right">
           <button

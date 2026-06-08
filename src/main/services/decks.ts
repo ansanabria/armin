@@ -1,6 +1,9 @@
-import { and, count, eq, lte } from "drizzle-orm";
-import { getDb, schema } from "../db";
+import { eq } from "drizzle-orm";
+import { schema } from "../db";
 import type { Deck } from "../db/schema";
+import type { ServiceContext } from "./context";
+import { buildSessionQueue } from "./review";
+import { State } from "./scheduler";
 
 const { decks, cards } = schema;
 
@@ -8,52 +11,54 @@ export type DeckWithStats = Deck & {
   total: number;
   due: number;
   newCount: number;
+  learning: number;
+  learned: number;
 };
 
-export async function listDecks(): Promise<DeckWithStats[]> {
-  const db = getDb();
-  const now = new Date();
+async function withStats(
+  ctx: ServiceContext,
+  deck: Deck,
+): Promise<DeckWithStats> {
+  const deckCards = await ctx.db
+    .select()
+    .from(cards)
+    .where(eq(cards.deckId, deck.id))
+    .all();
+  const due = (await buildSessionQueue(ctx, deckCards, deck.id)).length;
+  const learning = deckCards.filter(
+    (card) => card.state === State.Learning || card.state === State.Relearning,
+  ).length;
+  const learned = deckCards.filter((card) => card.state === State.Review).length;
+
+  return {
+    ...deck,
+    total: deckCards.length,
+    due,
+    newCount: deckCards.filter((card) => card.state === State.New).length,
+    learning,
+    learned,
+  };
+}
+
+export async function listDecks(ctx: ServiceContext): Promise<DeckWithStats[]> {
+  const db = ctx.db;
   const rows = await db.select().from(decks).orderBy(decks.createdAt).all();
-  return Promise.all(
-    rows.map(async (d) => {
-      const total =
-        (
-          await db
-            .select({ c: count() })
-            .from(cards)
-            .where(eq(cards.deckId, d.id))
-            .get()
-        )?.c ?? 0;
-      const due =
-        (
-          await db
-            .select({ c: count() })
-            .from(cards)
-            .where(and(eq(cards.deckId, d.id), lte(cards.due, now)))
-            .get()
-        )?.c ?? 0;
-      const newCount =
-        (
-          await db
-            .select({ c: count() })
-            .from(cards)
-            .where(and(eq(cards.deckId, d.id), eq(cards.state, 0)))
-            .get()
-        )?.c ?? 0;
-      return { ...d, total, due, newCount };
-    }),
-  );
+  return Promise.all(rows.map((deck) => withStats(ctx, deck)));
 }
 
-export async function getDeck(id: string): Promise<Deck | undefined> {
-  return getDb().select().from(decks).where(eq(decks.id, id)).get();
+export async function getDeck(
+  ctx: ServiceContext,
+  id: string,
+): Promise<DeckWithStats | undefined> {
+  const deck = await ctx.db.select().from(decks).where(eq(decks.id, id)).get();
+  return deck ? withStats(ctx, deck) : undefined;
 }
 
-export async function createDeck(input: {
+export async function createDeck(ctx: ServiceContext, input: {
   name: string;
   description?: string | null;
 }): Promise<Deck> {
-  const db = getDb();
+  const db = ctx.db;
   const row = await db
     .insert(decks)
     .values({ name: input.name, description: input.description ?? null })
@@ -63,10 +68,11 @@ export async function createDeck(input: {
 }
 
 export async function updateDeck(
+  ctx: ServiceContext,
   id: string,
   patch: { name?: string; description?: string | null },
 ): Promise<Deck | undefined> {
-  const db = getDb();
+  const db = ctx.db;
   return db
     .update(decks)
     .set({ ...patch, updatedAt: new Date() })
@@ -75,6 +81,6 @@ export async function updateDeck(
     .get();
 }
 
-export async function deleteDeck(id: string): Promise<void> {
-  await getDb().delete(decks).where(eq(decks.id, id)).run();
+export async function deleteDeck(ctx: ServiceContext, id: string): Promise<void> {
+  await ctx.db.delete(decks).where(eq(decks.id, id)).run();
 }
