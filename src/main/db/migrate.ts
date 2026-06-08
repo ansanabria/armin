@@ -1,23 +1,11 @@
 import path from "node:path";
+import { app } from "electron";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { getDb } from "./index";
 
-type ElectronModule = {
-  app?: {
-    getAppPath(): string;
-  };
-};
-
-async function defaultMigrationsFolder() {
+function defaultMigrationsFolder() {
   if (process.versions.electron) {
-    try {
-      const electron = (await import("electron")) as ElectronModule;
-      if (electron.app) {
-        return path.join(electron.app.getAppPath(), "drizzle");
-      }
-    } catch {
-      // Fall through to the project-root path used by the standalone MCP process.
-    }
+    return path.join(app.getAppPath(), "drizzle");
   }
 
   return path.join(process.cwd(), "drizzle");
@@ -29,10 +17,10 @@ async function defaultMigrationsFolder() {
  * project root in dev and the asar root in production).
  */
 export async function runMigrations(
+  profileId: string,
   options: { migrationsFolder?: string } = {},
 ) {
-  await migrate(getDb(), {
-    migrationsFolder:
-      options.migrationsFolder ?? (await defaultMigrationsFolder()),
+  await migrate(getDb(profileId), {
+    migrationsFolder: options.migrationsFolder ?? defaultMigrationsFolder(),
   });
 }

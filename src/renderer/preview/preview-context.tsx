@@ -39,7 +39,7 @@ export function PreviewProvider({ children }: { children: React.ReactNode }) {
     <PreviewContext.Provider value={{ scenario, setScenario }}>
       {children}
       <div className="fixed bottom-4 left-4 z-40 print:hidden">
-        <div className="w-[260px] overflow-hidden rounded-xl border border-border-strong bg-surface/90 shadow-overlay backdrop-blur">
+        <div className="w-[260px] overflow-hidden rounded-xl border border-border-strong bg-surface shadow-overlay">
           <button
             onClick={() => setCollapsed((c) => !c)}
             className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"

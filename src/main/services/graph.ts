@@ -1,11 +1,21 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { getDb, schema } from "../db";
-import { State } from "./scheduler";
+import { schema } from "../db";
+import type { ServiceContext } from "./context";
+import {
+  isPendingSchedule,
+  isPrereqSecured,
+  newCardFields,
+  pendingCardFields,
+} from "./scheduler";
+import { getSettings } from "./settings";
 
 const { cardPrereqs, cards } = schema;
 
-export async function getPrereqIds(cardId: string): Promise<string[]> {
-  const rows = await getDb()
+export async function getPrereqIds(
+  ctx: ServiceContext,
+  cardId: string,
+): Promise<string[]> {
+  const rows = await ctx.db
     .select({ id: cardPrereqs.prereqId })
     .from(cardPrereqs)
     .where(eq(cardPrereqs.dependentId, cardId))
@@ -13,8 +23,11 @@ export async function getPrereqIds(cardId: string): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
-export async function getDependentIds(cardId: string): Promise<string[]> {
-  const rows = await getDb()
+export async function getDependentIds(
+  ctx: ServiceContext,
+  cardId: string,
+): Promise<string[]> {
+  const rows = await ctx.db
     .select({ id: cardPrereqs.dependentId })
     .from(cardPrereqs)
     .where(eq(cardPrereqs.prereqId, cardId))
@@ -22,23 +35,35 @@ export async function getDependentIds(cardId: string): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
+async function getPrereqStabilityFloor(ctx: ServiceContext): Promise<number> {
+  return (await getSettings(ctx)).prereqStabilityFloor;
+}
+
 /**
- * A card is unlocked when it has no prerequisites, or every prerequisite has
- * graduated into the FSRS `Review` state.
+ * A card is unlocked when it has no prerequisites, or every prerequisite is
+ * secured in FSRS Review state with stability at or above the user floor.
  */
-export async function isUnlocked(cardId: string): Promise<boolean> {
-  const prereqIds = await getPrereqIds(cardId);
+export async function isUnlocked(
+  ctx: ServiceContext,
+  cardId: string,
+): Promise<boolean> {
+  const prereqIds = await getPrereqIds(ctx, cardId);
   if (prereqIds.length === 0) return true;
-  const states = await getDb()
-    .select({ state: cards.state })
+  const floor = await getPrereqStabilityFloor(ctx);
+  const prereqs = await ctx.db
+    .select({ state: cards.state, stability: cards.stability })
     .from(cards)
     .where(inArray(cards.id, prereqIds))
     .all();
-  return states.every((s) => s.state === State.Review);
+  return prereqs.every((prereq) => isPrereqSecured(prereq, floor));
 }
 
 /** Would adding edge prereq → dependent introduce a cycle? */
-async function reaches(from: string, target: string): Promise<boolean> {
+async function reaches(
+  ctx: ServiceContext,
+  from: string,
+  target: string,
+): Promise<boolean> {
   const seen = new Set<string>();
   const stack = [from];
   while (stack.length) {
@@ -46,24 +71,70 @@ async function reaches(from: string, target: string): Promise<boolean> {
     if (node === target) return true;
     if (seen.has(node)) continue;
     seen.add(node);
-    stack.push(...(await getDependentIds(node)));
+    stack.push(...(await getDependentIds(ctx, node)));
   }
   return false;
 }
 
+/** Align FSRS scheduling with lock state for never-studied cards. */
+export async function syncCardScheduling(
+  ctx: ServiceContext,
+  cardId: string,
+): Promise<void> {
+  const card = await ctx.db
+    .select()
+    .from(cards)
+    .where(eq(cards.id, cardId))
+    .get();
+  if (!card || card.reps > 0 || card.lastReview != null) return;
+
+  const unlocked = await isUnlocked(ctx, cardId);
+  const pending = isPendingSchedule(card);
+  const now = new Date();
+
+  if (!unlocked && !pending) {
+    await ctx.db
+      .update(cards)
+      .set({ ...pendingCardFields(), updatedAt: now })
+      .where(eq(cards.id, cardId))
+      .run();
+    return;
+  }
+
+  if (unlocked && pending) {
+    await ctx.db
+      .update(cards)
+      .set({ ...newCardFields(now), updatedAt: now })
+      .where(eq(cards.id, cardId))
+      .run();
+  }
+}
+
+/** Start FSRS for dependents whose prerequisites just became secured. */
+export async function activateUnlockedDependents(
+  ctx: ServiceContext,
+  cardId: string,
+): Promise<void> {
+  const dependentIds = await getDependentIds(ctx, cardId);
+  await Promise.all(
+    dependentIds.map((dependentId) => syncCardScheduling(ctx, dependentId)),
+  );
+}
+
 export async function addPrereq(
+  ctx: ServiceContext,
   prereqId: string,
   dependentId: string,
 ): Promise<void> {
   if (prereqId === dependentId) {
     throw new Error("A card cannot be its own prerequisite.");
   }
-  if (await reaches(dependentId, prereqId)) {
+  if (await reaches(ctx, dependentId, prereqId)) {
     throw new Error(
       "That edge would create a cycle in the prerequisite graph.",
     );
   }
-  const edgeCards = await getDb()
+  const edgeCards = await ctx.db
     .select({ id: cards.id, deckId: cards.deckId })
     .from(cards)
     .where(inArray(cards.id, [prereqId, dependentId]))
@@ -76,18 +147,20 @@ export async function addPrereq(
   if (prereq?.deckId !== dependent?.deckId) {
     throw new Error("Prerequisite edges can only connect cards in one deck.");
   }
-  await getDb()
+  await ctx.db
     .insert(cardPrereqs)
     .values({ prereqId, dependentId })
     .onConflictDoNothing()
     .run();
+  await syncCardScheduling(ctx, dependentId);
 }
 
 export async function removePrereq(
+  ctx: ServiceContext,
   prereqId: string,
   dependentId: string,
 ): Promise<void> {
-  await getDb()
+  await ctx.db
     .delete(cardPrereqs)
     .where(
       and(
@@ -96,17 +169,32 @@ export async function removePrereq(
       ),
     )
     .run();
+  await syncCardScheduling(ctx, dependentId);
 }
 
 export type DeckGraph = {
-  nodes: { id: string; front: string; state: number; locked: boolean }[];
+  nodes: {
+    id: string;
+    front: string;
+    back: string;
+    state: number;
+    locked: boolean;
+  }[];
   edges: { prereqId: string; dependentId: string }[];
 };
 
-export async function getDeckGraph(deckId: string): Promise<DeckGraph> {
-  const db = getDb();
+export async function getDeckGraph(
+  ctx: ServiceContext,
+  deckId: string,
+): Promise<DeckGraph> {
+  const db = ctx.db;
   const deckCards = await db
-    .select({ id: cards.id, front: cards.front, state: cards.state })
+    .select({
+      id: cards.id,
+      front: cards.front,
+      back: cards.back,
+      state: cards.state,
+    })
     .from(cards)
     .where(eq(cards.deckId, deckId))
     .all();
@@ -126,7 +214,7 @@ export async function getDeckGraph(deckId: string): Promise<DeckGraph> {
   const nodes = await Promise.all(
     deckCards.map(async (c) => ({
       ...c,
-      locked: !(await isUnlocked(c.id)),
+      locked: !(await isUnlocked(ctx, c.id)),
     })),
   );
   return { nodes, edges };

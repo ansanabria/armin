@@ -1,10 +1,11 @@
 import { eq } from "drizzle-orm";
-import { getDb, schema } from "../db";
+import { schema } from "../db";
 import type { Settings } from "../db/schema";
+import type { ServiceContext } from "./context";
 
 /** Read the singleton settings row, seeding defaults on first access. */
-export async function getSettings(): Promise<Settings> {
-  const db = getDb();
+export async function getSettings(ctx: ServiceContext): Promise<Settings> {
+  const db = ctx.db;
   const existing = await db
     .select()
     .from(schema.settings)
@@ -30,16 +31,21 @@ export type SettingsUpdate = Partial<
     | "learningSteps"
     | "relearningSteps"
     | "weights"
+    | "prereqStabilityFloor"
+    | "newCardsPerDay"
   >
 >;
 
-export async function updateSettings(patch: SettingsUpdate): Promise<Settings> {
-  const db = getDb();
-  await getSettings(); // ensure row exists
+export async function updateSettings(
+  ctx: ServiceContext,
+  patch: SettingsUpdate,
+): Promise<Settings> {
+  const db = ctx.db;
+  await getSettings(ctx); // ensure row exists
   await db
     .update(schema.settings)
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(schema.settings.id, 1))
     .run();
-  return getSettings();
+  return getSettings(ctx);
 }

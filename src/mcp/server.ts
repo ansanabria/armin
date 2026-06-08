@@ -1,11 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
-import { closeDb, initDb } from "../main/db";
+import { closeDb, getDb, initDb } from "../main/db";
 import { runMigrations } from "../main/db/migrate";
 import { createCard, getCard, listCards } from "../main/services/cards";
 import { createDeck, listDecks } from "../main/services/decks";
 import { addPrereq } from "../main/services/graph";
+import type { ServiceContext } from "../main/services/context";
 import { importCardHierarchy, readDeckGraph } from "./import-hierarchy";
 
 const server = new McpServer(
@@ -28,6 +29,11 @@ function jsonResult<T extends Record<string, unknown>>(value: T) {
 }
 
 const idSchema = z.string().min(1);
+const profileId = process.env.ARMIN_PROFILE_ID ?? "mcp";
+
+function ctx(): ServiceContext {
+  return { profileId, db: getDb(profileId) };
+}
 
 server.registerTool(
   "list_decks",
@@ -36,7 +42,7 @@ server.registerTool(
     description: "List Armin decks and basic review/card counts.",
     inputSchema: z.object({}),
   },
-  async () => jsonResult({ decks: await listDecks() }),
+  async () => jsonResult({ decks: await listDecks(ctx()) }),
 );
 
 server.registerTool(
@@ -52,7 +58,7 @@ server.registerTool(
         .describe("Optional deck description or source summary."),
     }),
   },
-  async (input) => jsonResult({ deck: await createDeck(input) }),
+  async (input) => jsonResult({ deck: await createDeck(ctx(), input) }),
 );
 
 server.registerTool(
@@ -68,7 +74,8 @@ server.registerTool(
       type: z.string().optional().describe("Card type. Defaults to basic."),
     }),
   },
-  async (input) => jsonResult({ card: await createCard(input) }),
+  async (input) =>
+    jsonResult({ card: await createCard({ ctx: ctx(), ...input }) }),
 );
 
 server.registerTool(
@@ -85,7 +92,7 @@ server.registerTool(
     }),
   },
   async ({ prereqId, dependentId }) => {
-    await addPrereq(prereqId, dependentId);
+    await addPrereq(ctx(), prereqId, dependentId);
     return jsonResult({ ok: true, edge: { prereqId, dependentId } });
   },
 );
@@ -144,7 +151,7 @@ server.registerTool(
         message: "Either deckId or deckName is required.",
       }),
   },
-  async (input) => jsonResult(await importCardHierarchy(input)),
+  async (input) => jsonResult(await importCardHierarchy(ctx(), input)),
 );
 
 server.registerTool(
@@ -156,7 +163,7 @@ server.registerTool(
       deckId: idSchema.describe("Deck ID to inspect."),
     }),
   },
-  async ({ deckId }) => jsonResult(await readDeckGraph(deckId)),
+  async ({ deckId }) => jsonResult(await readDeckGraph(ctx(), deckId)),
 );
 
 server.registerTool(
@@ -168,7 +175,7 @@ server.registerTool(
       deckId: idSchema.describe("Deck ID to inspect."),
     }),
   },
-  async ({ deckId }) => jsonResult({ cards: await listCards(deckId) }),
+  async ({ deckId }) => jsonResult({ cards: await listCards(ctx(), deckId) }),
 );
 
 server.registerTool(
@@ -180,12 +187,12 @@ server.registerTool(
       id: idSchema.describe("Card ID."),
     }),
   },
-  async ({ id }) => jsonResult({ card: await getCard(id) }),
+  async ({ id }) => jsonResult({ card: await getCard(ctx(), id) }),
 );
 
 async function main() {
-  await initDb();
-  await runMigrations();
+  await initDb(profileId);
+  await runMigrations(profileId);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
