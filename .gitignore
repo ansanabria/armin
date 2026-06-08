@@ -90,3 +90,6 @@ typings/
 
 # Electron-Forge
 out/
+
+# Armin profile data
+.armin-data
