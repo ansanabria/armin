@@ -1,5 +1,6 @@
 import type { Card, Deck, Settings } from "../../main/db/schema";
 import type { DeckWithStats } from "../../main/services/decks";
+import type { BrowseCard, CardWithMeta } from "../../main/services/cards";
 import type { SettingsUpdate } from "../../main/services/settings";
 import type { PreviewOption } from "../../main/services/review";
 import type { DeckGraph } from "../../main/services/graph";
@@ -21,7 +22,7 @@ export interface ArminApi {
   };
   decks: {
     list(): Promise<DeckWithStats[]>;
-    get(id: string): Promise<Deck | undefined>;
+    get(id: string): Promise<DeckWithStats | undefined>;
     create(input: { name: string; description?: string | null }): Promise<Deck>;
     update(input: {
       id: string;
@@ -31,26 +32,30 @@ export interface ArminApi {
     delete(id: string): Promise<{ ok: true }>;
   };
   cards: {
-    list(deckId: string): Promise<Card[]>;
-    get(id: string): Promise<Card | undefined>;
+    list(deckId: string): Promise<CardWithMeta[]>;
+    listAll(): Promise<BrowseCard[]>;
+    get(id: string): Promise<CardWithMeta | undefined>;
     create(input: {
       deckId: string;
       front: string;
       back: string;
       type?: string;
-    }): Promise<Card>;
+      tags?: string[];
+    }): Promise<CardWithMeta>;
     update(input: {
       id: string;
       front?: string;
       back?: string;
       type?: string;
-    }): Promise<Card | undefined>;
+      tags?: string[];
+    }): Promise<CardWithMeta | undefined>;
     delete(id: string): Promise<{ ok: true }>;
   };
   review: {
-    queue(deckId: string): Promise<Card[]>;
+    queue(deckId: string): Promise<CardWithMeta[]>;
+    queueAll(): Promise<BrowseCard[]>;
     preview(cardId: string): Promise<PreviewOption[]>;
-    rate(cardId: string, rating: Grade): Promise<Card>;
+    rate(cardId: string, rating: Grade): Promise<CardWithMeta>;
   };
   graph: {
     get(deckId: string): Promise<DeckGraph>;
@@ -80,4 +85,13 @@ declare global {
   }
 }
 
-export type { Card, Deck, Settings, DeckWithStats, PreviewOption, DeckGraph };
+export type {
+  Card,
+  Deck,
+  Settings,
+  DeckWithStats,
+  CardWithMeta,
+  BrowseCard,
+  PreviewOption,
+  DeckGraph,
+};

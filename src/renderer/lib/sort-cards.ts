@@ -1,4 +1,4 @@
-import type { UiCard } from "@/data/fixtures";
+import type { UiCard } from "@/types/view-models";
 
 export type CardSortKey =
   | "due-soon"

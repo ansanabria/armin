@@ -1,5 +1,5 @@
 import { MarkerType, type Edge } from "@xyflow/react";
-import type { UiDeckGraph } from "@/data/fixtures";
+import type { UiDeckGraph } from "@/types/view-models";
 import { isIsolatedNode } from "@/lib/graph-cycle";
 import { CARD_NODE_HEIGHT, CARD_NODE_WIDTH, layoutGraph } from "@/lib/graph-layout";
 import type { CardFlowNode, CardNodeData } from "@/components/prerequisite-graph/card-node";

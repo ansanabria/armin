@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,9 +7,9 @@ import { Kbd } from "@/components/ui/kbd";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usePreview } from "@/preview/preview-context";
-import { intervalPreview, type UiReviewCard } from "@/data/fixtures";
-import type { Grade } from "@/types/window";
+import { reviewKeys } from "@/lib/armin-query";
+import type { Grade, PreviewOption } from "@/types/window";
+import type { UiReviewCard } from "@/types/view-models";
 import { cn } from "@/lib/utils";
 
 const RATINGS: {
@@ -37,6 +38,11 @@ export type ReviewSessionProps = {
   emptyDescription: string;
   /** Changing this resets the session to the first card. */
   resetKey?: string;
+  isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
+  loadPreview: (cardId: string) => Promise<PreviewOption[]>;
+  onRate: (cardId: string, rating: Grade) => Promise<void>;
 };
 
 export function ReviewSession({
@@ -47,48 +53,69 @@ export function ReviewSession({
   doneDescription,
   emptyDescription,
   resetKey,
+  isLoading = false,
+  isError = false,
+  onRetry,
+  loadPreview,
+  onRate,
 }: ReviewSessionProps) {
-  // UI PREVIEW ONLY: `scenario` stands in for the queue query status.
-  const { scenario, setScenario } = usePreview();
-
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
+  const [rating, setRating] = useState<Grade | null>(null);
 
-  const cards = scenario === "ready" ? queue : [];
+  const cards = isLoading || isError ? [] : queue;
   const card = cards[index];
-  const done = scenario === "ready" && index >= cards.length && cards.length > 0;
-  const empty = scenario === "empty" || (scenario === "ready" && cards.length === 0);
+  const done = !isLoading && !isError && index >= cards.length && cards.length > 0;
+  const empty = !isLoading && !isError && cards.length === 0;
 
-  // The chosen grade drives FSRS when wired up; here it just advances.
-  const rate = () => {
-    setFlipped(false);
-    setIndex((i) => i + 1);
+  const preview = useQuery({
+    queryKey: card ? reviewKeys.preview(card.id) : ["review", "preview", "none"],
+    queryFn: () => loadPreview(card!.id),
+    enabled: Boolean(card),
+  });
+
+  const intervalLabels = new Map<Grade, string>(
+    (preview.data ?? []).map((option) => [option.rating as Grade, option.label]),
+  );
+
+  const rate = async (grade: Grade) => {
+    if (!card || rating) return;
+    setRating(grade);
+    try {
+      await onRate(card.id, grade);
+      setFlipped(false);
+      setIndex((i) => i + 1);
+    } catch {
+      // The route-level mutation handler owns the user-visible error toast.
+    } finally {
+      setRating(null);
+    }
   };
 
   useEffect(() => {
     setIndex(0);
     setFlipped(false);
-  }, [scenario, resetKey]);
+  }, [isLoading, isError, resetKey]);
 
   useEffect(() => {
-    if (scenario !== "ready" || !card) return;
+    if (isLoading || isError || !card) return;
     const onKey = (e: KeyboardEvent) => {
       if (!flipped && (e.key === " " || e.key === "Enter")) {
         e.preventDefault();
         setFlipped(true);
       } else if (flipped && ["1", "2", "3", "4"].includes(e.key)) {
-        rate();
+        void rate(Number(e.key) as Grade);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [scenario, card, flipped]);
+  }, [isLoading, isError, card, flipped, rating]);
 
   return (
     <div className="mx-auto max-w-2xl">
       {header}
 
-      {(subtitle || (scenario === "ready" && card)) && (
+      {(subtitle || card) && (
         <div
           className={cn(
             "mt-1.5 flex items-baseline gap-4 text-sm",
@@ -96,7 +123,7 @@ export function ReviewSession({
           )}
         >
           {subtitle && <p className="min-w-0 text-muted">{subtitle}</p>}
-          {scenario === "ready" && card && (
+          {card && (
             <div
               className={cn(
                 "flex shrink-0 items-center gap-3 font-mono text-xs uppercase tracking-wide text-muted",
@@ -120,7 +147,7 @@ export function ReviewSession({
         </div>
       )}
 
-      {scenario === "loading" && (
+      {isLoading && (
         <div className="mt-6">
           <Skeleton className="h-1.5 w-full rounded-full" />
           <Skeleton className="mt-6 h-[260px] w-full rounded-xl" />
@@ -128,8 +155,8 @@ export function ReviewSession({
         </div>
       )}
 
-      {scenario === "error" && (
-        <div className="mt-10 flex flex-col items-center text-center">
+      {isError && (
+        <div className="mt-10 flex flex-col items-center border border-border bg-bg-2 px-6 py-14 text-center">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-relearning-bg text-relearning">
             <AlertTriangle className="h-6 w-6" strokeWidth={1.5} />
           </div>
@@ -140,7 +167,7 @@ export function ReviewSession({
           <Button
             variant="outline"
             className="mt-5"
-            onClick={() => setScenario("ready")}
+            onClick={onRetry}
           >
             Try again
           </Button>
@@ -148,7 +175,7 @@ export function ReviewSession({
       )}
 
       {(empty || done) && (
-        <div className="mt-16 flex flex-col items-center text-center">
+        <div className="mt-16 flex flex-col items-center border border-border bg-bg-2 px-6 py-14 text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-review-bg text-good">
             <CheckCircle2 className="h-7 w-7" strokeWidth={1.5} />
           </div>
@@ -160,7 +187,7 @@ export function ReviewSession({
         </div>
       )}
 
-      {scenario === "ready" && card && (
+      {card && (
         <div className="mt-8">
           <Progress value={index} max={cards.length} className="mb-8" />
 
@@ -197,7 +224,8 @@ export function ReviewSession({
                 {RATINGS.map((r) => (
                   <button
                     key={r.grade}
-                    onClick={() => rate()}
+                    onClick={() => void rate(r.grade)}
+                    disabled={rating !== null}
                     className={`flex flex-col items-center gap-0.5 rounded-md px-3 py-2.5 text-sm font-medium text-on-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${r.bg}`}
                   >
                     <span className="flex items-center gap-1.5">
@@ -207,7 +235,7 @@ export function ReviewSession({
                       </Kbd>
                     </span>
                     <span className="font-mono text-xs text-on-accent/85">
-                      {intervalPreview[r.grade]}
+                      {intervalLabels.get(r.grade) ?? "…"}
                     </span>
                   </button>
                 ))}
