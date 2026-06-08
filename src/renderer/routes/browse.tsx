@@ -1,13 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import {
-  Tag,
-  Layers,
-  AlertTriangle,
-  Library,
-  CircleDot,
-} from "lucide-react";
+import { Tag, Layers, AlertTriangle, Library, CircleDot } from "lucide-react";
 import { CardFormDialog } from "@/components/card-form-dialog";
 import { CardTile } from "@/components/card-tile";
 import { SortControl } from "@/components/sort-control";
@@ -81,7 +75,8 @@ export default function BrowsePage() {
       window.armin.cards.update(values),
     onSuccess: (_card, values) => {
       invalidateCoreData(queryClient, editing?.deckId);
-      if (values.id) void queryClient.invalidateQueries({ queryKey: cardKeys.all });
+      if (values.id)
+        void queryClient.invalidateQueries({ queryKey: cardKeys.all });
       toast({ tone: "success", title: "Card updated" });
       closeDialog();
     },
@@ -141,10 +136,7 @@ export default function BrowsePage() {
     return Number.isInteger(n) ? [n as CardState] : [];
   }, [stateFilter]);
 
-  const deckIds = useMemo(
-    () => (deckFilter ? [deckFilter] : []),
-    [deckFilter],
-  );
+  const deckIds = useMemo(() => (deckFilter ? [deckFilter] : []), [deckFilter]);
 
   const tags = useMemo(() => (tagFilter ? [tagFilter] : []), [tagFilter]);
 
@@ -236,10 +228,7 @@ export default function BrowsePage() {
                       <SelectGroup>
                         <SelectItem value={ALL_STATES}>All states</SelectItem>
                         {STATE_OPTIONS.map((opt) => (
-                          <SelectItem
-                            key={opt.value}
-                            value={String(opt.value)}
-                          >
+                          <SelectItem key={opt.value} value={String(opt.value)}>
                             {opt.label}
                           </SelectItem>
                         ))}
@@ -295,7 +284,9 @@ export default function BrowsePage() {
                       </>
                     }
                   >
-                    <p className="flex h-9 items-center text-sm text-muted">No tags</p>
+                    <p className="flex h-9 items-center text-sm text-muted">
+                      No tags
+                    </p>
                   </FilterField>
                 )}
               </div>
@@ -327,7 +318,9 @@ export default function BrowsePage() {
                       params: { deckId: card.deckId },
                     })
                   }
-                  onDelete={() => deleteCard.mutateAsync(card)}
+                  onDelete={async () => {
+                    await deleteCard.mutateAsync(card);
+                  }}
                 />
               ))}
             </ul>

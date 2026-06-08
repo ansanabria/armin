@@ -2,7 +2,7 @@ import {
   useEffect,
   useRef,
   useState,
-  type KeyboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import { X } from "lucide-react";
@@ -87,7 +87,7 @@ export function CardFormDialog({
   useEffect(() => {
     if (!open) return;
 
-    const onKeyDown = (event: KeyboardEvent) => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Enter" && event.ctrlKey) {
         event.preventDefault();
         void handleSubmitRef.current?.();
@@ -130,7 +130,11 @@ export function CardFormDialog({
           />
         </Field>
         <Field label="Tags" hint="Press Enter or comma to add.">
-          <TagsInput key={`tags-${editorKey}`} value={tags} onChange={setTags} />
+          <TagsInput
+            key={`tags-${editorKey}`}
+            value={tags}
+            onChange={setTags}
+          />
         </Field>
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="ghost" onClick={onClose}>
@@ -177,7 +181,7 @@ function TagsInput({
     onChange(value.filter((t) => t !== tag));
   };
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter" || event.key === ",") {
       event.preventDefault();
       addTag(draft);

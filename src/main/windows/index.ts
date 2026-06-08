@@ -1,14 +1,20 @@
 import { app, BrowserWindow, Menu } from "electron";
 import path from "node:path";
-import {
-  loadDevToolsExtensions,
-  registerDevToolsShortcuts,
-} from "../devtools";
+import { loadDevToolsExtensions, registerDevToolsShortcuts } from "../devtools";
 import { attachWindowIcon, getAppIcon } from "../icon";
 
 let profilePickerWindow: BrowserWindow | null = null;
 const profileWindows = new Map<string, BrowserWindow>();
 let devToolsExtensionsLoaded = false;
+
+export function getProfileIdForWebContents(webContentsId: number) {
+  for (const [profileId, win] of profileWindows) {
+    if (!win.isDestroyed() && win.webContents.id === webContentsId) {
+      return profileId;
+    }
+  }
+  return null;
+}
 
 export function getMainWindow() {
   const focused = BrowserWindow.getFocusedWindow();
@@ -39,9 +45,7 @@ function shellOptions() {
 
 function loadProfilePicker(win: BrowserWindow) {
   if (PROFILE_PICKER_VITE_DEV_SERVER_URL) {
-    win.loadURL(
-      `${PROFILE_PICKER_VITE_DEV_SERVER_URL}/profile-picker.html`,
-    );
+    win.loadURL(`${PROFILE_PICKER_VITE_DEV_SERVER_URL}/profile-picker.html`);
   } else {
     win.loadFile(
       path.join(
