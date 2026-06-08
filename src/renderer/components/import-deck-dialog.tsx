@@ -58,40 +58,55 @@ export function ImportDeckDialog({
   onImport,
 }: ImportDeckDialogProps) {
   const [step, setStep] = useState<Step>("choose");
+  const [displayStep, setDisplayStep] = useState<Step>("choose");
+  const wasOpenRef = useRef(open);
 
-  // Reset the whole flow each time the dialog opens.
   useEffect(() => {
-    if (open) setStep("choose");
-  }, [open]);
+    if (open && !wasOpenRef.current) {
+      setStep("choose");
+      setDisplayStep("choose");
+    } else if (open) {
+      setDisplayStep(step);
+    }
+    wasOpenRef.current = open;
+  }, [open, step]);
+
+  const visibleStep = open ? step : displayStep;
 
   const title =
-    step === "anki"
+    visibleStep === "anki"
       ? "Import from Anki"
-      : step === "markdown"
+      : visibleStep === "markdown"
         ? "Import from Markdown"
         : "Import deck";
 
   const description =
-    step === "choose"
+    visibleStep === "choose"
       ? "Bring your cards in from another tool."
       : undefined;
+
+  const handleExitComplete = () => {
+    setStep("choose");
+    setDisplayStep("choose");
+  };
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
+      onExitComplete={handleExitComplete}
       title={title}
       description={description}
       className="max-w-lg"
     >
-      {step === "choose" && <ChooseSource onPick={setStep} />}
-      {step === "anki" && (
+      {visibleStep === "choose" && <ChooseSource onPick={setStep} />}
+      {visibleStep === "anki" && (
         <AnkiImport
           onBack={() => setStep("choose")}
           onImport={onImport}
         />
       )}
-      {step === "markdown" && (
+      {visibleStep === "markdown" && (
         <MarkdownImport
           onBack={() => setStep("choose")}
           onImport={onImport}
@@ -135,7 +150,7 @@ function SourceOption({
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full items-center gap-4 rounded-lg border border-border bg-surface p-4 text-left transition-colors duration-150 hover:border-border-strong hover:bg-bg-2/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="group flex w-full items-center gap-4 rounded-lg border border-border bg-surface p-4 text-left transition-colors duration-150 hover:border-border-strong hover:bg-bg-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-sunken text-ink">
         <Icon className="h-5 w-5" />
@@ -202,7 +217,7 @@ function AnkiImport({
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
 
-          <label className="flex items-center justify-between gap-4 rounded-md border border-border bg-bg-2/40 px-3 py-2.5">
+          <label className="flex items-center justify-between gap-4 rounded-md border border-border bg-bg-2 px-3 py-2.5">
             <span className="min-w-0">
               <span className="block text-sm font-medium text-ink">
                 Keep scheduling
@@ -426,7 +441,7 @@ function FileDrop({
 
   if (file && file.name) {
     return (
-      <div className="flex items-center gap-3 rounded-md border border-border bg-bg-2/40 px-3 py-2.5">
+      <div className="flex items-center gap-3 rounded-md border border-border bg-bg-2 px-3 py-2.5">
         <FileText className="h-4 w-4 shrink-0 text-muted" />
         <span className="min-w-0 flex-1 truncate text-sm text-ink">
           {file.name}
@@ -471,8 +486,8 @@ function FileDrop({
         className={cn(
           "flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-8 text-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
           dragging
-            ? "border-accent bg-accent-tint/40"
-            : "border-border-strong bg-surface hover:bg-bg-2/40",
+            ? "border-accent bg-accent-tint"
+            : "border-border-strong bg-surface hover:bg-bg-2",
         )}
       >
         <Upload className="h-6 w-6 text-muted" strokeWidth={1.5} />

@@ -87,6 +87,13 @@ to store the SQLite database:
 ARMIN_DATA_DIR="$PWD/.armin-data" npm run mcp
 ```
 
+MCP writes to one Armin profile. Set `ARMIN_PROFILE_ID` to choose it; when omitted,
+the server uses a profile named `mcp`.
+
+```bash
+ARMIN_DATA_DIR="$PWD/.armin-data" ARMIN_PROFILE_ID="default" npm run mcp
+```
+
 Use the same `ARMIN_DATA_DIR` when you want the desktop app and MCP server to
 share a development database. For a packaged app, point `ARMIN_DATA_DIR` at the
 same app data directory you want Armin to use.
@@ -115,6 +122,7 @@ tool_timeout_sec = 60
 
 [mcp_servers.armin.env]
 ARMIN_DATA_DIR = "/absolute/path/to/armin/.armin-data"
+ARMIN_PROFILE_ID = "default"
 ```
 
 You can also add it from the CLI:
@@ -122,6 +130,7 @@ You can also add it from the CLI:
 ```bash
 codex mcp add armin \
   --env ARMIN_DATA_DIR=/absolute/path/to/armin/.armin-data \
+  --env ARMIN_PROFILE_ID=default \
   -- npm --prefix /absolute/path/to/armin run mcp --
 ```
 
@@ -140,7 +149,8 @@ Claude Code to use Armin:
       "command": "npm",
       "args": ["--prefix", "/absolute/path/to/armin", "run", "mcp", "--"],
       "env": {
-        "ARMIN_DATA_DIR": "/absolute/path/to/armin/.armin-data"
+        "ARMIN_DATA_DIR": "/absolute/path/to/armin/.armin-data",
+        "ARMIN_PROFILE_ID": "default"
       }
     }
   }
@@ -152,6 +162,7 @@ Or add it with the Claude Code CLI:
 ```bash
 claude mcp add --transport stdio --scope project \
   --env ARMIN_DATA_DIR=/absolute/path/to/armin/.armin-data \
+  --env ARMIN_PROFILE_ID=default \
   armin -- npm --prefix /absolute/path/to/armin run mcp --
 ```
 
@@ -170,7 +181,8 @@ Cursor should use Armin:
       "command": "npm",
       "args": ["--prefix", "${workspaceFolder}", "run", "mcp", "--"],
       "env": {
-        "ARMIN_DATA_DIR": "${workspaceFolder}/.armin-data"
+        "ARMIN_DATA_DIR": "${workspaceFolder}/.armin-data",
+        "ARMIN_PROFILE_ID": "default"
       }
     }
   }
@@ -200,6 +212,7 @@ Add Armin under `mcp` in `opencode.json` or `opencode.jsonc`:
       ],
       "environment": {
         "ARMIN_DATA_DIR": "/absolute/path/to/armin/.armin-data",
+        "ARMIN_PROFILE_ID": "default",
       },
       "enabled": true,
       "timeout": 10000,

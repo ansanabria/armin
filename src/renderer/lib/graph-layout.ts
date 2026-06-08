@@ -1,4 +1,4 @@
-import dagre from "@dagrejs/dagre";
+import { graphlib, layout } from "@dagrejs/dagre";
 import { Position, type Edge, type Node } from "@xyflow/react";
 
 export const CARD_NODE_WIDTH = 240;
@@ -8,7 +8,7 @@ export function layoutGraph<T extends Record<string, unknown>>(
   nodes: Node<T>[],
   edges: Edge[],
 ): { nodes: Node<T>[]; edges: Edge[] } {
-  const g = new dagre.graphlib.Graph();
+  const g = new graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: "TB", nodesep: 48, ranksep: 72 });
 
@@ -23,7 +23,7 @@ export function layoutGraph<T extends Record<string, unknown>>(
     g.setEdge(edge.source, edge.target);
   }
 
-  dagre.layout(g);
+  layout(g);
 
   const layoutedNodes = nodes.map((node) => {
     const pos = g.node(node.id);

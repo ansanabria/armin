@@ -1,4 +1,4 @@
-import type { UiDeck } from "@/data/fixtures";
+import type { UiDeck } from "@/types/view-models";
 
 export type DeckSortKey =
   | "name-asc"

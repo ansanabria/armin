@@ -376,6 +376,8 @@ export const settings = {
   enableShortTerm: true,
   learningSteps: "1m, 10m",
   relearningSteps: "10m",
+  prereqStabilityFloor: 2,
+  newCardsPerDay: 10,
   theme: "system" as "flexoki-light" | "flexoki-dark" | "system",
   mcpEnabled: true,
   mcpPort: 4117,
