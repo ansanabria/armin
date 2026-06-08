@@ -42,8 +42,10 @@ export function resolveViewTransitionTypes(
     return ["fade"];
   }
 
+  // Skip the initial route commit — the document isn't ready for a transition yet
+  // and this avoids "Transition was aborted because of invalid state" on load.
   if (!fromLocation) {
-    return ["fade"];
+    return false;
   }
 
   const fromTab = tabIndex(from);
@@ -67,4 +69,26 @@ export function resolveViewTransitionTypes(
   }
 
   return ["fade"];
+}
+
+/**
+ * View transitions reject their `finished` promise when a newer navigation
+ * supersedes an in-flight transition. TanStack Router doesn't catch that, so
+ * wire it here to keep DevTools clean during fast tab switches.
+ */
+export function installViewTransitionRejectionHandler(): void {
+  if (
+    typeof document === "undefined" ||
+    !("startViewTransition" in document) ||
+    typeof document.startViewTransition !== "function"
+  ) {
+    return;
+  }
+
+  const original = document.startViewTransition.bind(document);
+  document.startViewTransition = (updateCallbackOrOptions) => {
+    const transition = original(updateCallbackOrOptions);
+    void transition.finished.catch(() => {});
+    return transition;
+  };
 }
