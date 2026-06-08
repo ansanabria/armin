@@ -8,8 +8,9 @@ import { getDb } from "./index";
  * bundled into the asar at package time (app.getAppPath() resolves to the
  * project root in dev and the asar root in production).
  */
-export async function runMigrations() {
-  await migrate(getDb(), {
-    migrationsFolder: path.join(app.getAppPath(), "drizzle"),
+export async function runMigrations(profileId: string) {
+  const appPath = app?.getAppPath?.() ?? process.cwd();
+  await migrate(getDb(profileId), {
+    migrationsFolder: path.join(appPath, "drizzle"),
   });
 }
