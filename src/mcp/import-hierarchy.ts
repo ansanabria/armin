@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import type { Card, Deck } from "../main/db/schema";
 import { schema } from "../main/db";
 import { getDeck } from "../main/services/decks";
-import { getDeckGraph } from "../main/services/graph";
+import { getDeckGraph, refreshLockedForDeck } from "../main/services/graph";
 import type { ServiceContext } from "../main/services/context";
 import { newCardFields } from "../main/services/scheduler";
 
@@ -153,6 +153,9 @@ export async function importCardHierarchy(
     }
 
     return { deck, cards: createdCards, edges };
+  }).then(async (result) => {
+    await refreshLockedForDeck(ctx, result.deck.id);
+    return result;
   });
 }
 

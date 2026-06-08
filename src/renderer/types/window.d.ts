@@ -4,6 +4,7 @@ import type { BrowseCard, CardWithMeta } from "../../main/services/cards";
 import type { SettingsUpdate } from "../../main/services/settings";
 import type { PreviewOption } from "../../main/services/review";
 import type { DeckGraph } from "../../main/services/graph";
+import type { McpSetup } from "../../shared/mcp";
 
 export type Grade = 1 | 2 | 3 | 4;
 
@@ -34,6 +35,20 @@ export interface ArminApi {
   cards: {
     list(deckId: string): Promise<CardWithMeta[]>;
     listAll(): Promise<BrowseCard[]>;
+    browse(input: {
+      offset: number;
+      limit: number;
+      sort: string;
+      state?: number;
+      deckId?: string;
+      tag?: string;
+    }): Promise<{
+      cards: BrowseCard[];
+      filteredTotal: number;
+      libraryTotal: number;
+    }>;
+    listTags(): Promise<string[]>;
+    listDeckTags(deckId: string): Promise<string[]>;
     get(id: string): Promise<CardWithMeta | undefined>;
     create(input: {
       deckId: string;
@@ -65,6 +80,9 @@ export interface ArminApi {
   settings: {
     get(): Promise<Settings>;
     update(patch: SettingsUpdate): Promise<Settings>;
+  };
+  mcp: {
+    getSetup(): Promise<McpSetup>;
   };
   onDataChanged(cb: () => void): () => void;
 }

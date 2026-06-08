@@ -1,5 +1,10 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -15,19 +20,20 @@ import { CardFormDialog } from "@/components/card-form-dialog";
 import { CardTile } from "@/components/card-tile";
 import { SortControl } from "@/components/sort-control";
 import { SearchableSelect } from "@/components/ui/combobox";
-import {
-  CARD_SORT_OPTIONS,
-  sortCards,
-  type CardSortKey,
-} from "@/lib/sort-cards";
-import { matchesTags } from "@/lib/card-filters";
+import { CARD_SORT_OPTIONS, type CardSortKey } from "@/lib/sort-cards";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
-import { cardKeys, deckKeys, invalidateCoreData } from "@/lib/armin-query";
+import {
+  cardKeys,
+  deckKeys,
+  invalidateCoreData,
+  type BrowseQueryFilters,
+} from "@/lib/armin-query";
 import { toUiCard, type UiCard } from "@/types/view-models";
 import type { CardFormValues } from "@/components/card-form-dialog";
+import { BROWSE_PAGE_SIZE } from "../../shared/browse";
 
 export default function DeckPage() {
   const { deckId } = useParams({ from: "/deck/$deckId" });
@@ -39,38 +45,89 @@ export default function DeckPage() {
   const [sort, setSort] = useState<CardSortKey>("due-soon");
   const [tagFilter, setTagFilter] = useState("");
 
+  const browseFilters = useMemo((): BrowseQueryFilters => {
+    const filters: BrowseQueryFilters = { sort, deckId };
+    if (tagFilter) filters.tag = tagFilter;
+    return filters;
+  }, [sort, deckId, tagFilter]);
+
   const deckQuery = useQuery({
     queryKey: deckKeys.detail(deckId),
     queryFn: () => window.armin.decks.get(deckId),
   });
-  const cardsQuery = useQuery({
-    queryKey: cardKeys.deck(deckId),
-    queryFn: () => window.armin.cards.list(deckId),
+
+  const tagsQuery = useQuery({
+    queryKey: cardKeys.deckTags(deckId),
+    queryFn: () => window.armin.cards.listDeckTags(deckId),
   });
 
-  const deck = deckQuery.data;
-  const cards = useMemo(
-    () => (cardsQuery.data ?? []).map(toUiCard),
+  const cardsQuery = useInfiniteQuery({
+    queryKey: cardKeys.browse(browseFilters),
+    queryFn: ({ pageParam }) =>
+      window.armin.cards.browse({
+        offset: pageParam,
+        limit: BROWSE_PAGE_SIZE,
+        sort: browseFilters.sort,
+        deckId: browseFilters.deckId,
+        tag: browseFilters.tag,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce(
+        (count, page) => count + page.cards.length,
+        0,
+      );
+      return loaded < lastPage.filteredTotal ? loaded : undefined;
+    },
+  });
+
+  const displayed = useMemo(
+    () =>
+      (cardsQuery.data?.pages ?? [])
+        .flatMap((page) => page.cards)
+        .map(toUiCard),
     [cardsQuery.data],
   );
 
-  const deckTags = useMemo(() => {
-    const set = new Set<string>();
-    for (const card of cards) for (const tag of card.tags) set.add(tag);
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [cards]);
+  const filteredTotal = cardsQuery.data?.pages[0]?.filteredTotal ?? 0;
+  const hasMore = cardsQuery.hasNextPage ?? false;
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMore || cardsQuery.isFetchingNextPage) return;
+
+    const root = sentinel.closest(".route-scroll");
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0]?.isIntersecting &&
+          cardsQuery.hasNextPage &&
+          !cardsQuery.isFetchingNextPage
+        ) {
+          void cardsQuery.fetchNextPage();
+        }
+      },
+      { root, rootMargin: "240px" },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [
+    hasMore,
+    cardsQuery.hasNextPage,
+    cardsQuery.isFetchingNextPage,
+    cardsQuery.fetchNextPage,
+    browseFilters,
+  ]);
+
+  const deckTags = tagsQuery.data ?? [];
   const tagOptions = useMemo(
     () => [
       { value: "", label: "All tags" },
       ...deckTags.map((t) => ({ value: t, label: t })),
     ],
     [deckTags],
-  );
-  const tags = useMemo(() => (tagFilter ? [tagFilter] : []), [tagFilter]);
-  const sortedCards = useMemo(() => sortCards(cards, sort), [cards, sort]);
-  const visibleCards = useMemo(
-    () => sortedCards.filter((c) => matchesTags(c, tags)),
-    [sortedCards, tags],
   );
 
   const openNew = () => {
@@ -123,47 +180,51 @@ export default function DeckPage() {
     else await createCard.mutateAsync(values);
   };
 
+  const deck = deckQuery.data;
   const dueCount = deck?.due ?? 0;
-  const isLoading = deckQuery.isLoading || cardsQuery.isLoading;
+  const deckLoading = deckQuery.isLoading;
+  const cardsLoading = cardsQuery.isLoading;
   const isError = deckQuery.isError || cardsQuery.isError;
 
-  if (isLoading || isError) {
+  if (deckLoading) {
     return (
       <div>
-        <Link
-          to="/"
-          className="inline-flex items-center gap-1 rounded-sm text-sm text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <ArrowLeft className="h-4 w-4" /> All decks
-        </Link>
-
+        <BackLink />
         <div className="mt-6">
-          {isLoading && <CardsSkeleton />}
+          <Skeleton className="mb-6 h-16 w-full max-w-md" />
+          <CardsSkeleton />
+        </div>
+      </div>
+    );
+  }
 
-          {isError && (
-            <div className="flex flex-col items-center rounded-xl border border-border bg-bg-2 px-6 py-14 text-center">
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-relearning-bg text-relearning">
-                <AlertTriangle className="h-6 w-6" strokeWidth={1.5} />
-              </div>
-              <h3 className="text-base font-semibold text-ink">
-                Couldn&apos;t load these cards
-              </h3>
-              <p className="mt-1 max-w-[40ch] text-sm text-muted">
-                Something went wrong reading from local storage. Your data is
-                safe on disk.
-              </p>
-              <Button
-                variant="outline"
-                className="mt-5"
-                onClick={() => {
-                  void deckQuery.refetch();
-                  void cardsQuery.refetch();
-                }}
-              >
-                Try again
-              </Button>
+  if (isError) {
+    return (
+      <div>
+        <BackLink />
+        <div className="mt-6">
+          <div className="flex flex-col items-center rounded-xl border border-border bg-bg-2 px-6 py-14 text-center">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-relearning-bg text-relearning">
+              <AlertTriangle className="h-6 w-6" strokeWidth={1.5} />
             </div>
-          )}
+            <h3 className="text-base font-semibold text-ink">
+              Couldn&apos;t load these cards
+            </h3>
+            <p className="mt-1 max-w-[40ch] text-sm text-muted">
+              Something went wrong reading from local storage. Your data is
+              safe on disk.
+            </p>
+            <Button
+              variant="outline"
+              className="mt-5"
+              onClick={() => {
+                void deckQuery.refetch();
+                void cardsQuery.refetch();
+              }}
+            >
+              Try again
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -172,12 +233,7 @@ export default function DeckPage() {
   if (!deck) {
     return (
       <div>
-        <Link
-          to="/"
-          className="inline-flex items-center gap-1 rounded-sm text-sm text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <ArrowLeft className="h-4 w-4" /> All decks
-        </Link>
+        <BackLink />
         <EmptyState
           className="mt-8"
           icon={Layers}
@@ -195,12 +251,7 @@ export default function DeckPage() {
 
   return (
     <div>
-      <Link
-        to="/"
-        className="inline-flex items-center gap-1 rounded-sm text-sm text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <ArrowLeft className="h-4 w-4" /> All decks
-      </Link>
+      <BackLink />
 
       <header className="mb-6 mt-4 flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
@@ -240,7 +291,7 @@ export default function DeckPage() {
         </div>
       </header>
 
-      {!isLoading && !isError && cards.length === 0 && (
+      {deck.total === 0 && !cardsLoading && (
         <EmptyState
           icon={Layers}
           title="No cards in this deck"
@@ -253,7 +304,7 @@ export default function DeckPage() {
         />
       )}
 
-      {!isLoading && !isError && cards.length > 0 && (
+      {deck.total > 0 && (
         <>
           <div className="mb-5 border border-border bg-bg-2 px-4 py-3">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -299,20 +350,45 @@ export default function DeckPage() {
               />
             </div>
           </div>
-          {visibleCards.length > 0 ? (
-            <ul className="card-grid grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {visibleCards.map((card) => (
-                <CardTile
-                  key={card.id}
-                  card={card}
-                  onOpen={() => openEdit(card)}
-                  onDelete={async () => {
-                    await deleteCard.mutateAsync(card.id);
-                  }}
-                />
-              ))}
-            </ul>
-          ) : (
+
+          {cardsLoading && <CardsSkeleton />}
+
+          {!cardsLoading && filteredTotal > 0 && (
+            <>
+              <p className="mb-3 text-xs text-muted">
+                {hasMore
+                  ? `Showing ${displayed.length} of ${filteredTotal} cards`
+                  : `${filteredTotal} cards`}
+              </p>
+              <ul className="card-grid grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {displayed.map((card) => (
+                  <CardTile
+                    key={card.id}
+                    card={card}
+                    onOpen={() => openEdit(card)}
+                    onDelete={async () => {
+                      await deleteCard.mutateAsync(card.id);
+                    }}
+                  />
+                ))}
+              </ul>
+              {hasMore || cardsQuery.isFetchingNextPage ? (
+                <div
+                  ref={loadMoreRef}
+                  className="mt-4 flex justify-center py-2"
+                  aria-hidden
+                >
+                  {cardsQuery.isFetchingNextPage ? (
+                    <Skeleton className="h-4 w-28" />
+                  ) : (
+                    <div className="h-px w-full" />
+                  )}
+                </div>
+              ) : null}
+            </>
+          )}
+
+          {!cardsLoading && filteredTotal === 0 && (
             <p className="border border-border bg-bg-2 px-6 py-10 text-center text-sm text-muted">
               No cards match the selected tags.
             </p>
@@ -332,6 +408,17 @@ export default function DeckPage() {
         onSubmit={saveCard}
       />
     </div>
+  );
+}
+
+function BackLink() {
+  return (
+    <Link
+      to="/"
+      className="inline-flex items-center gap-1 rounded-sm text-sm text-muted transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <ArrowLeft className="h-4 w-4" /> All decks
+    </Link>
   );
 }
 
@@ -356,17 +443,20 @@ function FilterField({
 
 function CardsSkeleton() {
   return (
-    <ul className="card-grid grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <ul className="card-grid grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: 6 }).map((_, i) => (
         <li
           key={i}
-          className="flex flex-col gap-2 border border-border bg-surface p-4 pr-11"
+          className="card-tile-collapse flex min-h-[13.5rem] flex-col border border-border bg-surface p-4"
         >
-          <Skeleton className="h-5 w-20" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-3 w-full" />
-          <Skeleton className="h-3 w-4/5" />
-          <Skeleton className="mt-1 h-3 w-16" />
+          <div className="flex items-center justify-between gap-2">
+            <Skeleton className="h-5 w-16" />
+            <Skeleton className="h-8 w-8 shrink-0" />
+          </div>
+          <div className="mt-3 flex flex-1 flex-col gap-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-3 w-4/5" />
+          </div>
         </li>
       ))}
     </ul>

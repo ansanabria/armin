@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
 import { schema } from "../db";
 import type { ServiceContext } from "./context";
 import {
@@ -47,15 +47,196 @@ export async function isUnlocked(
   ctx: ServiceContext,
   cardId: string,
 ): Promise<boolean> {
-  const prereqIds = await getPrereqIds(ctx, cardId);
-  if (prereqIds.length === 0) return true;
+  const locked = await getLockedByCardIds(ctx, [cardId]);
+  return !(locked.get(cardId) ?? false);
+}
+
+/** Batch locked lookup from the denormalized cards.locked column. */
+export async function getLockedByCardIds(
+  ctx: ServiceContext,
+  cardIds: string[],
+): Promise<Map<string, boolean>> {
+  const uniqueIds = [...new Set(cardIds)];
+  const locked = new Map(uniqueIds.map((id) => [id, false]));
+  if (uniqueIds.length === 0) return locked;
+
+  const rows = await ctx.db
+    .select({ id: cards.id, locked: cards.locked })
+    .from(cards)
+    .where(inArray(cards.id, uniqueIds))
+    .all();
+
+  for (const row of rows) {
+    locked.set(row.id, row.locked);
+  }
+
+  return locked;
+}
+
+/** Recompute lock state from prerequisite graph + FSRS fields. */
+async function computeLockedByCardIds(
+  ctx: ServiceContext,
+  cardIds: string[],
+): Promise<Map<string, boolean>> {
+  const uniqueIds = [...new Set(cardIds)];
+  const locked = new Map(uniqueIds.map((id) => [id, false]));
+  if (uniqueIds.length === 0) return locked;
+
   const floor = await getPrereqStabilityFloor(ctx);
-  const prereqs = await ctx.db
-    .select({ state: cards.state, stability: cards.stability })
+  const edges = await ctx.db
+    .select({
+      dependentId: cardPrereqs.dependentId,
+      prereqId: cardPrereqs.prereqId,
+    })
+    .from(cardPrereqs)
+    .where(inArray(cardPrereqs.dependentId, uniqueIds))
+    .all();
+
+  if (edges.length === 0) return locked;
+
+  const prereqIds = [...new Set(edges.map((edge) => edge.prereqId))];
+  const prereqRows = await ctx.db
+    .select({
+      id: cards.id,
+      state: cards.state,
+      stability: cards.stability,
+    })
     .from(cards)
     .where(inArray(cards.id, prereqIds))
     .all();
-  return prereqs.every((prereq) => isPrereqSecured(prereq, floor));
+  const prereqById = new Map(prereqRows.map((row) => [row.id, row]));
+
+  const prereqsByDependent = new Map<string, string[]>();
+  for (const edge of edges) {
+    const list = prereqsByDependent.get(edge.dependentId) ?? [];
+    list.push(edge.prereqId);
+    prereqsByDependent.set(edge.dependentId, list);
+  }
+
+  for (const id of uniqueIds) {
+    const prereqList = prereqsByDependent.get(id) ?? [];
+    if (prereqList.length === 0) continue;
+    const unlocked = prereqList.every((prereqId) => {
+      const prereq = prereqById.get(prereqId);
+      return prereq ? isPrereqSecured(prereq, floor) : false;
+    });
+    locked.set(id, !unlocked);
+  }
+
+  return locked;
+}
+
+export async function persistLockedForCardIds(
+  ctx: ServiceContext,
+  cardIds: string[],
+): Promise<void> {
+  const uniqueIds = [...new Set(cardIds)];
+  if (uniqueIds.length === 0) return;
+
+  const computed = await computeLockedByCardIds(ctx, uniqueIds);
+  const now = new Date();
+
+  await ctx.db.transaction(async (tx) => {
+    for (const id of uniqueIds) {
+      await tx
+        .update(cards)
+        .set({ locked: computed.get(id) ?? false, updatedAt: now })
+        .where(eq(cards.id, id))
+        .run();
+    }
+  });
+}
+
+async function collectTransitiveDependents(
+  ctx: ServiceContext,
+  rootId: string,
+): Promise<string[]> {
+  const seen = new Set<string>();
+  const stack = [rootId];
+
+  while (stack.length) {
+    const node = stack.pop()!;
+    const dependents = await getDependentIds(ctx, node);
+    for (const dependentId of dependents) {
+      if (seen.has(dependentId)) continue;
+      seen.add(dependentId);
+      stack.push(dependentId);
+    }
+  }
+
+  return [...seen];
+}
+
+export async function refreshLockedAfterPrereqChange(
+  ctx: ServiceContext,
+  dependentId: string,
+): Promise<void> {
+  const affected = await collectTransitiveDependents(ctx, dependentId);
+  affected.push(dependentId);
+  await persistLockedForCardIds(ctx, affected);
+}
+
+export async function refreshLockedAfterPrereqSecured(
+  ctx: ServiceContext,
+  prereqId: string,
+): Promise<void> {
+  const affected = await collectTransitiveDependents(ctx, prereqId);
+  if (affected.length === 0) return;
+  await persistLockedForCardIds(ctx, affected);
+}
+
+export async function refreshAllLockedStates(ctx: ServiceContext): Promise<void> {
+  const dependents = await ctx.db
+    .selectDistinct({ id: cardPrereqs.dependentId })
+    .from(cardPrereqs)
+    .all();
+  const dependentIds = dependents.map((row) => row.id);
+
+  if (dependentIds.length === 0) {
+    await ctx.db.update(cards).set({ locked: false }).run();
+    return;
+  }
+
+  await persistLockedForCardIds(ctx, dependentIds);
+  await ctx.db
+    .update(cards)
+    .set({ locked: false })
+    .where(notInArray(cards.id, dependentIds))
+    .run();
+}
+
+export async function refreshLockedForDeck(
+  ctx: ServiceContext,
+  deckId: string,
+): Promise<void> {
+  const deckCards = await ctx.db
+    .select({ id: cards.id })
+    .from(cards)
+    .where(eq(cards.deckId, deckId))
+    .all();
+  const deckCardIds = new Set(deckCards.map((row) => row.id));
+
+  const dependents = await ctx.db
+    .selectDistinct({ id: cardPrereqs.dependentId })
+    .from(cardPrereqs)
+    .where(inArray(cardPrereqs.dependentId, [...deckCardIds]))
+    .all();
+  const dependentIds = dependents.map((row) => row.id);
+
+  if (dependentIds.length > 0) {
+    await persistLockedForCardIds(ctx, dependentIds);
+  }
+
+  const nonDependentIds = deckCards
+    .map((row) => row.id)
+    .filter((id) => !dependentIds.includes(id));
+  if (nonDependentIds.length === 0) return;
+
+  await ctx.db
+    .update(cards)
+    .set({ locked: false })
+    .where(inArray(cards.id, nonDependentIds))
+    .run();
 }
 
 /** Would adding edge prereq → dependent introduce a cycle? */
@@ -115,6 +296,7 @@ export async function activateUnlockedDependents(
   ctx: ServiceContext,
   cardId: string,
 ): Promise<void> {
+  await refreshLockedAfterPrereqSecured(ctx, cardId);
   const dependentIds = await getDependentIds(ctx, cardId);
   await Promise.all(
     dependentIds.map((dependentId) => syncCardScheduling(ctx, dependentId)),
@@ -152,6 +334,7 @@ export async function addPrereq(
     .values({ prereqId, dependentId })
     .onConflictDoNothing()
     .run();
+  await refreshLockedAfterPrereqChange(ctx, dependentId);
   await syncCardScheduling(ctx, dependentId);
 }
 
@@ -169,6 +352,7 @@ export async function removePrereq(
       ),
     )
     .run();
+  await refreshLockedAfterPrereqChange(ctx, dependentId);
   await syncCardScheduling(ctx, dependentId);
 }
 
@@ -194,6 +378,7 @@ export async function getDeckGraph(
       front: cards.front,
       back: cards.back,
       state: cards.state,
+      locked: cards.locked,
     })
     .from(cards)
     .where(eq(cards.deckId, deckId))
@@ -211,11 +396,12 @@ export async function getDeckGraph(
           .all()
       ).filter((e) => ids.includes(e.prereqId))
     : [];
-  const nodes = await Promise.all(
-    deckCards.map(async (c) => ({
-      ...c,
-      locked: !(await isUnlocked(ctx, c.id)),
-    })),
-  );
+  const nodes = deckCards.map((c) => ({
+    id: c.id,
+    front: c.front,
+    back: c.back,
+    state: c.state,
+    locked: c.locked,
+  }));
   return { nodes, edges };
 }
