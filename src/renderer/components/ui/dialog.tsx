@@ -12,6 +12,7 @@ const EXIT_MS = 200;
 export function Dialog({
   open,
   onClose,
+  onExitComplete,
   title,
   description,
   children,
@@ -19,6 +20,7 @@ export function Dialog({
 }: {
   open: boolean;
   onClose: () => void;
+  onExitComplete?: () => void;
   title?: string;
   description?: string;
   children: React.ReactNode;
@@ -26,14 +28,27 @@ export function Dialog({
 }) {
   const panelRef = React.useRef<HTMLDivElement>(null);
   const onCloseRef = React.useRef(onClose);
+  const onExitCompleteRef = React.useRef(onExitComplete);
   const previouslyFocusedRef = React.useRef<HTMLElement | null>(null);
   const titleId = React.useId();
   const [present, setPresent] = React.useState(open);
   const [closing, setClosing] = React.useState(false);
+  const snapshotRef = React.useRef({ title, description, children });
+  const exiting = closing || (present && !open);
+
+  if (open && !exiting) {
+    snapshotRef.current = { title, description, children };
+  }
+
+  const content = exiting ? snapshotRef.current : { title, description, children };
 
   React.useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
+
+  React.useEffect(() => {
+    onExitCompleteRef.current = onExitComplete;
+  }, [onExitComplete]);
 
   React.useEffect(() => {
     if (open) {
@@ -45,7 +60,7 @@ export function Dialog({
   }, [open, present]);
 
   React.useEffect(() => {
-    if (!present || closing) return;
+    if (!present || exiting) return;
 
     const panel = panelRef.current;
     const focusFrame = requestAnimationFrame(() => {
@@ -94,7 +109,7 @@ export function Dialog({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [present, closing]);
+  }, [present, exiting]);
 
   React.useEffect(() => {
     if (!closing) return;
@@ -106,6 +121,7 @@ export function Dialog({
       previouslyFocusedRef.current?.focus?.();
       setPresent(false);
       setClosing(false);
+      onExitCompleteRef.current?.();
     };
 
     const panel = panelRef.current;
@@ -130,7 +146,7 @@ export function Dialog({
       <div
         className={cn(
           "absolute inset-0 bg-ink/35",
-          closing ? "animate-fade-out" : "animate-fade-in",
+          exiting ? "animate-fade-out" : "animate-fade-in",
         )}
         onClick={onClose}
         aria-hidden
@@ -139,21 +155,21 @@ export function Dialog({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={title ? titleId : undefined}
+        aria-labelledby={content.title ? titleId : undefined}
         className={cn(
           "relative z-10 w-full max-w-md rounded-lg border border-border bg-surface p-6 shadow-overlay",
-          closing ? "animate-pop-out" : "animate-pop",
+          exiting ? "animate-pop-out" : "animate-pop",
           className,
         )}
       >
-        {title && (
+        {content.title && (
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
               <h2 id={titleId} className="text-lg font-semibold text-ink">
-                {title}
+                {content.title}
               </h2>
-              {description && (
-                <p className="mt-1 text-sm text-muted">{description}</p>
+              {content.description && (
+                <p className="mt-1 text-sm text-muted">{content.description}</p>
               )}
             </div>
             <button
@@ -165,7 +181,7 @@ export function Dialog({
             </button>
           </div>
         )}
-        {children}
+        {content.children}
       </div>
     </div>,
     document.body,

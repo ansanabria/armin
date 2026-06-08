@@ -129,6 +129,10 @@ export const settings = sqliteTable("settings", {
   relearningSteps: text("relearning_steps").notNull().default("10m"),
   // JSON array of FSRS weights; null = library defaults.
   weights: text("weights"),
+  /** Minimum FSRS stability before a prereq counts as secured. */
+  prereqStabilityFloor: real("prereq_stability_floor").notNull().default(2),
+  /** Max brand-new cards introduced per calendar day (frontier cap). */
+  newCardsPerDay: integer("new_cards_per_day").notNull().default(10),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .default(sql`(unixepoch() * 1000)`),

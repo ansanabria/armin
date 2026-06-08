@@ -9,6 +9,10 @@ export const RETENTION_MIN = 0.7;
 export const RETENTION_MAX = 0.99;
 export const MAX_INTERVAL_MIN = 1;
 export const MAX_INTERVAL_MAX = 36500;
+export const STABILITY_FLOOR_MIN = 0.1;
+export const STABILITY_FLOOR_MAX = 365;
+export const NEW_CARDS_PER_DAY_MIN = 0;
+export const NEW_CARDS_PER_DAY_MAX = 999;
 
 export function formatRetentionPercent(value: number): string {
   return String(Math.round(value * 100));
@@ -122,6 +126,22 @@ function formatStepToken(step: StepDuration): string | null {
     return `${minutes / 60}h`;
   }
   return `${minutes}m`;
+}
+
+export function isValidStabilityFloor(value: number): boolean {
+  return (
+    Number.isFinite(value) &&
+    value >= STABILITY_FLOOR_MIN &&
+    value <= STABILITY_FLOOR_MAX
+  );
+}
+
+export function isValidNewCardsPerDay(value: number): boolean {
+  return (
+    Number.isInteger(value) &&
+    value >= NEW_CARDS_PER_DAY_MIN &&
+    value <= NEW_CARDS_PER_DAY_MAX
+  );
 }
 
 export function parseBoundedInt(input: string, max: number): number | null {

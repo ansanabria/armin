@@ -4,6 +4,7 @@ import {
   loadDevToolsExtensions,
   registerDevToolsShortcuts,
 } from "../devtools";
+import { attachWindowIcon, getAppIcon } from "../icon";
 
 let profilePickerWindow: BrowserWindow | null = null;
 const profileWindows = new Map<string, BrowserWindow>();
@@ -87,6 +88,7 @@ export function openProfilePicker() {
     center: true,
     resizable: false,
     show: false,
+    icon: getAppIcon(),
     ...(isMac
       ? { titleBarStyle: "hiddenInset" as const }
       : {
@@ -98,9 +100,15 @@ export function openProfilePicker() {
       spellcheck: false,
     },
   });
+  attachWindowIcon(profilePickerWindow);
 
   profilePickerWindow.once("ready-to-show", () => {
-    profilePickerWindow?.show();
+    const picker = profilePickerWindow;
+    try {
+      if (picker && !picker.isDestroyed()) picker.show();
+    } catch {
+      // Window torn down while ready-to-show was queued (e.g. dev server stop).
+    }
   });
 
   profilePickerWindow.on("closed", () => {
@@ -134,6 +142,7 @@ export async function openMainWindow(profileId: string, profileName?: string) {
     width: 1200,
     height: 800,
     show: false,
+    icon: getAppIcon(),
     title: profileName ? `${profileName} — Armin` : "Armin",
     ...(isMac
       ? { titleBarStyle: "hiddenInset" as const }
@@ -146,11 +155,16 @@ export async function openMainWindow(profileId: string, profileName?: string) {
       spellcheck: false,
     },
   });
+  attachWindowIcon(win);
 
   profileWindows.set(profileId, win);
 
   win.once("ready-to-show", () => {
-    win.show();
+    try {
+      if (!win.isDestroyed()) win.show();
+    } catch {
+      // Window torn down while ready-to-show was queued (e.g. dev server stop).
+    }
   });
 
   win.on("closed", () => {
