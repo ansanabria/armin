@@ -30,12 +30,7 @@ jobs:
         shell: bash
         run: |
           node node_modules/electron/install.js
-          case "$RUNNER_OS" in
-            Linux) echo electron > node_modules/electron/path.txt ;;
-            macOS) echo Electron.app/Contents/MacOS/Electron > node_modules/electron/path.txt ;;
-            Windows) echo electron.exe > node_modules/electron/path.txt ;;
-          esac
-          node -e "console.log(require('electron'))"
+          node node_modules/electron/cli.js --version
 
       - name: Install E2E dependencies
         run: sudo apt-get update && sudo apt-get install -y xvfb
@@ -54,6 +49,9 @@ jobs:
 
       - name: Build Electron app for E2E
         run: npm run test:e2e:build
+
+      - name: Verify Electron binary after packaging
+        run: node node_modules/electron/cli.js --version
 
       - name: Run E2E tests
         run: xvfb-run --auto-servernum npm run test:e2e
@@ -91,12 +89,7 @@ jobs:
         shell: bash
         run: |
           node node_modules/electron/install.js
-          case "$RUNNER_OS" in
-            Linux) echo electron > node_modules/electron/path.txt ;;
-            macOS) echo Electron.app/Contents/MacOS/Electron > node_modules/electron/path.txt ;;
-            Windows) echo electron.exe > node_modules/electron/path.txt ;;
-          esac
-          node -e "console.log(require('electron'))"
+          node node_modules/electron/cli.js --version
 
       - name: Build icons
         run: npm run icons
