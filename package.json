@@ -19,6 +19,7 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "node scripts/publish.mjs",
+    "electron:install": "node scripts/ensure-electron.mjs",
     "mcp": "tsx src/mcp/server.ts",
     "lint": "eslint --ext .ts,.tsx .",
     "test": "vitest run",
