@@ -9,10 +9,7 @@ describe("dueSortPriority", () => {
       { locked: false, state: 2, due: new Date("2026-06-08T11:00:00.000Z") },
       now,
     );
-    const locked = dueSortPriority(
-      { locked: true, state: 0, due: now },
-      now,
-    );
+    const locked = dueSortPriority({ locked: true, state: 0, due: now }, now);
     const brandNew = dueSortPriority(
       { locked: false, state: 0, due: now },
       now,

@@ -32,29 +32,33 @@ const NAMED_ENTITIES: Record<string, string> = {
 };
 
 export function decodeEntities(input: string): string {
-  return input.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, body: string) => {
-    if (body[0] === "#") {
-      const codePoint =
-        body[1] === "x" || body[1] === "X"
-          ? parseInt(body.slice(2), 16)
-          : parseInt(body.slice(1), 10);
-      if (Number.isNaN(codePoint)) return match;
-      try {
-        return String.fromCodePoint(codePoint);
-      } catch {
-        return match;
+  return input.replace(
+    /&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g,
+    (match, body: string) => {
+      if (body[0] === "#") {
+        const codePoint =
+          body[1] === "x" || body[1] === "X"
+            ? parseInt(body.slice(2), 16)
+            : parseInt(body.slice(1), 10);
+        if (Number.isNaN(codePoint)) return match;
+        try {
+          return String.fromCodePoint(codePoint);
+        } catch {
+          return match;
+        }
       }
-    }
-    const named = NAMED_ENTITIES[body];
-    return named ?? match;
-  });
+      const named = NAMED_ENTITIES[body];
+      return named ?? match;
+    },
+  );
 }
 
 type Token =
   | { kind: "text"; value: string }
   | { kind: "open" | "close" | "void"; tag: string; attrs: string };
 
-const TAG_RE = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g;
+const TAG_RE =
+  /<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g;
 const VOID_TAGS = new Set(["br", "hr", "img", "input", "wbr"]);
 
 function tokenize(html: string): Token[] {
@@ -84,7 +88,10 @@ function tokenize(html: string): Token[] {
 }
 
 function getAttr(attrs: string, name: string): string | undefined {
-  const re = new RegExp(`${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, "i");
+  const re = new RegExp(
+    `${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`,
+    "i",
+  );
   const m = attrs.match(re);
   if (!m) return undefined;
   return decodeEntities(m[2] ?? m[3] ?? m[4] ?? "");

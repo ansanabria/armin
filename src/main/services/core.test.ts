@@ -1,57 +1,16 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { count, eq } from "drizzle-orm";
-import { closeDb, getDb, initDb, schema, setDbRootForTests } from "../db";
-import { runMigrations } from "../db/migrate";
-import type { ServiceContext } from "./context";
+import { schema } from "../db";
+import { makeContext, securePrereq, useTestDb } from "../test/db";
 import * as browse from "./browse";
 import * as cards from "./cards";
 import * as decks from "./decks";
 import * as graph from "./graph";
 import * as review from "./review";
 import * as settings from "./settings";
-import {
-  isPendingSchedule,
-  PENDING_DUE,
-  State,
-} from "./scheduler";
+import { isPendingSchedule, PENDING_DUE, State } from "./scheduler";
 
-let root: string;
-
-async function makeContext(profileId: string): Promise<ServiceContext> {
-  await initDb(profileId);
-  await runMigrations(profileId);
-  return { profileId, db: getDb(profileId) };
-}
-
-async function securePrereq(ctx: ServiceContext, cardId: string) {
-  await ctx.db
-    .update(schema.cards)
-    .set({
-      state: State.Review,
-      stability: 2.5,
-      difficulty: 5,
-      scheduledDays: 3,
-      due: new Date(),
-      lastReview: new Date(),
-      reps: 2,
-    })
-    .where(eq(schema.cards.id, cardId))
-    .run();
-}
-
-beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), "armin-test-"));
-  setDbRootForTests(root);
-});
-
-afterEach(() => {
-  closeDb();
-  setDbRootForTests(null);
-  fs.rmSync(root, { recursive: true, force: true });
-});
+useTestDb();
 
 describe("core services", () => {
   it("isolates deck data by profile database", async () => {
@@ -218,9 +177,24 @@ describe("core services", () => {
   it("prevents graph self-links, duplicates, and cycles", async () => {
     const ctx = await makeContext("graph");
     const deck = await decks.createDeck(ctx, { name: "Cycles" });
-    const a = await cards.createCard({ ctx, deckId: deck.id, front: "A", back: "A" });
-    const b = await cards.createCard({ ctx, deckId: deck.id, front: "B", back: "B" });
-    const c = await cards.createCard({ ctx, deckId: deck.id, front: "C", back: "C" });
+    const a = await cards.createCard({
+      ctx,
+      deckId: deck.id,
+      front: "A",
+      back: "A",
+    });
+    const b = await cards.createCard({
+      ctx,
+      deckId: deck.id,
+      front: "B",
+      back: "B",
+    });
+    const c = await cards.createCard({
+      ctx,
+      deckId: deck.id,
+      front: "C",
+      back: "C",
+    });
 
     await expect(graph.addPrereq(ctx, a.id, a.id)).rejects.toThrow(
       /own prerequisite/,
@@ -330,10 +304,18 @@ describe("core services", () => {
       offset: 0,
       limit: 30,
       sort: "front-asc",
-      tag: "shared",
+      tags: ["shared"],
     });
     expect(tagFiltered.filteredTotal).toBe(1);
     expect(tagFiltered.cards[0].id).toBe(older.id);
+
+    const multiTagFiltered = await browse.listBrowsePage(ctx, {
+      offset: 0,
+      limit: 30,
+      sort: "front-asc",
+      tags: ["shared", "beta-only"],
+    });
+    expect(multiTagFiltered.filteredTotal).toBe(2);
   });
 
   it("lists deck tag names without loading all cards", async () => {
@@ -393,7 +375,7 @@ describe("core services", () => {
       limit: 10,
       sort: "front-asc",
       deckId: deck.id,
-      tag: "focus",
+      tags: ["focus"],
     });
     expect(tagFiltered.filteredTotal).toBe(1);
     expect(tagFiltered.cards[0].id).toBe(tagged.id);

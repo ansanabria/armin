@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -19,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { CardFormDialog } from "@/components/card-form-dialog";
 import { CardTile } from "@/components/card-tile";
 import { SortControl } from "@/components/sort-control";
-import { SearchableSelect } from "@/components/ui/combobox";
+import { SearchableMultiSelect } from "@/components/ui/combobox";
 import { CARD_SORT_OPTIONS, type CardSortKey } from "@/lib/sort-cards";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,11 +44,11 @@ export default function DeckPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<UiCard | null>(null);
   const [sort, setSort] = useState<CardSortKey>("due-soon");
-  const [tagFilter, setTagFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
 
   const browseFilters = useMemo((): BrowseQueryFilters => {
     const filters: BrowseQueryFilters = { sort, deckId };
-    if (tagFilter) filters.tag = tagFilter;
+    if (tagFilter.length > 0) filters.tags = tagFilter;
     return filters;
   }, [sort, deckId, tagFilter]);
 
@@ -69,7 +70,7 @@ export default function DeckPage() {
         limit: BROWSE_PAGE_SIZE,
         sort: browseFilters.sort,
         deckId: browseFilters.deckId,
-        tag: browseFilters.tag,
+        tags: browseFilters.tags,
       }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
@@ -79,6 +80,7 @@ export default function DeckPage() {
       );
       return loaded < lastPage.filteredTotal ? loaded : undefined;
     },
+    placeholderData: keepPreviousData,
   });
 
   const displayed = useMemo(
@@ -123,10 +125,7 @@ export default function DeckPage() {
 
   const deckTags = tagsQuery.data ?? [];
   const tagOptions = useMemo(
-    () => [
-      { value: "", label: "All tags" },
-      ...deckTags.map((t) => ({ value: t, label: t })),
-    ],
+    () => deckTags.map((t) => ({ value: t, label: t })),
     [deckTags],
   );
 
@@ -211,8 +210,8 @@ export default function DeckPage() {
               Couldn&apos;t load these cards
             </h3>
             <p className="mt-1 max-w-[40ch] text-sm text-muted">
-              Something went wrong reading from local storage. Your data is
-              safe on disk.
+              Something went wrong reading from local storage. Your data is safe
+              on disk.
             </p>
             <Button
               variant="outline"
@@ -317,7 +316,7 @@ export default function DeckPage() {
                     </>
                   }
                 >
-                  <SearchableSelect
+                  <SearchableMultiSelect
                     value={tagFilter}
                     onValueChange={setTagFilter}
                     options={tagOptions}

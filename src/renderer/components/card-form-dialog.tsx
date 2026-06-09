@@ -106,6 +106,7 @@ export function CardFormDialog({
       onClose={onClose}
       onExitComplete={onExitComplete}
       title={displayMode === "edit" ? "Edit card" : "Add card"}
+      className="max-w-[35rem]"
     >
       <div className="space-y-4">
         <Field label="Front" hint="The prompt or question.">
@@ -139,17 +140,16 @@ export function CardFormDialog({
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="ghost" onClick={onClose}>
             Cancel
+            <Kbd>Esc</Kbd>
           </Button>
           <Button
             disabled={!front.trim() || !back.trim() || submitting}
             onClick={() => void handleSubmit()}
           >
             {displayMode === "edit" ? "Save changes" : "Add card"}
-            {displayMode === "create" && (
-              <Kbd className="border-on-accent/25 bg-on-accent/10 text-on-accent shadow-none">
-                Ctrl+Enter
-              </Kbd>
-            )}
+            <Kbd className="border-on-accent/25 bg-on-accent/10 text-on-accent shadow-none">
+              Ctrl+Enter
+            </Kbd>
           </Button>
         </div>
       </div>

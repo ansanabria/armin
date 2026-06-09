@@ -140,7 +140,7 @@ function decodeMediaEntries(bytes: Uint8Array): string[] {
         const innerLen = readVarint();
         const slice = bytes.subarray(i, i + innerLen);
         i += innerLen;
-        if ((innerTag >> 3) === 1) name = Buffer.from(slice).toString("utf8");
+        if (innerTag >> 3 === 1) name = Buffer.from(slice).toString("utf8");
       } else if (innerWire === 0) {
         readVarint();
       } else {
@@ -210,7 +210,10 @@ function chooseCollection(entries: Record<string, Uint8Array>): {
   schema18: boolean;
 } {
   if (entries["collection.anki21b"]) {
-    return { bytes: maybeDecompress(entries["collection.anki21b"]), schema18: true };
+    return {
+      bytes: maybeDecompress(entries["collection.anki21b"]),
+      schema18: true,
+    };
   }
   if (entries["collection.anki21"]) {
     return { bytes: entries["collection.anki21"], schema18: false };
@@ -246,7 +249,10 @@ type ColMeta = {
   deckNames: Map<number, string>;
 };
 
-async function readColMeta(client: Client, schema18: boolean): Promise<ColMeta> {
+async function readColMeta(
+  client: Client,
+  schema18: boolean,
+): Promise<ColMeta> {
   const noteTypes = new Map<number, NoteType>();
   const deckNames = new Map<number, string>();
   let crt = Math.floor(Date.now() / 1000);
@@ -254,7 +260,9 @@ async function readColMeta(client: Client, schema18: boolean): Promise<ColMeta> 
   // Legacy: everything lives in the single `col` row as JSON.
   let usedJson = false;
   try {
-    const col = await client.execute("SELECT crt, models, decks FROM col LIMIT 1");
+    const col = await client.execute(
+      "SELECT crt, models, decks FROM col LIMIT 1",
+    );
     const row = col.rows[0] as Record<string, unknown> | undefined;
     if (row) {
       crt = Number(row.crt) || crt;
@@ -268,12 +276,18 @@ async function readColMeta(client: Client, schema18: boolean): Promise<ColMeta> 
             name: m.name,
             isCloze: m.type === 1,
             fieldNames: (m.flds ?? []).map((f) => f.name),
-            templates: (m.tmpls ?? []).map((t) => ({ qfmt: t.qfmt, afmt: t.afmt })),
+            templates: (m.tmpls ?? []).map((t) => ({
+              qfmt: t.qfmt,
+              afmt: t.afmt,
+            })),
           });
         }
       }
       if (decks) {
-        for (const d of Object.values(decks) as { id: number; name: string }[]) {
+        for (const d of Object.values(decks) as {
+          id: number;
+          name: string;
+        }[]) {
           deckNames.set(Number(d.id), d.name);
         }
       }
@@ -300,7 +314,11 @@ async function readSchema18Meta(
     const nts = await client.execute("SELECT id, name FROM notetypes");
     const fieldsByNt = new Map<number, { ord: number; name: string }[]>();
     const fields = await client.execute("SELECT ntid, ord, name FROM fields");
-    for (const r of fields.rows as unknown as { ntid: number; ord: number; name: string }[]) {
+    for (const r of fields.rows as unknown as {
+      ntid: number;
+      ord: number;
+      name: string;
+    }[]) {
       const list = fieldsByNt.get(Number(r.ntid)) ?? [];
       list.push({ ord: Number(r.ord), name: r.name });
       fieldsByNt.set(Number(r.ntid), list);
@@ -356,7 +374,10 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
 
 // --- card building -----------------------------------------------------------
 
-function buildFieldMap(noteType: NoteType, fields: string[]): Record<string, string> {
+function buildFieldMap(
+  noteType: NoteType,
+  fields: string[],
+): Record<string, string> {
   const map: Record<string, string> = {};
   noteType.fieldNames.forEach((name, i) => {
     map[name] = fields[i] ?? "";
@@ -431,7 +452,8 @@ function mapSchedule(card: CardRow, crt: number): FsrsFields | null {
   if (card.type === 0 && card.reps === 0) return null;
 
   const fsrs = JSON.parse(card.data || "{}") as { s?: number; d?: number };
-  const ivlDays = card.ivl > 0 ? card.ivl : Math.max(1, Math.round(-card.ivl / 86_400));
+  const ivlDays =
+    card.ivl > 0 ? card.ivl : Math.max(1, Math.round(-card.ivl / 86_400));
 
   let due: Date;
   if (card.type === 2) {
@@ -445,8 +467,7 @@ function mapSchedule(card: CardRow, crt: number): FsrsFields | null {
   }
 
   const stability = fsrs.s ?? Math.max(ivlDays, 0.5);
-  const difficulty =
-    fsrs.d ?? clamp(10 - (card.factor - 1300) / 250, 1, 10);
+  const difficulty = fsrs.d ?? clamp(10 - (card.factor - 1300) / 250, 1, 10);
   const lastReview =
     card.type === 2 ? new Date(due.getTime() - ivlDays * DAY_MS) : new Date();
 
@@ -491,7 +512,9 @@ export async function analyzeAnkiPackage(
   try {
     const { crt, noteTypes, deckNames } = await readColMeta(client, schema18);
 
-    const noteRows = await client.execute("SELECT id, mid, tags, flds FROM notes");
+    const noteRows = await client.execute(
+      "SELECT id, mid, tags, flds FROM notes",
+    );
     const notesById = new Map<number, Note>();
     for (const r of noteRows.rows as unknown as {
       id: number;
@@ -520,8 +543,7 @@ export async function analyzeAnkiPackage(
     for (const raw of cardRows.rows as unknown as CardRow[]) {
       const note = notesById.get(Number(raw.nid));
       if (!note) continue;
-      const noteType =
-        noteTypes.get(note.mid) ?? fallbackNoteType(note);
+      const noteType = noteTypes.get(note.mid) ?? fallbackNoteType(note);
 
       // For now Armin only imports basic front/back cards; skip everything else.
       if (isUnsupportedNote(note, noteType)) {
@@ -587,11 +609,15 @@ export async function analyzeAnkiPackage(
         "This package uses Anki's newest format; card layouts were simplified to front/back.",
       );
     if (imageCount > 0)
-      warnings.push(`${plural(imageCount, "image")} embedded directly into cards.`);
+      warnings.push(
+        `${plural(imageCount, "image")} embedded directly into cards.`,
+      );
     if (droppedAudio)
       warnings.push("Audio was skipped — Armin doesn't support sound yet.");
     if (hasScheduling)
-      warnings.push("Anki review history maps approximately onto Armin's FSRS scheduler.");
+      warnings.push(
+        "Anki review history maps approximately onto Armin's FSRS scheduler.",
+      );
 
     const pkg: ParsedPackage = {
       cards,
@@ -633,7 +659,12 @@ function suggestedDeckName(
 ): string {
   const meaningful = decks.filter((d) => d.name && d.name !== "Default");
   if (meaningful.length === 1) return leafDeckName(meaningful[0].name);
-  return fileName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim() || "Imported deck";
+  return (
+    fileName
+      .replace(/\.[^.]+$/, "")
+      .replace(/[_-]+/g, " ")
+      .trim() || "Imported deck"
+  );
 }
 
 function leafDeckName(name: string): string {
@@ -678,7 +709,12 @@ export async function commitAnkiImport(
   let cardCount = 0;
 
   for (const [deckTitle, deckCards] of groups) {
-    const deckId = await writeDeck(ctx, deckTitle, deckCards, input.keepScheduling);
+    const deckId = await writeDeck(
+      ctx,
+      deckTitle,
+      deckCards,
+      input.keepScheduling,
+    );
     firstDeckId ??= deckId;
     cardCount += deckCards.length;
   }
@@ -695,7 +731,7 @@ async function writeDeck(
   parsedCards: ParsedCard[],
   keepScheduling: boolean,
 ): Promise<string> {
-  const { decks, cards, tags, cardTags } = schema;
+  const { decks, cards, cardTags } = schema;
 
   return ctx.db.transaction(async (tx) => {
     const deck = await tx.insert(decks).values({ name }).returning().get();
@@ -722,7 +758,10 @@ async function writeDeck(
     });
 
     for (let i = 0; i < cardValues.length; i += CARD_CHUNK) {
-      await tx.insert(cards).values(cardValues.slice(i, i + CARD_CHUNK)).run();
+      await tx
+        .insert(cards)
+        .values(cardValues.slice(i, i + CARD_CHUNK))
+        .run();
     }
     for (let i = 0; i < cardTagRows.length; i += CARD_CHUNK) {
       await tx
@@ -759,7 +798,11 @@ async function resolveTags(
 
   for (const [lower, display] of wanted) {
     if (byLower.has(lower)) continue;
-    const created = await tx.insert(tags).values({ name: display }).returning().get();
+    const created = await tx
+      .insert(tags)
+      .values({ name: display })
+      .returning()
+      .get();
     byLower.set(lower, created!.id);
   }
   return byLower;

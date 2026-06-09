@@ -1,4 +1,9 @@
-import { app, nativeImage, type BrowserWindow, type NativeImage } from "electron";
+import {
+  app,
+  nativeImage,
+  type BrowserWindow,
+  type NativeImage,
+} from "electron";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";

@@ -8,7 +8,12 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@libsql/client";
-import { setDbRootForTests, initDb, closeDb, getDb } from "../src/main/db/index";
+import {
+  setDbRootForTests,
+  initDb,
+  closeDb,
+  getDb,
+} from "../src/main/db/index";
 import { runMigrations } from "../src/main/db/migrate";
 import { listBrowsePage, listDeckTagNames } from "../src/main/services/browse";
 import { getDeck } from "../src/main/services/decks";
@@ -127,7 +132,9 @@ async function main() {
   }
 
   console.log("");
-  console.log(`Deck: ${count} cards, ${deck?.due} due, ${deck?.learned} learned`);
+  console.log(
+    `Deck: ${count} cards, ${deck?.due} due, ${deck?.learned} learned`,
+  );
   console.log(`Page 1 newest: ${page1.cards[0]?.front}`);
   console.log(`Page last: ${pageLast.cards[0]?.front}`);
   console.log(`Tagged cards: ${tagged.filteredTotal}`);

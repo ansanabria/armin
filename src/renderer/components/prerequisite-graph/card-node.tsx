@@ -47,7 +47,9 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
     <div
       className={cn(
         "group relative w-[240px] border border-border bg-surface px-3.5 py-3 transition-colors duration-150",
-        selected ? "border-accent ring-2 ring-accent/30" : "hover:border-border-strong",
+        selected
+          ? "border-accent ring-2 ring-accent/30"
+          : "hover:border-border-strong",
         data.locked && "opacity-65",
       )}
     >

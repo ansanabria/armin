@@ -40,7 +40,9 @@ export function Dialog({
     snapshotRef.current = { title, description, children };
   }
 
-  const content = exiting ? snapshotRef.current : { title, description, children };
+  const content = exiting
+    ? snapshotRef.current
+    : { title, description, children };
 
   React.useEffect(() => {
     onCloseRef.current = onClose;
@@ -67,9 +69,7 @@ export function Dialog({
       const autofocusHost =
         panel?.querySelector<HTMLElement>("[data-autofocus]");
       const target =
-        autofocusHost?.querySelector<HTMLElement>(
-          '[contenteditable="true"]',
-        ) ??
+        autofocusHost?.querySelector<HTMLElement>('[contenteditable="true"]') ??
         panel?.querySelector<HTMLElement>('[contenteditable="true"]') ??
         panel?.querySelector<HTMLElement>(
           "[autofocus], input, textarea, select",
@@ -145,7 +145,7 @@ export function Dialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className={cn(
-          "absolute inset-0 bg-ink/35",
+          "absolute inset-0 cursor-pointer bg-ink/35",
           exiting ? "animate-fade-out" : "animate-fade-in",
         )}
         onClick={onClose}

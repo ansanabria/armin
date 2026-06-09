@@ -22,7 +22,7 @@ describe("ankiHtmlToMarkdown", () => {
 
   it("renders the real Anki field shape with bold, breaks and an image", () => {
     const html =
-      '<div><b>Type:</b> Behavioral</div><div><br /></div>' +
+      "<div><b>Type:</b> Behavioral</div><div><br /></div>" +
       "<div><b>What it is:</b></div><div>Capture state.</div>" +
       '<div><img src="Memento.png" /></div>';
     const md = ankiHtmlToMarkdown(html, {
@@ -42,9 +42,9 @@ describe("ankiHtmlToMarkdown", () => {
   });
 
   it("converts links", () => {
-    expect(
-      ankiHtmlToMarkdown('see <a href="https://x.com">the site</a>'),
-    ).toBe("see [the site](https://x.com)");
+    expect(ankiHtmlToMarkdown('see <a href="https://x.com">the site</a>')).toBe(
+      "see [the site](https://x.com)",
+    );
   });
 
   it("converts unordered and ordered lists", () => {

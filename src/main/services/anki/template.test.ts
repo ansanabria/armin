@@ -22,7 +22,9 @@ describe("renderTemplate", () => {
   });
 
   it("keeps non-empty positive sections and drops empty ones", () => {
-    expect(renderTemplate("{{#Back}}A: {{Back}}{{/Back}}", fields)).toBe("A: 4");
+    expect(renderTemplate("{{#Back}}A: {{Back}}{{/Back}}", fields)).toBe(
+      "A: 4",
+    );
     expect(renderTemplate("{{#Extra}}{{Extra}}{{/Extra}}", fields)).toBe("");
   });
 

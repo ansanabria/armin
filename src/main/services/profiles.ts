@@ -52,6 +52,9 @@ export function listProfiles(): Profile[] {
 
 export function createProfile(name: string): Profile {
   const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("Profile name is required.");
+  }
   const store = readStore();
   const profile: Profile = {
     id: crypto.randomUUID(),

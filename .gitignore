@@ -93,3 +93,6 @@ out/
 
 # Armin profile data
 .armin-data
+
+# Production build
+dist/

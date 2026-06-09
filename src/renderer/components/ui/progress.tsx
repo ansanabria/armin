@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-/** Slim progress meter. Accent fill on a sunken track. */
+/** Slim progress meter. Accent fill on a border-toned track. */
 export function Progress({
   value,
   max = 100,
@@ -18,7 +18,7 @@ export function Progress({
   return (
     <div
       className={cn(
-        "h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken",
+        "h-1.5 w-full overflow-hidden rounded-full bg-border",
         className,
       )}
       role="progressbar"

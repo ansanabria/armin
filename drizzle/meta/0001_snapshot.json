@@ -28,12 +28,8 @@
           "name": "card_prereqs_prereq_id_cards_id_fk",
           "tableFrom": "card_prereqs",
           "tableTo": "cards",
-          "columnsFrom": [
-            "prereq_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["prereq_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -41,22 +37,15 @@
           "name": "card_prereqs_dependent_id_cards_id_fk",
           "tableFrom": "card_prereqs",
           "tableTo": "cards",
-          "columnsFrom": [
-            "dependent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["dependent_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "card_prereqs_prereq_id_dependent_id_pk": {
-          "columns": [
-            "prereq_id",
-            "dependent_id"
-          ],
+          "columns": ["prereq_id", "dependent_id"],
           "name": "card_prereqs_prereq_id_dependent_id_pk"
         }
       },
@@ -87,12 +76,8 @@
           "name": "card_tags_card_id_cards_id_fk",
           "tableFrom": "card_tags",
           "tableTo": "cards",
-          "columnsFrom": [
-            "card_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["card_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -100,22 +85,15 @@
           "name": "card_tags_tag_id_tags_id_fk",
           "tableFrom": "card_tags",
           "tableTo": "tags",
-          "columnsFrom": [
-            "tag_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tag_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "card_tags_card_id_tag_id_pk": {
-          "columns": [
-            "card_id",
-            "tag_id"
-          ],
+          "columns": ["card_id", "tag_id"],
           "name": "card_tags_card_id_tag_id_pk"
         }
       },
@@ -260,12 +238,8 @@
           "name": "cards_deck_id_decks_id_fk",
           "tableFrom": "cards",
           "tableTo": "decks",
-          "columnsFrom": [
-            "deck_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["deck_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -413,12 +387,8 @@
           "name": "review_logs_card_id_cards_id_fk",
           "tableFrom": "review_logs",
           "tableTo": "cards",
-          "columnsFrom": [
-            "card_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["card_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -552,9 +522,7 @@
       "indexes": {
         "tags_name_unique": {
           "name": "tags_name_unique",
-          "columns": [
-            "name"
-          ],
+          "columns": ["name"],
           "isUnique": true
         }
       },
