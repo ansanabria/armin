@@ -13,6 +13,7 @@ import * as graph from "../services/graph";
 import * as settings from "../services/settings";
 import * as mcp from "../services/mcp";
 import * as profiles from "../services/profiles";
+import { analyzeAnkiPackage, commitAnkiImport } from "../services/anki/import";
 import {
   getProfileIdForWebContents,
   openMainWindow,
@@ -172,6 +173,43 @@ export function registerIpc() {
     await cards.deleteCard(ctx, id);
     return { ok: true };
   });
+
+  // --- import ---
+  register(
+    "import:analyzeAnki",
+    z.object({
+      bytes: z.instanceof(Uint8Array),
+      fileName: z.string(),
+    }),
+    ({ bytes, fileName }) => analyzeAnkiPackage(bytes, fileName),
+  );
+  registerForProfile(
+    "import:commitAnki",
+    z.object({
+      importId: z.string(),
+      deckName: z.string().min(1),
+      keepScheduling: z.boolean(),
+      deckStrategy: z.enum(["single", "separate"]),
+    }),
+    (ctx, input) => commitAnkiImport(ctx, input),
+  );
+  registerForProfile(
+    "import:createDeckWithCards",
+    z.object({
+      name: z.string().min(1),
+      description: z.string().nullish(),
+      cards: z
+        .array(
+          z.object({
+            front: z.string().min(1),
+            back: z.string().min(1),
+            tags: z.array(z.string()).optional(),
+          }),
+        )
+        .min(1),
+    }),
+    (ctx, input) => decks.createDeckWithCards(ctx, input),
+  );
 
   // --- review ---
   registerForProfile("review:queue", z.object({ deckId: z.string() }), (ctx, { deckId }) =>
