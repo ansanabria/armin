@@ -34,7 +34,9 @@ export function resolveTheme(preference: ThemePreference): ResolvedTheme {
   return getSystemTheme();
 }
 
-export function normalizeThemePreference(value: string | null): ThemePreference {
+export function normalizeThemePreference(
+  value: string | null,
+): ThemePreference {
   if (
     value === "flexoki-light" ||
     value === "flexoki-dark" ||

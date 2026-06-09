@@ -89,7 +89,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 exiting={exiting ?? false}
                 onExitComplete={() => remove(id)}
                 onDismiss={() => dismiss(id)}
-                icon={<Icon className={cn("mt-0.5 h-4.5 w-4.5 shrink-0", color)} style={{ height: "1.125rem", width: "1.125rem" }} aria-hidden />}
+                icon={
+                  <Icon
+                    className={cn("mt-0.5 h-4.5 w-4.5 shrink-0", color)}
+                    style={{ height: "1.125rem", width: "1.125rem" }}
+                    aria-hidden
+                  />
+                }
                 title={title}
                 description={description}
               />

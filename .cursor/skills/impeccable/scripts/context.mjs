@@ -15,14 +15,14 @@
  * server-side scripts (live.mjs, live-server.mjs) that need the structured
  * shape rather than the markdown block.
  */
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const PRODUCT_NAMES = ['PRODUCT.md', 'Product.md', 'product.md'];
-const DESIGN_NAMES = ['DESIGN.md', 'Design.md', 'design.md'];
-const FALLBACK_DIRS = ['.agents/context', 'docs'];
+const PRODUCT_NAMES = ["PRODUCT.md", "Product.md", "product.md"];
+const DESIGN_NAMES = ["DESIGN.md", "Design.md", "design.md"];
+const FALLBACK_DIRS = [".agents/context", "docs"];
 
 // ─── Update check ──────────────────────────────────────────────────────────
 // Piggyback a lightweight skill-version check on the once-per-session boot.
@@ -31,9 +31,12 @@ const FALLBACK_DIRS = ['.agents/context', 'docs'];
 // silent on failure: a network problem, sandbox, or missing cache must never
 // block context output or print an error.
 
-const UPDATE_HOST = (process.env.IMPECCABLE_UPDATE_HOST || 'https://impeccable.style').replace(/\/$/, '');
+const UPDATE_HOST = (
+  process.env.IMPECCABLE_UPDATE_HOST || "https://impeccable.style"
+).replace(/\/$/, "");
 const UPDATE_CACHE_PATH =
-  process.env.IMPECCABLE_UPDATE_CACHE || path.join(os.homedir(), '.impeccable', 'update-check.json');
+  process.env.IMPECCABLE_UPDATE_CACHE ||
+  path.join(os.homedir(), ".impeccable", "update-check.json");
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // throttle the network poll to once a day
 const RENOTIFY_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // don't re-surface the same version for a week
 const FETCH_TIMEOUT_MS = 1200;
@@ -83,7 +86,7 @@ function firstExisting(dir, names) {
 
 function safeRead(p) {
   try {
-    return fs.readFileSync(p, 'utf-8');
+    return fs.readFileSync(p, "utf-8");
   } catch {
     return null;
   }
@@ -96,14 +99,14 @@ function safeRead(p) {
  */
 export function extractRegister(product) {
   if (!product) return null;
-  const lines = product.split('\n');
+  const lines = product.split("\n");
   for (let i = 0; i < lines.length; i++) {
     if (/^##\s+Register\b/i.test(lines[i].trim())) {
       for (let j = i + 1; j < lines.length; j++) {
         const next = lines[j].trim();
         if (!next) continue;
         const word = next.toLowerCase();
-        if (word === 'brand' || word === 'product') return word;
+        if (word === "brand" || word === "product") return word;
         return null;
       }
     }
@@ -119,10 +122,10 @@ export function extractRegister(product) {
 function readLocalSkillVersion() {
   try {
     const here = path.dirname(fileURLToPath(import.meta.url));
-    const skillMd = path.join(here, '..', 'SKILL.md');
-    const content = fs.readFileSync(skillMd, 'utf-8');
+    const skillMd = path.join(here, "..", "SKILL.md");
+    const content = fs.readFileSync(skillMd, "utf-8");
     const match = content.match(/^version:\s*(.+)$/m);
-    return match ? match[1].trim().replace(/^["']|["']$/g, '') : null;
+    return match ? match[1].trim().replace(/^["']|["']$/g, "") : null;
   } catch {
     return null;
   }
@@ -130,7 +133,7 @@ function readLocalSkillVersion() {
 
 function readUpdateCache() {
   try {
-    return JSON.parse(fs.readFileSync(UPDATE_CACHE_PATH, 'utf-8'));
+    return JSON.parse(fs.readFileSync(UPDATE_CACHE_PATH, "utf-8"));
   } catch {
     return {};
   }
@@ -147,8 +150,12 @@ function writeUpdateCache(cache) {
 
 /** Compare dotted numeric versions. Returns >0 when a is newer than b. */
 function compareSemver(a, b) {
-  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
-  const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+  const pa = String(a)
+    .split(".")
+    .map((n) => parseInt(n, 10) || 0);
+  const pb = String(b)
+    .split(".")
+    .map((n) => parseInt(n, 10) || 0);
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
     const diff = (pa[i] || 0) - (pb[i] || 0);
     if (diff !== 0) return diff;
@@ -158,10 +165,12 @@ function compareSemver(a, b) {
 
 async function fetchLatestSkillVersion() {
   try {
-    const res = await fetch(`${UPDATE_HOST}/api/version`, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    const res = await fetch(`${UPDATE_HOST}/api/version`, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     const data = await res.json();
-    return typeof data?.skills === 'string' ? data.skills : null;
+    return typeof data?.skills === "string" ? data.skills : null;
   } catch {
     return null; // offline, sandboxed, timed out, or bad JSON: all non-fatal
   }
@@ -205,7 +214,11 @@ async function computeUpdateDirective(now = Date.now()) {
     if (!latest || compareSemver(latest, localVersion) <= 0) return null;
 
     // Anti-nag: surface a given version at most once per RENOTIFY window.
-    if (cache.notifiedVersion === latest && cache.notifiedAt && now - cache.notifiedAt < RENOTIFY_INTERVAL_MS) {
+    if (
+      cache.notifiedVersion === latest &&
+      cache.notifiedAt &&
+      now - cache.notifiedAt < RENOTIFY_INTERVAL_MS
+    ) {
       return null;
     }
     cache.notifiedVersion = latest;
@@ -226,12 +239,12 @@ async function cli() {
     // Direct stdout message instead of relying on empty output as a signal
     // — cheap models miss the empty case more often than the explicit one.
     const parts = [
-      'NO_PRODUCT_MD: This project has no PRODUCT.md yet. ' +
-      'Stop the current task, load reference/init.md, and follow its ' +
-      'instructions to write PRODUCT.md before resuming.',
+      "NO_PRODUCT_MD: This project has no PRODUCT.md yet. " +
+        "Stop the current task, load reference/init.md, and follow its " +
+        "instructions to write PRODUCT.md before resuming.",
     ];
     if (updateDirective) parts.push(updateDirective);
-    process.stdout.write(parts.join('\n\n---\n\n') + '\n');
+    process.stdout.write(parts.join("\n\n---\n\n") + "\n");
     process.exit(0);
   }
   const parts = [`# PRODUCT.md\n\n${ctx.product.trim()}`];
@@ -244,7 +257,7 @@ async function cli() {
     : `NEXT STEP: You MUST now read the matching register reference (\`reference/brand.md\` or \`reference/product.md\`) before producing any design output. Pick based on PRODUCT.md above.`;
   parts.push(next);
   if (updateDirective) parts.push(updateDirective);
-  process.stdout.write(parts.join('\n\n---\n\n') + '\n');
+  process.stdout.write(parts.join("\n\n---\n\n") + "\n");
 }
 
 // Run cli() only when this module is the entry point. Compare realpaths
@@ -255,7 +268,9 @@ function invokedAsScript() {
   const arg = process.argv[1];
   if (!arg) return false;
   try {
-    return fs.realpathSync(arg) === fs.realpathSync(fileURLToPath(import.meta.url));
+    return (
+      fs.realpathSync(arg) === fs.realpathSync(fileURLToPath(import.meta.url))
+    );
   } catch {
     return false;
   }

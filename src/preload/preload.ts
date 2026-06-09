@@ -43,6 +43,10 @@ const api = {
       invoke("graph:addPrereq", { prereqId, dependentId }),
     removePrereq: (prereqId: string, dependentId: string) =>
       invoke("graph:removePrereq", { prereqId, dependentId }),
+    saveLayout: (
+      deckId: string,
+      placements: { cardId: string; x: number; y: number }[],
+    ) => invoke("graph:saveLayout", { deckId, placements }),
   },
   settings: {
     get: () => invoke("settings:get"),
@@ -66,6 +70,10 @@ const api = {
 };
 
 contextBridge.exposeInMainWorld("armin", api);
+contextBridge.exposeInMainWorld(
+  "__ARMIN_E2E__",
+  process.argv.includes("--armin-e2e") || process.env.ARMIN_E2E === "1",
+);
 
 contextBridge.exposeInMainWorld("arminShell", {
   platform: process.platform,

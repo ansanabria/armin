@@ -38,6 +38,8 @@ export type UiGraphNode = {
   back: string;
   state: CardState;
   locked: boolean;
+  x: number | null;
+  y: number | null;
 };
 
 export type UiGraphEdge = {

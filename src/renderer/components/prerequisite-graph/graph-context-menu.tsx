@@ -59,7 +59,7 @@ export function GraphContextMenu({
           type="button"
           role="menuitem"
           className={cn(
-            "flex w-full cursor-default items-center gap-2 px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-surface-sunken focus-visible:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
+            "flex w-full cursor-pointer items-center gap-2 px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-surface-sunken focus-visible:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
             item.variant === "destructive" && "text-again hover:text-again",
           )}
           onClick={() => {

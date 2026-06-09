@@ -38,8 +38,13 @@ export function resolveViewTransitionTypes(
   const from = fromLocation?.pathname ?? "";
   const to = toLocation.pathname;
 
+  // Skip the view transition when entering/leaving the graph. The graph route
+  // is heavy to mount, and a view transition freezes the previous page's
+  // snapshot on screen until the new route settles — which reads as the old
+  // page lingering for ~1s. An instant swap lets the graph's own loading screen
+  // appear immediately, which feels smoother here.
   if (isGraphPath(from) || isGraphPath(to)) {
-    return ["fade"];
+    return false;
   }
 
   // Skip the initial route commit — the document isn't ready for a transition yet

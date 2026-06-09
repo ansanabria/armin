@@ -41,7 +41,17 @@ const US = "\x1f";
 
 type NoteRow = [number, number, string, string]; // id, mid, tags, flds
 type CardRowTuple = [
-  number, number, number, number, number, number, number, number, number, number, string,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  string,
 ]; // id, nid, did, ord, type, due, ivl, factor, reps, lapses, data
 
 // A basic card with review scheduling, a basic image card, a basic Science
@@ -167,7 +177,9 @@ describe("Anki package import", () => {
     // No cloze card leaked through.
     expect(rows.some((c) => c.front.includes("[...]"))).toBe(false);
     // The image was inlined as a data URL.
-    expect(rows.some((c) => c.back.includes("data:image/png;base64"))).toBe(true);
+    expect(rows.some((c) => c.back.includes("data:image/png;base64"))).toBe(
+      true,
+    );
 
     const tags = await ctx.db.select().from(schema.tags).all();
     expect(tags.map((t) => t.name).sort()).toEqual(["capital", "europe"]);

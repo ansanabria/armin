@@ -66,20 +66,55 @@
       }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "Page titles only (Decks, deck name)." },
-      "title": { "displayName": "Title", "purpose": "The card front in review, the focal prompt." },
-      "body-lg": { "displayName": "Body Large", "purpose": "The card back answer and longer reading." },
-      "label": { "displayName": "Label", "purpose": "State chips, field labels, meta, stat counts. Sentence case." },
-      "mono": { "displayName": "Mono", "purpose": "Code on cards, keyboard hints, interval previews, card IDs." }
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page titles only (Decks, deck name)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The card front in review, the focal prompt."
+      },
+      "body-lg": {
+        "displayName": "Body Large",
+        "purpose": "The card back answer and longer reading."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "State chips, field labels, meta, stat counts. Sentence case."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Code on cards, keyboard hints, interval previews, card IDs."
+      }
     },
     "shadows": [
-      { "name": "lift", "value": "0 1px 2px oklch(0.26 0.008 60 / 0.05), 0 1px 3px oklch(0.26 0.008 60 / 0.06)", "purpose": "The single resting elevation, reserved for the review card." },
-      { "name": "overlay", "value": "0 12px 40px -8px oklch(0.26 0.008 60 / 0.22)", "purpose": "Dialogs and popovers. Soft, warm-tinted, never a hard black drop." }
+      {
+        "name": "lift",
+        "value": "0 1px 2px oklch(0.26 0.008 60 / 0.05), 0 1px 3px oklch(0.26 0.008 60 / 0.06)",
+        "purpose": "The single resting elevation, reserved for the review card."
+      },
+      {
+        "name": "overlay",
+        "value": "0 12px 40px -8px oklch(0.26 0.008 60 / 0.22)",
+        "purpose": "Dialogs and popovers. Soft, warm-tinted, never a hard black drop."
+      }
     ],
     "motion": [
-      { "name": "ease-out-quart", "value": "cubic-bezier(0.25, 1, 0.5, 1)", "purpose": "Default easing for state transitions and reveals." },
-      { "name": "duration-fast", "value": "150ms", "purpose": "Color/hover state changes." },
-      { "name": "duration-base", "value": "200ms", "purpose": "Card flip, dialog enter, focus ring." }
+      {
+        "name": "ease-out-quart",
+        "value": "cubic-bezier(0.25, 1, 0.5, 1)",
+        "purpose": "Default easing for state transitions and reveals."
+      },
+      {
+        "name": "duration-fast",
+        "value": "150ms",
+        "purpose": "Color/hover state changes."
+      },
+      {
+        "name": "duration-base",
+        "value": "200ms",
+        "purpose": "Card flip, dialog enter, focus ring."
+      }
     ],
     "breakpoints": [
       { "name": "sm", "value": "640px" },
@@ -171,11 +206,31 @@
       "Keyboard-first, so focus states are always visible and never subtle."
     ],
     "rules": [
-      { "name": "The Reserved-Semantics Rule", "body": "Red, amber, green, and blue belong to review meaning (Again / Hard / Good / Easy and the matching states). The brand never uses them decoratively, and the brand color is never one of them. If a UI element needs an accent, it is clay or petrol, never a rating hue.", "section": "colors" },
-      { "name": "The Carried-Warmth Rule", "body": "Warmth lives in clay and ink, never in the background. The page is cool-neutral paper. Tinting the bg warm to feel cozy while the primary is also warm is forbidden.", "section": "colors" },
-      { "name": "The One-Family Rule", "body": "Inter carries every label, button, heading, and paragraph. Reach for mono only when the content is code or a key. A second display typeface is prohibited.", "section": "typography" },
-      { "name": "The Sentence-Case Rule", "body": "Labels and chips are sentence case. No all-caps tracked eyebrows above sections.", "section": "typography" },
-      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest; their edge is a hairline border on a tonal step. A shadow is permission to float, granted only to the review card (Lift) and to overlays (Overlay).", "section": "elevation" }
+      {
+        "name": "The Reserved-Semantics Rule",
+        "body": "Red, amber, green, and blue belong to review meaning (Again / Hard / Good / Easy and the matching states). The brand never uses them decoratively, and the brand color is never one of them. If a UI element needs an accent, it is clay or petrol, never a rating hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Carried-Warmth Rule",
+        "body": "Warmth lives in clay and ink, never in the background. The page is cool-neutral paper. Tinting the bg warm to feel cozy while the primary is also warm is forbidden.",
+        "section": "colors"
+      },
+      {
+        "name": "The One-Family Rule",
+        "body": "Inter carries every label, button, heading, and paragraph. Reach for mono only when the content is code or a key. A second display typeface is prohibited.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence-Case Rule",
+        "body": "Labels and chips are sentence case. No all-caps tracked eyebrows above sections.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces are flat at rest; their edge is a hairline border on a tonal step. A shadow is permission to float, granted only to the review card (Lift) and to overlays (Overlay).",
+        "section": "elevation"
+      }
     ],
     "dos": [
       "Do make the brand clay (oklch(0.52 0.13 47)) and the accent petrol (oklch(0.40 0.09 220)) the only non-semantic colors; let everything else be neutral.",
