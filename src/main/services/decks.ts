@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { schema } from "../db";
 import type { Deck } from "../db/schema";
 import type { ServiceContext } from "./context";
+import { createCard } from "./cards";
 import { buildSessionQueue } from "./review";
 import { State } from "./scheduler";
 
@@ -83,4 +84,34 @@ export async function updateDeck(
 
 export async function deleteDeck(ctx: ServiceContext, id: string): Promise<void> {
   await ctx.db.delete(decks).where(eq(decks.id, id)).run();
+}
+
+/**
+ * Create a deck and populate it with cards in one call — used by the import
+ * flows (e.g. Markdown) where the parsed cards already exist.
+ */
+export async function createDeckWithCards(
+  ctx: ServiceContext,
+  input: {
+    name: string;
+    description?: string | null;
+    cards: { front: string; back: string; tags?: string[] }[];
+  },
+): Promise<{ deckId: string; cardCount: number }> {
+  const deck = await createDeck(ctx, {
+    name: input.name,
+    description: input.description ?? null,
+  });
+
+  for (const card of input.cards) {
+    await createCard({
+      ctx,
+      deckId: deck.id,
+      front: card.front,
+      back: card.back,
+      tags: card.tags,
+    });
+  }
+
+  return { deckId: deck.id, cardCount: input.cards.length };
 }

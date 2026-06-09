@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Layers, Plus, AlertTriangle, Ellipsis, Pencil, Trash2 } from "lucide-react";
+import { Layers, Plus, Upload, AlertTriangle, Ellipsis, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,6 +24,10 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SortControl } from "@/components/sort-control";
+import {
+  ImportDeckDialog,
+  type ImportSummary,
+} from "@/components/import-deck-dialog";
 import { useToast } from "@/components/ui/toast";
 import {
   DECK_SORT_OPTIONS,
@@ -38,6 +42,7 @@ export default function DecksPage() {
   const toast = useToast();
 
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [closingAfterCreate, setClosingAfterCreate] = useState(false);
@@ -108,6 +113,20 @@ export default function DecksPage() {
     });
   };
 
+  const handleImported = (summary: ImportSummary) => {
+    void queryClient.invalidateQueries({ queryKey: deckKeys.all });
+    const deckLabel =
+      summary.deckCount && summary.deckCount > 1
+        ? `${summary.deckCount} decks`
+        : summary.name;
+    toast({
+      tone: "success",
+      title: "Import complete",
+      description: `${summary.cardCount} cards added to ${deckLabel}.`,
+    });
+    setImportOpen(false);
+  };
+
   const handleCreateDialogExit = () => {
     if (closingAfterCreate) {
       setName("");
@@ -141,6 +160,9 @@ export default function DecksPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4" /> Import
+          </Button>
           <Button onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4" /> New deck
           </Button>
@@ -214,6 +236,12 @@ export default function DecksPage() {
           ))}
         </ul>
       )}
+
+      <ImportDeckDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImport={handleImported}
+      />
 
       <Dialog
         open={open}

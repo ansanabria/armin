@@ -35,14 +35,6 @@ function normalizeTags(input: string[] = []) {
   return result;
 }
 
-async function getCardTags(
-  db: ServiceContext["db"],
-  cardId: string,
-): Promise<string[]> {
-  const map = await getTagsForCards(db, [cardId]);
-  return map.get(cardId) ?? [];
-}
-
 export async function getTagsForCards(
   db: ServiceContext["db"],
   cardIds: string[],

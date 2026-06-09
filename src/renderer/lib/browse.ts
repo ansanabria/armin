@@ -1,6 +1,6 @@
 import type { BrowseSortKey as SharedBrowseSortKey } from "../../shared/browse";
 import type { UiBrowseCard } from "@/types/view-models";
-import { CARD_SORT_OPTIONS, sortCards, type CardSortKey } from "./sort-cards";
+import { CARD_SORT_OPTIONS, sortCards } from "./sort-cards";
 
 /** Browse adds deck-based ordering on top of the per-deck card sorts. */
 export type BrowseSortKey = SharedBrowseSortKey;

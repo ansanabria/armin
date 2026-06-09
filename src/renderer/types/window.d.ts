@@ -5,6 +5,10 @@ import type { SettingsUpdate } from "../../main/services/settings";
 import type { PreviewOption } from "../../main/services/review";
 import type { DeckGraph } from "../../main/services/graph";
 import type { McpSetup } from "../../shared/mcp";
+import type {
+  AnkiAnalysis,
+  AnkiImportResult,
+} from "../../main/services/anki/import";
 
 export type Grade = 1 | 2 | 3 | 4;
 
@@ -83,6 +87,20 @@ export interface ArminApi {
   };
   mcp: {
     getSetup(): Promise<McpSetup>;
+  };
+  import: {
+    analyzeAnki(bytes: Uint8Array, fileName: string): Promise<AnkiAnalysis>;
+    commitAnki(input: {
+      importId: string;
+      deckName: string;
+      keepScheduling: boolean;
+      deckStrategy: "single" | "separate";
+    }): Promise<AnkiImportResult>;
+    createDeckWithCards(input: {
+      name: string;
+      description?: string | null;
+      cards: { front: string; back: string; tags?: string[] }[];
+    }): Promise<{ deckId: string; cardCount: number }>;
   };
   onDataChanged(cb: () => void): () => void;
 }
