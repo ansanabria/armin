@@ -1,6 +1,11 @@
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
+
+const require = createRequire(import.meta.url);
+const { api } = require("@electron-forge/core");
+const { getMakeOptions } = require("@electron-forge/cli/dist/electron-forge-make.js");
 
 const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const tagName = `v${packageJson.version}`;
@@ -60,7 +65,15 @@ const env = {
   GITHUB_TOKEN: githubToken(),
 };
 
-run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "make"], { env });
+process.env.GITHUB_TOKEN = env.GITHUB_TOKEN;
+
+const keepAlive = setInterval(() => {}, 1000);
+
+try {
+  await api.make(await getMakeOptions());
+} finally {
+  clearInterval(keepAlive);
+}
 
 const releaseExists = spawnSync("gh", ["release", "view", tagName], {
   env,
