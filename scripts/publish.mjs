@@ -1,15 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
-
-const require = createRequire(import.meta.url);
-const { api } = require("@electron-forge/core");
-const { getMakeOptions } = require("@electron-forge/cli/dist/electron-forge-make.js");
 
 const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 const tagName = `v${packageJson.version}`;
 const dryRun = process.argv.includes("--dry-run");
+const artifactDirectory = path.resolve("out/make");
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -60,6 +56,22 @@ function findArtifacts(directory) {
     .sort();
 }
 
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitForArtifacts(directory) {
+  const deadline = Date.now() + 180_000;
+
+  while (Date.now() < deadline) {
+    const artifacts = findArtifacts(directory);
+    if (artifacts.length > 0) return artifacts;
+    await sleep(1000);
+  }
+
+  return [];
+}
+
 const env = {
   ...process.env,
   GITHUB_TOKEN: githubToken(),
@@ -67,13 +79,7 @@ const env = {
 
 process.env.GITHUB_TOKEN = env.GITHUB_TOKEN;
 
-const keepAlive = setInterval(() => {}, 1000);
-
-try {
-  await api.make(await getMakeOptions());
-} finally {
-  clearInterval(keepAlive);
-}
+run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "make"], { env });
 
 const releaseExists = spawnSync("gh", ["release", "view", tagName], {
   env,
@@ -98,7 +104,7 @@ if (releaseExists.status !== 0) {
   );
 }
 
-const artifacts = findArtifacts(path.resolve("out/make"));
+const artifacts = await waitForArtifacts(artifactDirectory);
 
 if (artifacts.length === 0) {
   throw new Error("No release artifacts were found in out/make.");
