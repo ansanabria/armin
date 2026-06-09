@@ -23,11 +23,14 @@ const env = {
   GITHUB_TOKEN: githubToken(),
 };
 
-const forgeCli = fileURLToPath(
-  new URL("../node_modules/@electron-forge/cli/dist/electron-forge.js", import.meta.url),
+const forgePublishCli = fileURLToPath(
+  new URL(
+    "../node_modules/@electron-forge/cli/dist/electron-forge-publish.js",
+    import.meta.url,
+  ),
 );
 
-const result = spawnSync(process.execPath, [forgeCli, "publish"], {
+const result = spawnSync(process.execPath, [forgePublishCli, ...process.argv.slice(2)], {
   env,
   stdio: "inherit",
 });
