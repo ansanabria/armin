@@ -120,8 +120,10 @@ export function registerIpc() {
   });
 
   // --- cards ---
-  registerForProfile("cards:list", z.object({ deckId: z.string() }), (ctx, { deckId }) =>
-    cards.listCards(ctx, deckId),
+  registerForProfile(
+    "cards:list",
+    z.object({ deckId: z.string() }),
+    (ctx, { deckId }) => cards.listCards(ctx, deckId),
   );
   registerForProfile("cards:listAll", z.void().optional(), (ctx) =>
     cards.listAllCards(ctx),
@@ -134,7 +136,7 @@ export function registerIpc() {
       sort: z.enum(BROWSE_SORT_KEYS),
       state: z.number().int().min(0).max(3).optional(),
       deckId: z.string().optional(),
-      tag: z.string().optional(),
+      tags: z.array(z.string()).optional(),
     }),
     (ctx, input) => browse.listBrowsePage(ctx, input),
   );
@@ -212,14 +214,18 @@ export function registerIpc() {
   );
 
   // --- review ---
-  registerForProfile("review:queue", z.object({ deckId: z.string() }), (ctx, { deckId }) =>
-    review.getQueue(ctx, deckId),
+  registerForProfile(
+    "review:queue",
+    z.object({ deckId: z.string() }),
+    (ctx, { deckId }) => review.getQueue(ctx, deckId),
   );
   registerForProfile("review:queueAll", z.void().optional(), (ctx) =>
     review.getGlobalQueue(ctx),
   );
-  registerForProfile("review:preview", z.object({ cardId: z.string() }), (ctx, { cardId }) =>
-    review.previewCard(ctx, cardId),
+  registerForProfile(
+    "review:preview",
+    z.object({ cardId: z.string() }),
+    (ctx, { cardId }) => review.previewCard(ctx, cardId),
   );
   registerForProfile(
     "review:rate",
@@ -229,8 +235,10 @@ export function registerIpc() {
   );
 
   // --- graph ---
-  registerForProfile("graph:get", z.object({ deckId: z.string() }), (ctx, { deckId }) =>
-    graph.getDeckGraph(ctx, deckId),
+  registerForProfile(
+    "graph:get",
+    z.object({ deckId: z.string() }),
+    (ctx, { deckId }) => graph.getDeckGraph(ctx, deckId),
   );
   registerForProfile(
     "graph:addPrereq",
@@ -245,6 +253,23 @@ export function registerIpc() {
     z.object({ prereqId: z.string(), dependentId: z.string() }),
     async (ctx, { prereqId, dependentId }) => {
       await graph.removePrereq(ctx, prereqId, dependentId);
+      return { ok: true };
+    },
+  );
+  registerForProfile(
+    "graph:saveLayout",
+    z.object({
+      deckId: z.string(),
+      placements: z.array(
+        z.object({
+          cardId: z.string(),
+          x: z.number(),
+          y: z.number(),
+        }),
+      ),
+    }),
+    async (ctx, { deckId, placements }) => {
+      await graph.saveLayout(ctx, deckId, placements);
       return { ok: true };
     },
   );

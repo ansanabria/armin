@@ -138,9 +138,7 @@ export async function listCards(
   return withCardMetaBatch(ctx, rows);
 }
 
-export async function listAllCards(
-  ctx: ServiceContext,
-): Promise<BrowseCard[]> {
+export async function listAllCards(ctx: ServiceContext): Promise<BrowseCard[]> {
   const rows = await ctx.db
     .select({
       card: cards,
@@ -232,6 +230,9 @@ export async function updateCard(
   return row ? withCardMeta(ctx, row) : undefined;
 }
 
-export async function deleteCard(ctx: ServiceContext, id: string): Promise<void> {
+export async function deleteCard(
+  ctx: ServiceContext,
+  id: string,
+): Promise<void> {
   await ctx.db.delete(cards).where(eq(cards.id, id)).run();
 }

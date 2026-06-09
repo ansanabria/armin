@@ -37,7 +37,10 @@ function resolveSections(template: string, fields: AnkiFields): string {
     const [whole, kind, rawName, inner] = match;
     const empty = fieldIsEmpty(fields[rawName.trim()]);
     const keep = kind === "#" ? !empty : empty;
-    out = out.slice(0, match.index) + (keep ? inner : "") + out.slice(match.index + whole.length);
+    out =
+      out.slice(0, match.index) +
+      (keep ? inner : "") +
+      out.slice(match.index + whole.length);
   }
   return out;
 }

@@ -121,7 +121,10 @@ export default function SettingsPage() {
       {settingsQuery.isError && (
         <div className="mb-8 flex items-center justify-between gap-4 border border-border bg-surface px-4 py-3">
           <p className="text-sm text-muted">Couldn&apos;t load settings.</p>
-          <Button variant="outline" onClick={() => void settingsQuery.refetch()}>
+          <Button
+            variant="outline"
+            onClick={() => void settingsQuery.refetch()}
+          >
             Try again
           </Button>
         </div>

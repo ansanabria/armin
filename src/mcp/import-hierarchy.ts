@@ -94,69 +94,71 @@ export async function importCardHierarchy(
     throw new Error("Either deckId or deckName is required.");
   }
 
-  return ctx.db.transaction(async (tx) => {
-    let deck: Deck | undefined;
-    if (input.deckId) {
-      deck = await tx
-        .select()
-        .from(schema.decks)
-        .where(eq(schema.decks.id, input.deckId))
-        .get();
-      if (!deck) {
-        throw new Error(`Deck not found: ${input.deckId}`);
+  return ctx.db
+    .transaction(async (tx) => {
+      let deck: Deck | undefined;
+      if (input.deckId) {
+        deck = await tx
+          .select()
+          .from(schema.decks)
+          .where(eq(schema.decks.id, input.deckId))
+          .get();
+        if (!deck) {
+          throw new Error(`Deck not found: ${input.deckId}`);
+        }
+      } else {
+        deck = await tx
+          .insert(schema.decks)
+          .values({
+            name: input.deckName!.trim(),
+            description: input.deckDescription ?? null,
+          })
+          .returning()
+          .get();
       }
-    } else {
-      deck = await tx
-        .insert(schema.decks)
-        .values({
-          name: input.deckName!.trim(),
-          description: input.deckDescription ?? null,
-        })
-        .returning()
-        .get();
-    }
 
-    const cardsByClientId = new Map<string, Card>();
-    const createdCards: Array<Card & { clientId: string }> = [];
+      const cardsByClientId = new Map<string, Card>();
+      const createdCards: Array<Card & { clientId: string }> = [];
 
-    for (const card of input.cards) {
-      const created = await tx
-        .insert(schema.cards)
-        .values({
-          deckId: deck.id,
-          front: card.front,
-          back: card.back,
-          type: card.type ?? "basic",
-          ...newCardFields(),
-        })
-        .returning()
-        .get();
-      cardsByClientId.set(card.clientId, created);
-      createdCards.push({ ...created, clientId: card.clientId });
-    }
-
-    const edges: ImportedHierarchy["edges"] = [];
-    for (const card of input.cards) {
-      const dependent = cardsByClientId.get(card.clientId)!;
-      for (const prereqClientId of card.prerequisites ?? []) {
-        const prereq = cardsByClientId.get(prereqClientId)!;
-        await tx
-          .insert(schema.cardPrereqs)
-          .values({ prereqId: prereq.id, dependentId: dependent.id })
-          .onConflictDoNothing()
-          .run();
-        edges.push({
-          prereqClientId,
-          dependentClientId: card.clientId,
-        });
+      for (const card of input.cards) {
+        const created = await tx
+          .insert(schema.cards)
+          .values({
+            deckId: deck.id,
+            front: card.front,
+            back: card.back,
+            type: card.type ?? "basic",
+            ...newCardFields(),
+          })
+          .returning()
+          .get();
+        cardsByClientId.set(card.clientId, created);
+        createdCards.push({ ...created, clientId: card.clientId });
       }
-    }
 
-    return { deck, cards: createdCards, edges };
-  }).then(async (result) => {
-    await refreshLockedForDeck(ctx, result.deck.id);
-    return result;
-  });
+      const edges: ImportedHierarchy["edges"] = [];
+      for (const card of input.cards) {
+        const dependent = cardsByClientId.get(card.clientId)!;
+        for (const prereqClientId of card.prerequisites ?? []) {
+          const prereq = cardsByClientId.get(prereqClientId)!;
+          await tx
+            .insert(schema.cardPrereqs)
+            .values({ prereqId: prereq.id, dependentId: dependent.id })
+            .onConflictDoNothing()
+            .run();
+          edges.push({
+            prereqClientId,
+            dependentClientId: card.clientId,
+          });
+        }
+      }
+
+      return { deck, cards: createdCards, edges };
+    })
+    .then(async (result) => {
+      await refreshLockedForDeck(ctx, result.deck.id);
+      return result;
+    });
 }
 
 export async function readDeckGraph(ctx: ServiceContext, deckId: string) {

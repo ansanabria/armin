@@ -1,7 +1,15 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Layers, Plus, Upload, AlertTriangle, Ellipsis, Pencil, Trash2 } from "lucide-react";
+import {
+  Layers,
+  Plus,
+  Upload,
+  AlertTriangle,
+  Ellipsis,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -208,7 +216,11 @@ export default function DecksPage() {
 
       {!decksQuery.isLoading && !decksQuery.isError && decks.length > 0 && (
         <div className="mb-4 flex justify-end">
-          <SortControl value={sort} onChange={setSort} options={DECK_SORT_OPTIONS} />
+          <SortControl
+            value={sort}
+            onChange={setSort}
+            options={DECK_SORT_OPTIONS}
+          />
         </div>
       )}
 
@@ -270,7 +282,9 @@ export default function DecksPage() {
               Cancel
             </Button>
             <Button
-              disabled={!name.trim() || createDeck.isPending || closingAfterCreate}
+              disabled={
+                !name.trim() || createDeck.isPending || closingAfterCreate
+              }
               onClick={create}
             >
               {createDeck.isPending || closingAfterCreate
@@ -296,7 +310,10 @@ export default function DecksPage() {
             onChange={(e) => setRenameName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && renamingDeck && renameName.trim()) {
-                updateDeck.mutate({ id: renamingDeck.id, name: renameName.trim() });
+                updateDeck.mutate({
+                  id: renamingDeck.id,
+                  name: renameName.trim(),
+                });
               }
             }}
           />
@@ -313,7 +330,10 @@ export default function DecksPage() {
               }
               onClick={() => {
                 if (!renamingDeck || !renameName.trim()) return;
-                updateDeck.mutate({ id: renamingDeck.id, name: renameName.trim() });
+                updateDeck.mutate({
+                  id: renamingDeck.id,
+                  name: renameName.trim(),
+                });
               }}
             >
               {updateDeck.isPending || closingAfterRename ? "Saving…" : "Save"}
@@ -345,7 +365,9 @@ export default function DecksPage() {
               deleteDeck.mutate(deletingDeck.id);
             }}
           >
-            {deleteDeck.isPending || closingAfterDelete ? "Deleting…" : "Delete deck"}
+            {deleteDeck.isPending || closingAfterDelete
+              ? "Deleting…"
+              : "Delete deck"}
           </Button>
         </div>
       </Dialog>
@@ -388,74 +410,85 @@ function DeckTile({
   onRename: () => void;
   onDelete: () => void;
 }) {
-  const pct = deck.total > 0 ? Math.round((deck.learned / deck.total) * 100) : 0;
+  const pct =
+    deck.total > 0 ? Math.round((deck.learned / deck.total) * 100) : 0;
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger
-        className="group flex h-full flex-col border border-border bg-surface p-5 transition-colors duration-150 hover:border-border-strong hover:bg-surface-sunken"
-      >
-        <div className="flex items-start justify-between gap-2">
-          <Link
-            to="/deck/$deckId"
-            params={{ deckId: deck.id }}
-            className="min-w-0 flex-1 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <h2 className="font-serif text-lg font-semibold text-ink">{deck.name}</h2>
-          </Link>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Deck actions"
-                  className="-mt-1.5 -mr-1.5 shrink-0"
-                />
-              }
-            >
-              <Ellipsis className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-40">
-              <DeckActionItems
-                onRename={onRename}
-                onDelete={onDelete}
-                Item={DropdownMenuItem}
-                Separator={DropdownMenuSeparator}
-              />
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+      <ContextMenuTrigger className="group relative flex h-full cursor-pointer flex-col border border-border bg-surface p-5 transition-colors duration-150 hover:border-border-strong hover:bg-surface-sunken">
         <Link
           to="/deck/$deckId"
           params={{ deckId: deck.id }}
-          className="mt-1 flex flex-1 flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
-        >
-          {deck.description && (
-            <p className="line-clamp-2 text-sm text-muted">{deck.description}</p>
-          )}
-          <div className="mt-4 flex flex-1 flex-col justify-end">
-            <div className="flex items-center justify-between text-xs text-muted">
-              <span>{deck.total} cards</span>
-              <span>{pct}% learned</span>
-            </div>
-            <Progress value={deck.learned} max={deck.total} tone="good" className="mt-1.5" />
-            <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-              {deck.due > 0 && (
-                <Stat color="bg-accent" label={`${deck.due} due`} emphatic />
-              )}
-              {deck.newCount > 0 && (
-                <Stat color="bg-new" label={`${deck.newCount} new`} />
-              )}
-              {deck.learning > 0 && (
-                <Stat color="bg-learning" label={`${deck.learning} learning`} />
-              )}
-              {deck.due === 0 && deck.newCount === 0 && (
-                <span className="text-muted">All caught up</span>
-              )}
+          aria-label={`Open deck: ${deck.name}`}
+          className="absolute inset-0 z-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        />
+        <div className="pointer-events-none relative z-10 flex flex-1 flex-col">
+          <div className="flex items-start justify-between gap-2">
+            <h2 className="min-w-0 flex-1 font-serif text-lg font-semibold text-ink">
+              {deck.name}
+            </h2>
+            <div className="pointer-events-auto shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Deck actions"
+                      className="-mt-1.5 -mr-1.5"
+                    />
+                  }
+                >
+                  <Ellipsis className="h-4 w-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-40">
+                  <DeckActionItems
+                    onRename={onRename}
+                    onDelete={onDelete}
+                    Item={DropdownMenuItem}
+                    Separator={DropdownMenuSeparator}
+                  />
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
-        </Link>
+          <div className="mt-1 flex flex-1 flex-col">
+            {deck.description && (
+              <p className="line-clamp-2 text-sm text-muted">
+                {deck.description}
+              </p>
+            )}
+            <div className="mt-4 flex flex-1 flex-col justify-end">
+              <div className="flex items-center justify-between text-xs text-muted">
+                <span>{deck.total} cards</span>
+                <span>{pct}% learned</span>
+              </div>
+              <Progress
+                value={deck.learned}
+                max={deck.total}
+                tone="good"
+                className="mt-1.5"
+              />
+              <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                {deck.due > 0 && (
+                  <Stat color="bg-accent" label={`${deck.due} due`} emphatic />
+                )}
+                {deck.newCount > 0 && (
+                  <Stat color="bg-new" label={`${deck.newCount} new`} />
+                )}
+                {deck.learning > 0 && (
+                  <Stat
+                    color="bg-learning"
+                    label={`${deck.learning} learning`}
+                  />
+                )}
+                {deck.due === 0 && deck.newCount === 0 && (
+                  <span className="text-muted">All caught up</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </ContextMenuTrigger>
 
       <ContextMenuContent className="min-w-40">

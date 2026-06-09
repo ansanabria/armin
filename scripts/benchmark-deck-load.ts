@@ -11,7 +11,12 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@libsql/client";
-import { setDbRootForTests, initDb, closeDb, getDb } from "../src/main/db/index";
+import {
+  setDbRootForTests,
+  initDb,
+  closeDb,
+  getDb,
+} from "../src/main/db/index";
 import { runMigrations } from "../src/main/db/migrate";
 import { listCards } from "../src/main/services/cards";
 import { listBrowsePage } from "../src/main/services/browse";
@@ -37,7 +42,11 @@ if (seedMode) {
 
 const dbPath = path.join(dataDir!, "profiles", profileId, "armin.db");
 
-async function seedDeck(client: ReturnType<typeof createClient>, targetDeckId: string, count: number) {
+async function seedDeck(
+  client: ReturnType<typeof createClient>,
+  targetDeckId: string,
+  count: number,
+) {
   const now = Date.now();
   await client.execute({
     sql: `INSERT OR IGNORE INTO decks (id, name, description, created_at, updated_at)

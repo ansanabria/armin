@@ -1,12 +1,4 @@
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, sql, type SQL } from "drizzle-orm";
 import { schema } from "../db";
 import { BROWSE_PAGE_SIZE, type BrowseSortKey } from "../../shared/browse";
 import type { ServiceContext } from "./context";
@@ -22,7 +14,7 @@ export type BrowseQuery = {
   sort: BrowseSortKey;
   state?: number;
   deckId?: string;
-  tag?: string;
+  tags?: string[];
 };
 
 export type BrowsePage = {
@@ -40,12 +32,16 @@ function browseFilters(query: BrowseQuery): SQL | undefined {
   if (query.deckId) {
     parts.push(eq(cards.deckId, query.deckId));
   }
-  if (query.tag) {
+  if (query.tags && query.tags.length > 0) {
+    const tagList = sql.join(
+      query.tags.map((tag) => sql`${tag}`),
+      sql`, `,
+    );
     parts.push(
       sql`exists (
         select 1 from ${cardTags} ct
         inner join ${tags} t on t.id = ct.tag_id
-        where ct.card_id = ${cards.id} and t.name = ${query.tag}
+        where ct.card_id = ${cards.id} and t.name in (${tagList})
       )`,
     );
   }

@@ -6,7 +6,13 @@ import type { CardWithMeta, BrowseCard } from "./cards";
 import { withCardMeta } from "./cards";
 import type { ServiceContext } from "./context";
 import { activateUnlockedDependents, getLockedByCardIds } from "./graph";
-import { buildScheduler, fromFsrsCard, isPendingSchedule, State, toFsrsCard } from "./scheduler";
+import {
+  buildScheduler,
+  fromFsrsCard,
+  isPendingSchedule,
+  State,
+  toFsrsCard,
+} from "./scheduler";
 import { getSettings } from "./settings";
 import { shuffle } from "./shuffle";
 
@@ -81,9 +87,7 @@ export async function buildSessionQueue(
 
   const reviews = unlocked.filter(
     (card) =>
-      !isPendingSchedule(card) &&
-      card.state !== State.New &&
-      card.due <= now,
+      !isPendingSchedule(card) && card.state !== State.New && card.due <= now,
   );
 
   const frontier = unlocked.filter(
@@ -149,7 +153,11 @@ export async function previewCard(
   ctx: ServiceContext,
   cardId: string,
 ): Promise<PreviewOption[]> {
-  const card = await ctx.db.select().from(cards).where(eq(cards.id, cardId)).get();
+  const card = await ctx.db
+    .select()
+    .from(cards)
+    .where(eq(cards.id, cardId))
+    .get();
   if (!card) throw new Error(`Card ${cardId} not found`);
   const now = new Date();
   const scheduler = await buildScheduler(ctx);

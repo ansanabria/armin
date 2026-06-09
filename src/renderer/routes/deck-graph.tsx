@@ -2,24 +2,56 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, GitBranch, Plus } from "lucide-react";
-import type { XYPosition } from "@xyflow/react";
+import type { Viewport, XYPosition } from "@xyflow/react";
 import { CardFormDialog } from "@/components/card-form-dialog";
 import { PrerequisiteGraph } from "@/components/prerequisite-graph/prerequisite-graph";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
-import {
-  deckKeys,
-  graphKeys,
-  invalidateCoreData,
-} from "@/lib/armin-query";
+import { deckKeys, graphKeys, invalidateCoreData } from "@/lib/armin-query";
 import { toUiDeckGraph, type UiDeckGraph } from "@/types/view-models";
 import type { CardFormValues } from "@/components/card-form-dialog";
+import { cn } from "@/lib/utils";
+
+const viewportStorageKey = (deckId: string) => `armin:graph-viewport:${deckId}`;
+
+function readSavedViewport(deckId: string): Viewport | undefined {
+  try {
+    const raw = localStorage.getItem(viewportStorageKey(deckId));
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as Partial<Viewport>;
+    if (
+      typeof parsed.x === "number" &&
+      typeof parsed.y === "number" &&
+      typeof parsed.zoom === "number"
+    ) {
+      return { x: parsed.x, y: parsed.y, zoom: parsed.zoom };
+    }
+  } catch {
+    // Ignore malformed or unavailable storage.
+  }
+  return undefined;
+}
 
 export default function DeckGraphPage() {
   const { deckId } = useParams({ from: "/deck/$deckId/graph" });
   const queryClient = useQueryClient();
   const toast = useToast();
+
+  const [initialViewport] = useState<Viewport | undefined>(() =>
+    readSavedViewport(deckId),
+  );
+
+  const persistViewport = (viewport: Viewport) => {
+    try {
+      localStorage.setItem(
+        viewportStorageKey(deckId),
+        JSON.stringify(viewport),
+      );
+    } catch {
+      // Ignore storage write failures (e.g. private mode quota).
+    }
+  };
 
   const deckQuery = useQuery({
     queryKey: deckKeys.detail(deckId),
@@ -40,28 +72,57 @@ export default function DeckGraphPage() {
   const [pendingPlacement, setPendingPlacement] = useState<XYPosition | null>(
     null,
   );
+  const [pendingConnectFrom, setPendingConnectFrom] = useState<string | null>(
+    null,
+  );
   const [nodePlacements, setNodePlacements] = useState<
     Record<string, XYPosition>
   >({});
+
+  const [graphReady, setGraphReady] = useState(false);
+  const [canvasMounted, setCanvasMounted] = useState(false);
+  const [canvasReady, setCanvasReady] = useState(false);
 
   const editingNode = editingId
     ? graph.nodes.find((n) => n.id === editingId)
     : null;
 
   useEffect(() => {
-    if (persistedGraph) setGraph(persistedGraph);
+    if (persistedGraph) {
+      setGraph(persistedGraph);
+      setGraphReady(true);
+    }
   }, [persistedGraph]);
+
+  // Once the data is in, let the loading screen paint a frame before mounting
+  // the canvas. Building the graph (dagre layout + ReactFlow + every node) is a
+  // heavy synchronous burst that blocks the main thread, so deferring it keeps
+  // the loading state on screen the whole time instead of freezing the prior
+  // page.
+  useEffect(() => {
+    if (!graphReady || canvasMounted) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setCanvasMounted(true));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [graphReady, canvasMounted]);
 
   const closeDialog = () => setOpen(false);
 
   const handleDialogExitComplete = () => {
     setEditingId(null);
     setPendingPlacement(null);
+    setPendingConnectFrom(null);
   };
 
-  const openCreate = (placement?: XYPosition) => {
+  const openCreate = (placement?: XYPosition, connectFromNodeId?: string) => {
     setEditingId(null);
     setPendingPlacement(placement ?? null);
+    setPendingConnectFrom(connectFromNodeId ?? null);
     setOpen(true);
   };
 
@@ -70,6 +131,7 @@ export default function DeckGraphPage() {
     if (!node) return;
     setEditingId(nodeId);
     setPendingPlacement(null);
+    setPendingConnectFrom(null);
     setOpen(true);
   };
 
@@ -82,9 +144,19 @@ export default function DeckGraphPage() {
           ...current,
           [card.id]: pendingPlacement,
         }));
+        void window.armin.graph.saveLayout(deckId, [
+          { cardId: card.id, x: pendingPlacement.x, y: pendingPlacement.y },
+        ]);
+      }
+      if (pendingConnectFrom) {
+        addPrereq.mutate({
+          prereqId: pendingConnectFrom,
+          dependentId: card.id,
+        });
       }
       invalidateCoreData(queryClient, deckId);
       toast({ tone: "success", title: "Card added to graph" });
+      closeDialog();
     },
     onError: () => toast({ tone: "error", title: "Couldn’t add card" }),
   });
@@ -130,6 +202,12 @@ export default function DeckGraphPage() {
       toast({ tone: "error", title: "Couldn’t remove link" });
       void graphQuery.refetch();
     },
+  });
+
+  const saveLayout = useMutation({
+    mutationFn: (placements: { cardId: string; x: number; y: number }[]) =>
+      window.armin.graph.saveLayout(deckId, placements),
+    onError: () => toast({ tone: "error", title: "Couldn’t save layout" }),
   });
 
   const saveCard = async ({ front, back, tags }: CardFormValues) => {
@@ -189,8 +267,14 @@ export default function DeckGraphPage() {
 
   return (
     <div data-fullbleed className="relative h-full w-full">
-      {(deckQuery.isLoading || graphQuery.isLoading) && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-bg">
+      {!deckQuery.isError && !graphQuery.isError && (
+        <div
+          aria-hidden={canvasReady}
+          className={cn(
+            "pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-bg transition-opacity duration-200",
+            canvasReady ? "opacity-0" : "opacity-100",
+          )}
+        >
           <p className="text-sm text-muted">Loading graph…</p>
         </div>
       )}
@@ -211,8 +295,7 @@ export default function DeckGraphPage() {
           </div>
         </div>
       )}
-      {!deckQuery.isLoading &&
-      !graphQuery.isLoading &&
+      {canvasMounted &&
       !deckQuery.isError &&
       !graphQuery.isError &&
       graph.nodes.length === 0 ? (
@@ -222,7 +305,10 @@ export default function DeckGraphPage() {
             title="No cards yet"
             description="Double-click the canvas to add your first card."
             action={
-              <Button className="pointer-events-auto" onClick={() => openCreate()}>
+              <Button
+                className="pointer-events-auto"
+                onClick={() => openCreate()}
+              >
                 <Plus className="h-4 w-4" /> Add your first card
               </Button>
             }
@@ -236,14 +322,20 @@ export default function DeckGraphPage() {
       >
         <ArrowLeft className="h-3.5 w-3.5" /> {deckQuery.data?.name ?? "Deck"}
       </Link>
-      <PrerequisiteGraph
-        graph={graph}
-        onGraphChange={handleGraphChange}
-        nodePlacements={nodePlacements}
-        onCreateCardRequest={openCreate}
-        onEditCardRequest={openEdit}
-        onConnectError={(message) => toast({ tone: "error", title: message })}
-      />
+      {canvasMounted && (
+        <PrerequisiteGraph
+          graph={graph}
+          onGraphChange={handleGraphChange}
+          nodePlacements={nodePlacements}
+          onCreateCardRequest={openCreate}
+          onEditCardRequest={openEdit}
+          onPersistLayout={(placements) => saveLayout.mutate(placements)}
+          initialViewport={initialViewport}
+          onViewportChange={persistViewport}
+          onReady={() => setCanvasReady(true)}
+          onConnectError={(message) => toast({ tone: "error", title: message })}
+        />
+      )}
 
       <CardFormDialog
         open={open}

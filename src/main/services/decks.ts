@@ -29,7 +29,9 @@ async function withStats(
   const learning = deckCards.filter(
     (card) => card.state === State.Learning || card.state === State.Relearning,
   ).length;
-  const learned = deckCards.filter((card) => card.state === State.Review).length;
+  const learned = deckCards.filter(
+    (card) => card.state === State.Review,
+  ).length;
 
   return {
     ...deck,
@@ -55,10 +57,13 @@ export async function getDeck(
   return deck ? withStats(ctx, deck) : undefined;
 }
 
-export async function createDeck(ctx: ServiceContext, input: {
-  name: string;
-  description?: string | null;
-}): Promise<Deck> {
+export async function createDeck(
+  ctx: ServiceContext,
+  input: {
+    name: string;
+    description?: string | null;
+  },
+): Promise<Deck> {
   const db = ctx.db;
   const row = await db
     .insert(decks)
@@ -82,7 +87,10 @@ export async function updateDeck(
     .get();
 }
 
-export async function deleteDeck(ctx: ServiceContext, id: string): Promise<void> {
+export async function deleteDeck(
+  ctx: ServiceContext,
+  id: string,
+): Promise<void> {
   await ctx.db.delete(decks).where(eq(decks.id, id)).run();
 }
 

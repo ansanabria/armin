@@ -67,17 +67,23 @@ export function ReviewSession({
 
   const cards = isLoading || isError ? [] : (sessionQueue ?? queue);
   const card = cards[index];
-  const done = !isLoading && !isError && index >= cards.length && cards.length > 0;
+  const done =
+    !isLoading && !isError && index >= cards.length && cards.length > 0;
   const empty = !isLoading && !isError && cards.length === 0;
 
   const preview = useQuery({
-    queryKey: card ? reviewKeys.preview(card.id) : ["review", "preview", "none"],
+    queryKey: card
+      ? reviewKeys.preview(card.id)
+      : ["review", "preview", "none"],
     queryFn: () => loadPreview(card!.id),
     enabled: Boolean(card),
   });
 
   const intervalLabels = new Map<Grade, string>(
-    (preview.data ?? []).map((option) => [option.rating as Grade, option.label]),
+    (preview.data ?? []).map((option) => [
+      option.rating as Grade,
+      option.label,
+    ]),
   );
 
   const rate = async (grade: Grade) => {
@@ -173,11 +179,7 @@ export function ReviewSession({
           <p className="mt-1 max-w-[40ch] text-sm text-muted">
             The scheduler hit a snag building your queue.
           </p>
-          <Button
-            variant="outline"
-            className="mt-5"
-            onClick={onRetry}
-          >
+          <Button variant="outline" className="mt-5" onClick={onRetry}>
             Try again
           </Button>
         </div>
@@ -188,7 +190,9 @@ export function ReviewSession({
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-review-bg text-good">
             <CheckCircle2 className="h-7 w-7" strokeWidth={1.5} />
           </div>
-          <h2 className="text-xl font-semibold tracking-tight">All caught up</h2>
+          <h2 className="text-xl font-semibold tracking-tight">
+            All caught up
+          </h2>
           <p className="mt-1.5 max-w-[44ch] text-pretty text-sm text-muted">
             {done ? doneDescription : emptyDescription}
           </p>

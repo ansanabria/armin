@@ -68,13 +68,18 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
 ]);
 
+const viewTransitionsEnabled =
+  typeof window === "undefined" || window.__ARMIN_E2E__ !== true;
+
 export const router = createRouter({
   routeTree,
   history: createHashHistory(),
   scrollRestoration: true,
-  defaultViewTransition: {
-    types: resolveViewTransitionTypes,
-  },
+  defaultViewTransition: viewTransitionsEnabled
+    ? {
+        types: resolveViewTransitionTypes,
+      }
+    : false,
 });
 
 declare module "@tanstack/react-router" {

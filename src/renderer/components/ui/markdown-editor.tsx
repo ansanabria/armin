@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-} from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
@@ -86,6 +81,15 @@ export function MarkdownEditor({
         autocorrect: "off",
         autocapitalize: "off",
         ...(ariaLabel ? { "aria-label": ariaLabel } : {}),
+      },
+      // Ctrl/Cmd+Enter submits the card form (handled at the dialog level), so
+      // swallow it here to stop ProseMirror from inserting a stray newline. The
+      // DOM event still bubbles up to the dialog's submit listener.
+      handleKeyDown: (_view, event) => {
+        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+          return true;
+        }
+        return false;
       },
       handlePaste: (_view, event) => {
         const files = event.clipboardData?.files;
@@ -171,7 +175,7 @@ export function MarkdownEditor({
       <div
         ref={containerRef}
         {...(autoFocus ? { "data-autofocus": true } : {})}
-        className="markdown-editor max-h-[220px] min-h-[88px] w-full px-3 py-2 text-sm leading-relaxed text-ink"
+        className="markdown-editor armin-scrollbar max-h-[220px] min-h-[88px] w-full px-3 py-2 text-sm leading-relaxed text-ink"
       >
         <EditorContent editor={editor} />
       </div>

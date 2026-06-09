@@ -81,7 +81,8 @@ export const decks: UiDeck[] = [
   {
     id: "sd",
     name: "System Design",
-    description: "Caching, queues, replication, and the trade-offs between them.",
+    description:
+      "Caching, queues, replication, and the trade-offs between them.",
     total: 22,
     due: 0,
     newCount: 8,
@@ -91,7 +92,8 @@ export const decks: UiDeck[] = [
   {
     id: "rust",
     name: "Rust Ownership",
-    description: "Borrowing, lifetimes, and making peace with the borrow checker.",
+    description:
+      "Borrowing, lifetimes, and making peace with the borrow checker.",
     total: 18,
     due: 0,
     newCount: 18,
@@ -103,62 +105,62 @@ export const decks: UiDeck[] = [
 /** Cards keyed by deck id for preview navigation between decks. */
 export const deckCardsByDeck: Record<string, UiCard[]> = {
   js: [
-  {
-    id: "c1",
-    createdAt: "2025-08-12",
-    front: "What does `typeof null` return?",
-    back: '`"object"` — a long-standing bug kept for backwards compatibility.',
-    state: 2,
-    locked: false,
-    dueLabel: "in 9 days",
-    tags: ["types", "gotchas"],
-  },
-  {
-    id: "c2",
-    createdAt: "2025-08-15",
-    front: "What is the temporal dead zone?",
-    back: "The span between entering scope and a `let`/`const` declaration being initialized, where accessing the binding throws.",
-    state: 2,
-    locked: false,
-    dueLabel: "in 3 days",
-  },
-  {
-    id: "c3",
-    createdAt: "2025-09-02",
-    front: "How does the event loop order microtasks vs macrotasks?",
-    back: "All queued microtasks (promises) drain after each macrotask (timers, I/O) and before the next one.",
-    state: 1,
-    locked: false,
-    dueLabel: "Due now",
-  },
-  {
-    id: "c4",
-    createdAt: "2025-09-20",
-    front: "What is a closure?",
-    back: "A function bundled with references to its surrounding lexical scope, so it keeps access to those variables after the outer function returns.",
-    state: 0,
-    locked: false,
-    dueLabel: "New",
-    tags: ["scope", "fundamentals"],
-  },
-  {
-    id: "c5",
-    createdAt: "2025-08-28",
-    front: "Explain prototypal inheritance.",
-    back: "Objects delegate property lookups to their prototype, forming a chain that ends at `Object.prototype` (then `null`).",
-    state: 3,
-    locked: false,
-    dueLabel: "Due now",
-  },
-  {
-    id: "c6",
-    createdAt: "2025-10-05",
-    front: "When should you reach for a `WeakMap`?",
-    back: "When keys are objects whose entries should be garbage-collected once nothing else references the key. Requires closures first.",
-    state: 0,
-    locked: true,
-    dueLabel: "Locked",
-  },
+    {
+      id: "c1",
+      createdAt: "2025-08-12",
+      front: "What does `typeof null` return?",
+      back: '`"object"` — a long-standing bug kept for backwards compatibility.',
+      state: 2,
+      locked: false,
+      dueLabel: "in 9 days",
+      tags: ["types", "gotchas"],
+    },
+    {
+      id: "c2",
+      createdAt: "2025-08-15",
+      front: "What is the temporal dead zone?",
+      back: "The span between entering scope and a `let`/`const` declaration being initialized, where accessing the binding throws.",
+      state: 2,
+      locked: false,
+      dueLabel: "in 3 days",
+    },
+    {
+      id: "c3",
+      createdAt: "2025-09-02",
+      front: "How does the event loop order microtasks vs macrotasks?",
+      back: "All queued microtasks (promises) drain after each macrotask (timers, I/O) and before the next one.",
+      state: 1,
+      locked: false,
+      dueLabel: "Due now",
+    },
+    {
+      id: "c4",
+      createdAt: "2025-09-20",
+      front: "What is a closure?",
+      back: "A function bundled with references to its surrounding lexical scope, so it keeps access to those variables after the outer function returns.",
+      state: 0,
+      locked: false,
+      dueLabel: "New",
+      tags: ["scope", "fundamentals"],
+    },
+    {
+      id: "c5",
+      createdAt: "2025-08-28",
+      front: "Explain prototypal inheritance.",
+      back: "Objects delegate property lookups to their prototype, forming a chain that ends at `Object.prototype` (then `null`).",
+      state: 3,
+      locked: false,
+      dueLabel: "Due now",
+    },
+    {
+      id: "c6",
+      createdAt: "2025-10-05",
+      front: "When should you reach for a `WeakMap`?",
+      back: "When keys are objects whose entries should be garbage-collected once nothing else references the key. Requires closures first.",
+      state: 0,
+      locked: true,
+      dueLabel: "Locked",
+    },
   ],
   ts: [
     {
@@ -203,7 +205,7 @@ export const deckCardsByDeck: Record<string, UiCard[]> = {
     {
       id: "e1",
       createdAt: "2025-07-22",
-      front: "¿Cómo se dice \"I would like\" politely?",
+      front: '¿Cómo se dice "I would like" politely?',
       back: "Me gustaría — softer than quiero for requests in restaurants and shops.",
       state: 2,
       locked: false,
@@ -313,21 +315,21 @@ export function getDeck(deckId: string): UiDeck | undefined {
 
 export const reviewQueueByDeck: Record<string, UiReviewCard[]> = {
   js: [
-  {
-    id: "r1",
-    front: "How does the event loop order microtasks vs macrotasks?",
-    back: "All queued microtasks (promises) drain after each macrotask (timers, I/O) and before the next one is taken.",
-  },
-  {
-    id: "r2",
-    front: "Explain **prototypal inheritance**.",
-    back: "Objects delegate property lookups to their prototype, forming a chain:\n\n- Own properties are checked **first**\n- Then the object's `[[Prototype]]`\n- The chain ends at `Object.prototype`, then `null`",
-  },
-  {
-    id: "r3",
-    front: "What is the temporal dead zone?",
-    back: "The span between entering scope and a `let`/`const` being initialized, where touching the binding throws a ReferenceError.",
-  },
+    {
+      id: "r1",
+      front: "How does the event loop order microtasks vs macrotasks?",
+      back: "All queued microtasks (promises) drain after each macrotask (timers, I/O) and before the next one is taken.",
+    },
+    {
+      id: "r2",
+      front: "Explain **prototypal inheritance**.",
+      back: "Objects delegate property lookups to their prototype, forming a chain:\n\n- Own properties are checked **first**\n- Then the object's `[[Prototype]]`\n- The chain ends at `Object.prototype`, then `null`",
+    },
+    {
+      id: "r3",
+      front: "What is the temporal dead zone?",
+      back: "The span between entering scope and a `let`/`const` being initialized, where touching the binding throws a ReferenceError.",
+    },
   ],
   ts: [
     {
@@ -339,7 +341,7 @@ export const reviewQueueByDeck: Record<string, UiReviewCard[]> = {
   es: [
     {
       id: "er1",
-      front: "¿Cómo se dice \"I would like\" politely?",
+      front: '¿Cómo se dice "I would like" politely?',
       back: "Me gustaría — softer than quiero for requests in restaurants and shops.",
     },
   ],

@@ -1,6 +1,6 @@
-import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu"
+import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuGroup,
@@ -13,11 +13,11 @@ import {
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 
-const ContextMenu = ContextMenuPrimitive.Root
-const ContextMenuTrigger = ContextMenuPrimitive.Trigger
-const ContextMenuPortal = ContextMenuPrimitive.Portal
+const ContextMenu = ContextMenuPrimitive.Root;
+const ContextMenuTrigger = ContextMenuPrimitive.Trigger;
+const ContextMenuPortal = ContextMenuPrimitive.Portal;
 
 function ContextMenuContent({
   className,
@@ -36,7 +36,7 @@ function ContextMenuContent({
         />
       </ContextMenuPrimitive.Positioner>
     </ContextMenuPortal>
-  )
+  );
 }
 
 export {
@@ -55,4 +55,4 @@ export {
   DropdownMenuSubContent as ContextMenuSubContent,
   DropdownMenuGroup as ContextMenuGroup,
   DropdownMenuLabel as ContextMenuLabel,
-}
+};

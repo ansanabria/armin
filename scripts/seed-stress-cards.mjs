@@ -5,7 +5,8 @@ import { randomUUID } from "node:crypto";
 
 const profileId =
   process.env.ARMIN_PROFILE_ID ?? "95e6ebdd-2eb6-4d05-92ea-e711d1330e40";
-const dataDir = process.env.ARMIN_DATA_DIR ?? `${process.env.HOME}/.config/Armin`;
+const dataDir =
+  process.env.ARMIN_DATA_DIR ?? `${process.env.HOME}/.config/Armin`;
 const dbPath = path.join(dataDir, "profiles", profileId, "armin.db");
 
 if (!fs.existsSync(dbPath)) {
@@ -20,9 +21,30 @@ const count = Number(process.env.CARD_COUNT ?? 100);
 const deckName = `Stress test (${count} cards)`;
 
 const words = [
-  "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta",
-  "lambda", "sigma", "omega", "nova", "quark", "photon", "nebula", "orbit",
-  "cipher", "vector", "matrix", "tensor", "kernel", "buffer", "socket", "thread",
+  "alpha",
+  "beta",
+  "gamma",
+  "delta",
+  "epsilon",
+  "zeta",
+  "eta",
+  "theta",
+  "lambda",
+  "sigma",
+  "omega",
+  "nova",
+  "quark",
+  "photon",
+  "nebula",
+  "orbit",
+  "cipher",
+  "vector",
+  "matrix",
+  "tensor",
+  "kernel",
+  "buffer",
+  "socket",
+  "thread",
 ];
 
 function pickWord() {
@@ -34,7 +56,13 @@ await client.execute("PRAGMA foreign_keys = ON;");
 await client.execute({
   sql: `INSERT INTO decks (id, name, description, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?)`,
-  args: [deckId, deckName, "Auto-generated cards for review session testing.", now, now],
+  args: [
+    deckId,
+    deckName,
+    "Auto-generated cards for review session testing.",
+    now,
+    now,
+  ],
 });
 
 const tagId = randomUUID();

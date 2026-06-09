@@ -102,16 +102,10 @@ export function ImportDeckDialog({
     >
       {visibleStep === "choose" && <ChooseSource onPick={setStep} />}
       {visibleStep === "anki" && (
-        <AnkiImport
-          onBack={() => setStep("choose")}
-          onImport={onImport}
-        />
+        <AnkiImport onBack={() => setStep("choose")} onImport={onImport} />
       )}
       {visibleStep === "markdown" && (
-        <MarkdownImport
-          onBack={() => setStep("choose")}
-          onImport={onImport}
-        />
+        <MarkdownImport onBack={() => setStep("choose")} onImport={onImport} />
       )}
     </Dialog>
   );
@@ -321,7 +315,10 @@ function AnkiImport({
                   Carry over review progress and due dates from Anki.
                 </span>
               </span>
-              <Switch checked={keepSchedule} onCheckedChange={setKeepSchedule} />
+              <Switch
+                checked={keepSchedule}
+                onCheckedChange={setKeepSchedule}
+              />
             </label>
           )}
 
@@ -343,10 +340,7 @@ function AnkiImport({
       <Footer
         onCancel={onBack}
         disabled={
-          !analysis ||
-          analyzing ||
-          importing ||
-          (needsName && !name.trim())
+          !analysis || analyzing || importing || (needsName && !name.trim())
         }
         label={importing ? "Importing…" : "Import deck"}
         onConfirm={() => void handleImport()}
@@ -479,7 +473,9 @@ function MarkdownImport({
           lines={[
             `${plural(parsed.cards.length, "card")} ready to import`,
             ...(parsed.skipped > 0
-              ? [`${plural(parsed.skipped, "block")} skipped (missing front or back)`]
+              ? [
+                  `${plural(parsed.skipped, "block")} skipped (missing front or back)`,
+                ]
               : []),
           ]}
         />
@@ -744,7 +740,10 @@ What does \`typeof null\` return?
 }
 
 function deckNameFromFile(fileName: string): string {
-  return fileName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+  return fileName
+    .replace(/\.[^.]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
 }
 
 function plural(count: number, word: string): string {

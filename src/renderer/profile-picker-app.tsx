@@ -252,11 +252,7 @@ function PickerView({
             >
               {opening ? "Opening…" : "Open profile"}
             </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={onCreate}
-            >
+            <Button variant="outline" className="w-full" onClick={onCreate}>
               <Plus className="h-4 w-4" />
               Create profile
             </Button>
@@ -322,10 +318,19 @@ function CreateView({
       </label>
 
       <div className="mt-auto flex flex-col gap-2 pt-4">
-        <Button type="submit" className="w-full" disabled={!canCreate || creating}>
+        <Button
+          type="submit"
+          className="w-full"
+          disabled={!canCreate || creating}
+        >
           {creating ? "Creating…" : "Create profile"}
         </Button>
-        <Button type="button" variant="outline" className="w-full" onClick={onBack}>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={onBack}
+        >
           Cancel
         </Button>
       </div>
