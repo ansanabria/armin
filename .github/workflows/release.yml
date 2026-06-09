@@ -27,10 +27,7 @@ jobs:
         run: npm ci
 
       - name: Install Electron binary
-        shell: bash
-        run: |
-          rm -rf node_modules/electron/dist node_modules/electron/path.txt
-          force_no_cache=true npx install-electron --no
+        run: npx install-electron --no
 
       - name: Diagnose Electron binary
         shell: bash
@@ -48,7 +45,7 @@ jobs:
             echo "node_modules/electron/path.txt is missing"
           fi
           find node_modules/electron/dist -maxdepth 3 -print | sort | head -120 || true
-          node -e 'const fs = require("node:fs"); const electron = require("electron"); console.log(electron); if (!fs.existsSync(electron)) throw new Error(`${electron} does not exist`)'
+          node -e "const fs = require('node:fs'); const electron = require('electron'); console.log(electron); if (!fs.existsSync(electron)) throw new Error(`${electron} does not exist`)"
 
       - name: Install E2E dependencies
         run: sudo apt-get update && sudo apt-get install -y xvfb
@@ -104,10 +101,7 @@ jobs:
         run: npm ci
 
       - name: Install Electron binary
-        shell: bash
-        run: |
-          rm -rf node_modules/electron/dist node_modules/electron/path.txt
-          force_no_cache=true npx install-electron --no
+        run: npx install-electron --no
 
       - name: Diagnose Electron binary
         shell: bash
@@ -125,7 +119,7 @@ jobs:
             echo "node_modules/electron/path.txt is missing"
           fi
           find node_modules/electron/dist -maxdepth 3 -print | sort | head -120 || true
-          node -e 'const fs = require("node:fs"); const electron = require("electron"); console.log(electron); if (!fs.existsSync(electron)) throw new Error(`${electron} does not exist`)'
+          node -e "const fs = require('node:fs'); const electron = require('electron'); console.log(electron); if (!fs.existsSync(electron)) throw new Error(`${electron} does not exist`)"
 
       - name: Build icons
         run: npm run icons
