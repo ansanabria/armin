@@ -33,11 +33,17 @@ const args = process.argv.slice(2);
 const targetIndex = args.indexOf("--target");
 const targetValue = targetIndex >= 0 ? args[targetIndex + 1] : undefined;
 
-await api.publish({
-  dir: process.cwd(),
-  interactive: true,
-  dryRun: args.includes("--dry-run"),
-  dryRunResume: args.includes("--from-dry-run"),
-  publishTargets: targetValue ? targetValue.split(",") : undefined,
-  makeOptions: await getMakeOptions(),
-});
+const keepAlive = setInterval(() => {}, 1000);
+
+try {
+  await api.publish({
+    dir: process.cwd(),
+    interactive: true,
+    dryRun: args.includes("--dry-run"),
+    dryRunResume: args.includes("--from-dry-run"),
+    publishTargets: targetValue ? targetValue.split(",") : undefined,
+    makeOptions: await getMakeOptions(),
+  });
+} finally {
+  clearInterval(keepAlive);
+}
