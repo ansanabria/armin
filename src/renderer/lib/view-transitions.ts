@@ -88,7 +88,9 @@ export function installViewTransitionRejectionHandler(): void {
   const original = document.startViewTransition.bind(document);
   document.startViewTransition = (updateCallbackOrOptions) => {
     const transition = original(updateCallbackOrOptions);
-    void transition.finished.catch(() => {});
+    void transition.finished.catch(() => {
+      // Swallow benign view-transition rejections (e.g. interrupted transitions).
+    });
     return transition;
   };
 }

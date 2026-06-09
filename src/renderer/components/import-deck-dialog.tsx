@@ -33,6 +33,7 @@ export type ImportSummary = {
   source: "Anki" | "Markdown";
   name: string;
   cardCount: number;
+  deckCount?: number;
 };
 
 type ImportDeckDialogProps = {
@@ -122,7 +123,7 @@ function ChooseSource({ onPick }: { onPick: (step: Step) => void }) {
       <SourceOption
         icon={Package}
         title="Anki deck"
-        description="Import an .apkg or .colpkg export — cards, media, and optionally their scheduling."
+        description="Import an .apkg or .colpkg export. Basic front/back cards (with tags) come over; other types like cloze are skipped for now."
         onClick={() => onPick("anki")}
       />
       <SourceOption
@@ -180,6 +181,10 @@ function BackLink({ onBack }: { onBack: () => void }) {
   );
 }
 
+type AnkiAnalysisResult = Awaited<
+  ReturnType<Window["armin"]["import"]["analyzeAnki"]>
+>;
+
 function AnkiImport({
   onBack,
   onImport,
@@ -188,17 +193,73 @@ function AnkiImport({
   onImport: (summary: ImportSummary) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<AnkiAnalysisResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   const [name, setName] = useState("");
   const [keepSchedule, setKeepSchedule] = useState(true);
+  const [strategy, setStrategy] = useState<"single" | "separate">("single");
+  const [importing, setImporting] = useState(false);
 
-  const handleFile = (next: File | null) => {
-    setFile(next);
-    if (next) setName(deckNameFromFile(next.name));
+  const multiDeck = (analysis?.decks.length ?? 0) > 1;
+  const needsName = !multiDeck || strategy === "single";
+
+  const reset = () => {
+    setFile(null);
+    setAnalysis(null);
+    setError(null);
+    setName("");
+    setStrategy("single");
   };
 
-  // UI preview: a real importer unpacks the SQLite collection. Here we derive a
-  // believable card count from the file size so the preview feels alive.
-  const cardCount = file ? Math.max(1, Math.round(file.size / 256)) : 0;
+  const handleFile = async (next: File | null) => {
+    if (!next) {
+      reset();
+      return;
+    }
+    setFile(next);
+    setAnalysis(null);
+    setError(null);
+    setAnalyzing(true);
+    try {
+      const bytes = new Uint8Array(await next.arrayBuffer());
+      const result = await window.armin.import.analyzeAnki(bytes, next.name);
+      setAnalysis(result);
+      setName(result.suggestedName);
+      setStrategy("single");
+    } catch (err) {
+      setError(errorMessage(err, "We couldn't read that Anki package."));
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!analysis) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const result = await window.armin.import.commitAnki({
+        importId: analysis.importId,
+        deckName: name.trim() || "Imported deck",
+        keepScheduling: analysis.hasScheduling && keepSchedule,
+        deckStrategy: multiDeck ? strategy : "single",
+      });
+      onImport({
+        source: "Anki",
+        name:
+          result.deckCount > 1
+            ? `${plural(result.deckCount, "deck")}`
+            : name.trim() || "Imported deck",
+        cardCount: result.cardCount,
+        deckCount: result.deckCount,
+      });
+    } catch (err) {
+      setError(errorMessage(err, "The import failed. Please try again."));
+      setImporting(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -207,50 +268,88 @@ function AnkiImport({
       <FileDrop
         accept=".apkg,.colpkg"
         file={file}
-        onFile={handleFile}
+        onFile={(f) => void handleFile(f)}
         hint="Drop an .apkg or .colpkg file, or click to browse"
       />
 
-      {file && (
-        <>
-          <Field label="Deck name">
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
+      <p className="flex items-start gap-2 text-xs text-muted">
+        <CircleHelp className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>
+          Armin imports <span className="text-ink">basic front/back cards</span>{" "}
+          and their tags. Other card types (like cloze) are skipped for now —
+          support for them is coming later.
+        </span>
+      </p>
 
-          <label className="flex items-center justify-between gap-4 rounded-md border border-border bg-bg-2 px-3 py-2.5">
-            <span className="min-w-0">
-              <span className="block text-sm font-medium text-ink">
-                Keep scheduling
+      {analyzing && (
+        <p className="text-sm text-muted">Reading your Anki package…</p>
+      )}
+
+      {error && <PreviewSummary tone="warn" lines={[error]} />}
+
+      {analysis && !analyzing && (
+        <>
+          {multiDeck && (
+            <Field
+              label="This package has multiple decks"
+              hint={`${analysis.decks.length} decks found`}
+            >
+              <Segmented
+                options={[
+                  { value: "single", label: "Merge into one" },
+                  { value: "separate", label: "Keep separate" },
+                ]}
+                value={strategy}
+                onChange={setStrategy}
+              />
+            </Field>
+          )}
+
+          {needsName && (
+            <Field label="Deck name">
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </Field>
+          )}
+
+          {analysis.hasScheduling && (
+            <label className="flex items-center justify-between gap-4 rounded-md border border-border bg-bg-2 px-3 py-2.5">
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-ink">
+                  Keep scheduling
+                </span>
+                <span className="block text-xs text-muted">
+                  Carry over review progress and due dates from Anki.
+                </span>
               </span>
-              <span className="block text-xs text-muted">
-                Preserve review history and due dates from Anki.
-              </span>
-            </span>
-            <Switch checked={keepSchedule} onCheckedChange={setKeepSchedule} />
-          </label>
+              <Switch checked={keepSchedule} onCheckedChange={setKeepSchedule} />
+            </label>
+          )}
 
           <PreviewSummary
             lines={[
-              `${plural(cardCount, "card")} detected`,
-              keepSchedule
-                ? "Scheduling will be preserved"
-                : "Cards will be imported as new",
+              `${plural(analysis.totalCards, "card")} ready to import`,
+              multiDeck && strategy === "separate"
+                ? `Across ${plural(analysis.decks.length, "deck")}`
+                : "Into a single deck",
             ]}
           />
+
+          {analysis.warnings.length > 0 && (
+            <PreviewSummary tone="warn" lines={analysis.warnings} />
+          )}
         </>
       )}
 
       <Footer
         onCancel={onBack}
-        disabled={!file || !name.trim()}
-        label="Import deck"
-        onConfirm={() =>
-          onImport({
-            source: "Anki",
-            name: name.trim() || "Imported deck",
-            cardCount,
-          })
+        disabled={
+          !analysis ||
+          analyzing ||
+          importing ||
+          (needsName && !name.trim())
         }
+        label={importing ? "Importing…" : "Import deck"}
+        onConfirm={() => void handleImport()}
       />
     </div>
   );
@@ -270,6 +369,8 @@ function MarkdownImport({
   // The "unrecognized format" warning only appears after a failed import
   // attempt — never while the user is still typing.
   const [attempted, setAttempted] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const parsed = useMemo(() => parseMarkdownDeck(text), [text]);
 
@@ -290,16 +391,32 @@ function MarkdownImport({
     file.text().then(setText);
   };
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (parsed.cards.length === 0) {
       setAttempted(true);
       return;
     }
-    onImport({
-      source: "Markdown",
-      name: name.trim() || "Imported deck",
-      cardCount: parsed.cards.length,
-    });
+    setImporting(true);
+    setError(null);
+    try {
+      const deckName = name.trim() || "Imported deck";
+      const result = await window.armin.import.createDeckWithCards({
+        name: deckName,
+        cards: parsed.cards.map((card) => ({
+          front: card.front,
+          back: card.back,
+          tags: card.tags,
+        })),
+      });
+      onImport({
+        source: "Markdown",
+        name: deckName,
+        cardCount: result.cardCount,
+      });
+    } catch (err) {
+      setError(errorMessage(err, "The import failed. Please try again."));
+      setImporting(false);
+    }
   };
 
   return (
@@ -375,14 +492,24 @@ function MarkdownImport({
         />
       )}
 
+      {error && <PreviewSummary tone="warn" lines={[error]} />}
+
       <Footer
         onCancel={onBack}
-        disabled={!text.trim() || !name.trim()}
-        label="Import deck"
-        onConfirm={handleImport}
+        disabled={!text.trim() || !name.trim() || importing}
+        label={importing ? "Importing…" : "Import deck"}
+        onConfirm={() => void handleImport()}
       />
     </div>
   );
+}
+
+function errorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) {
+    // IPC wraps thrown errors; surface the message without the channel prefix.
+    return err.message.replace(/^Error invoking remote method '[^']*':\s*/, "");
+  }
+  return fallback;
 }
 
 /**
