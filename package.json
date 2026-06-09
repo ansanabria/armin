@@ -18,7 +18,7 @@
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
-    "publish": "node scripts/publish.mjs",
+    "publish": "electron-forge publish",
     "mcp": "tsx src/mcp/server.ts",
     "lint": "eslint --ext .ts,.tsx .",
     "test": "vitest run",
