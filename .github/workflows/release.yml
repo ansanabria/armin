@@ -27,7 +27,19 @@ jobs:
         run: npm ci
 
       - name: Install Electron binary
-        run: npm run electron:install
+        run: npx install-electron --no
+
+      - name: Diagnose Electron binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          node -p "process.version"
+          node -p "require('electron/package.json').version"
+          ls -la node_modules/electron
+          test -f node_modules/electron/path.txt
+          cat node_modules/electron/path.txt
+          find node_modules/electron/dist -maxdepth 2 -type f | sort | head -80
+          node -e "const fs = require('node:fs'); const electron = require('electron'); console.log(electron); if (!fs.existsSync(electron)) throw new Error(`${electron} does not exist`)"
 
       - name: Install E2E dependencies
         run: sudo apt-get update && sudo apt-get install -y xvfb
@@ -83,7 +95,19 @@ jobs:
         run: npm ci
 
       - name: Install Electron binary
-        run: npm run electron:install
+        run: npx install-electron --no
+
+      - name: Diagnose Electron binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          node -p "process.version"
+          node -p "require('electron/package.json').version"
+          ls -la node_modules/electron
+          test -f node_modules/electron/path.txt
+          cat node_modules/electron/path.txt
+          find node_modules/electron/dist -maxdepth 2 -type f | sort | head -80
+          node -e "const fs = require('node:fs'); const electron = require('electron'); console.log(electron); if (!fs.existsSync(electron)) throw new Error(`${electron} does not exist`)"
 
       - name: Build icons
         run: npm run icons
