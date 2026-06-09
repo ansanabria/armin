@@ -32,19 +32,13 @@ jobs:
       - name: Diagnose Electron binary
         shell: bash
         run: |
-          set -uxo pipefail
+          set -euxo pipefail
           node -p "process.version"
           node -p "require('electron/package.json').version"
-          command -v install-electron || true
-          command -v electron || true
-          ls -la node_modules/.bin | grep electron || true
           ls -la node_modules/electron
-          if test -f node_modules/electron/path.txt; then
-            cat node_modules/electron/path.txt
-          else
-            echo "node_modules/electron/path.txt is missing"
-          fi
-          find node_modules/electron/dist -maxdepth 3 -print | sort | head -120 || true
+          test -f node_modules/electron/path.txt
+          cat node_modules/electron/path.txt
+          find node_modules/electron/dist -maxdepth 2 -type f | sort | head -80
           node -e "const fs = require('node:fs'); const electron = require('electron'); console.log(electron); if (!fs.existsSync(electron)) throw new Error(`${electron} does not exist`)"
 
       - name: Install E2E dependencies
@@ -106,19 +100,13 @@ jobs:
       - name: Diagnose Electron binary
         shell: bash
         run: |
-          set -uxo pipefail
+          set -euxo pipefail
           node -p "process.version"
           node -p "require('electron/package.json').version"
-          command -v install-electron || true
-          command -v electron || true
-          ls -la node_modules/.bin | grep electron || true
           ls -la node_modules/electron
-          if test -f node_modules/electron/path.txt; then
-            cat node_modules/electron/path.txt
-          else
-            echo "node_modules/electron/path.txt is missing"
-          fi
-          find node_modules/electron/dist -maxdepth 3 -print | sort | head -120 || true
+          test -f node_modules/electron/path.txt
+          cat node_modules/electron/path.txt
+          find node_modules/electron/dist -maxdepth 2 -type f | sort | head -80
           node -e "const fs = require('node:fs'); const electron = require('electron'); console.log(electron); if (!fs.existsSync(electron)) throw new Error(`${electron} does not exist`)"
 
       - name: Build icons
