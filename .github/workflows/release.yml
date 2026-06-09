@@ -27,7 +27,15 @@ jobs:
         run: npm ci
 
       - name: Install Electron binary
-        run: node node_modules/electron/install.js
+        shell: bash
+        run: |
+          node node_modules/electron/install.js
+          case "$RUNNER_OS" in
+            Linux) echo electron > node_modules/electron/path.txt ;;
+            macOS) echo Electron.app/Contents/MacOS/Electron > node_modules/electron/path.txt ;;
+            Windows) echo electron.exe > node_modules/electron/path.txt ;;
+          esac
+          node -e "console.log(require('electron'))"
 
       - name: Install E2E dependencies
         run: sudo apt-get update && sudo apt-get install -y xvfb
@@ -80,7 +88,15 @@ jobs:
         run: npm ci
 
       - name: Install Electron binary
-        run: node node_modules/electron/install.js
+        shell: bash
+        run: |
+          node node_modules/electron/install.js
+          case "$RUNNER_OS" in
+            Linux) echo electron > node_modules/electron/path.txt ;;
+            macOS) echo Electron.app/Contents/MacOS/Electron > node_modules/electron/path.txt ;;
+            Windows) echo electron.exe > node_modules/electron/path.txt ;;
+          esac
+          node -e "console.log(require('electron'))"
 
       - name: Build icons
         run: npm run icons
