@@ -1,5 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { api } = require("@electron-forge/core");
+const { getMakeOptions } = require("@electron-forge/cli/dist/electron-forge-make.js");
 
 function githubToken() {
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
@@ -23,17 +27,17 @@ const env = {
   GITHUB_TOKEN: githubToken(),
 };
 
-const forgePublishCli = fileURLToPath(
-  new URL(
-    "../node_modules/@electron-forge/cli/dist/electron-forge-publish.js",
-    import.meta.url,
-  ),
-);
+process.env.GITHUB_TOKEN = env.GITHUB_TOKEN;
 
-const result = spawnSync(process.execPath, [forgePublishCli, ...process.argv.slice(2)], {
-  env,
-  stdio: "inherit",
+const args = process.argv.slice(2);
+const targetIndex = args.indexOf("--target");
+const targetValue = targetIndex >= 0 ? args[targetIndex + 1] : undefined;
+
+await api.publish({
+  dir: process.cwd(),
+  interactive: true,
+  dryRun: args.includes("--dry-run"),
+  dryRunResume: args.includes("--from-dry-run"),
+  publishTargets: targetValue ? targetValue.split(",") : undefined,
+  makeOptions: await getMakeOptions(),
 });
-
-if (result.error) throw result.error;
-process.exit(result.status ?? 1);
