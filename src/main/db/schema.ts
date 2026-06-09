@@ -60,6 +60,10 @@ export const cards = sqliteTable(
     /** Denormalized prerequisite lock; synced when graph or prereq FSRS changes. */
     locked: integer("locked", { mode: "boolean" }).notNull().default(false),
 
+    /** Persisted prerequisite-graph canvas position; null until the card is placed. */
+    posX: real("pos_x"),
+    posY: real("pos_y"),
+
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

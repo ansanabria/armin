@@ -185,7 +185,9 @@ export async function refreshLockedAfterPrereqSecured(
   await persistLockedForCardIds(ctx, affected);
 }
 
-export async function refreshAllLockedStates(ctx: ServiceContext): Promise<void> {
+export async function refreshAllLockedStates(
+  ctx: ServiceContext,
+): Promise<void> {
   const dependents = await ctx.db
     .selectDistinct({ id: cardPrereqs.dependentId })
     .from(cardPrereqs)
@@ -363,6 +365,8 @@ export type DeckGraph = {
     back: string;
     state: number;
     locked: boolean;
+    x: number | null;
+    y: number | null;
   }[];
   edges: { prereqId: string; dependentId: string }[];
 };
@@ -379,6 +383,8 @@ export async function getDeckGraph(
       back: cards.back,
       state: cards.state,
       locked: cards.locked,
+      posX: cards.posX,
+      posY: cards.posY,
     })
     .from(cards)
     .where(eq(cards.deckId, deckId))
@@ -402,6 +408,40 @@ export async function getDeckGraph(
     back: c.back,
     state: c.state,
     locked: c.locked,
+    x: c.posX,
+    y: c.posY,
   }));
   return { nodes, edges };
+}
+
+export type NodePlacement = { cardId: string; x: number; y: number };
+
+/**
+ * Persist canvas positions for a deck's cards. Only the supplied cards are
+ * touched, so callers can save a single dragged node or the whole layout.
+ */
+export async function saveLayout(
+  ctx: ServiceContext,
+  deckId: string,
+  placements: NodePlacement[],
+): Promise<void> {
+  if (placements.length === 0) return;
+  const ids = placements.map((p) => p.cardId);
+  const owned = await ctx.db
+    .select({ id: cards.id })
+    .from(cards)
+    .where(and(eq(cards.deckId, deckId), inArray(cards.id, ids)))
+    .all();
+  const ownedIds = new Set(owned.map((c) => c.id));
+  const toWrite = placements.filter((p) => ownedIds.has(p.cardId));
+  if (toWrite.length === 0) return;
+  await ctx.db.transaction(async (tx) => {
+    for (const p of toWrite) {
+      await tx
+        .update(cards)
+        .set({ posX: p.x, posY: p.y })
+        .where(eq(cards.id, p.cardId))
+        .run();
+    }
+  });
 }

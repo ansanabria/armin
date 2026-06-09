@@ -13,7 +13,7 @@ cramming. Many are technically literate — comfortable with keyboard shortcuts,
 local-first tools, and connecting their own AI agent (Claude Code, Codex,
 OpenCode) to generate cards.
 
-The job to be done: build durable, *hierarchical* knowledge. Create decks and
+The job to be done: build durable, _hierarchical_ knowledge. Create decks and
 cards, wire up prerequisite relationships, and run short spaced-repetition review
 sessions that adapt to actual recall. The recurring primary task on most screens
 is reviewing due cards quickly and judging recall honestly; the secondary task is

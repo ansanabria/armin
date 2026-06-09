@@ -43,6 +43,19 @@ function shellOptions() {
   return { isMac, isLinux };
 }
 
+function rendererWebPreferences() {
+  const additionalArguments: string[] = [];
+  if (process.env.ARMIN_E2E === "1") {
+    additionalArguments.push("--armin-e2e");
+  }
+
+  return {
+    preload: path.join(__dirname, "preload.js"),
+    spellcheck: false,
+    additionalArguments,
+  };
+}
+
 function loadProfilePicker(win: BrowserWindow) {
   if (PROFILE_PICKER_VITE_DEV_SERVER_URL) {
     win.loadURL(`${PROFILE_PICKER_VITE_DEV_SERVER_URL}/profile-picker.html`);
@@ -99,10 +112,7 @@ export function openProfilePicker() {
           frame: false,
           ...(isLinux && { hasShadow: false }),
         }),
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      spellcheck: false,
-    },
+    webPreferences: rendererWebPreferences(),
   });
   attachWindowIcon(profilePickerWindow);
 
@@ -154,10 +164,7 @@ export async function openMainWindow(profileId: string, profileName?: string) {
           frame: false,
           ...(isLinux && { hasShadow: false }),
         }),
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      spellcheck: false,
-    },
+    webPreferences: rendererWebPreferences(),
   });
   attachWindowIcon(win);
 

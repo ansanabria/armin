@@ -1,8 +1,15 @@
 import { MarkerType, type Edge } from "@xyflow/react";
 import type { UiDeckGraph } from "@/types/view-models";
 import { isIsolatedNode } from "@/lib/graph-cycle";
-import { CARD_NODE_HEIGHT, CARD_NODE_WIDTH, layoutGraph } from "@/lib/graph-layout";
-import type { CardFlowNode, CardNodeData } from "@/components/prerequisite-graph/card-node";
+import {
+  CARD_NODE_HEIGHT,
+  CARD_NODE_WIDTH,
+  layoutGraph,
+} from "@/lib/graph-layout";
+import type {
+  CardFlowNode,
+  CardNodeData,
+} from "@/components/prerequisite-graph/card-node";
 
 export const EDGE_STROKE = "var(--color-border-strong)";
 
@@ -52,23 +59,34 @@ export function toFlowNode(
 
 export function graphToFlowElements(
   graph: UiDeckGraph,
-  existingPositions?: Map<string, { x: number; y: number }>,
+  savedPositions?: Map<string, { x: number; y: number }>,
 ): { nodes: CardFlowNode[]; edges: Edge[] } {
   const nodes: CardFlowNode[] = graph.nodes.map((n) =>
-    toFlowNode(n, graph.edges, existingPositions?.get(n.id) ?? { x: 0, y: 0 }),
+    toFlowNode(n, graph.edges, savedPositions?.get(n.id) ?? { x: 0, y: 0 }),
   );
-  const edges = graph.edges.map((e) =>
-    makeFlowEdge(e.prereqId, e.dependentId),
-  );
+  const edges = graph.edges.map((e) => makeFlowEdge(e.prereqId, e.dependentId));
 
-  if (!existingPositions || existingPositions.size === 0) {
-    return layoutGraph<CardNodeData>(nodes, edges) as {
-      nodes: CardFlowNode[];
-      edges: Edge[];
-    };
-  }
+  // Every card already has a saved position — render it exactly as left.
+  const allPlaced =
+    graph.nodes.length > 0 &&
+    graph.nodes.every((n) => savedPositions?.has(n.id));
+  if (allPlaced) return { nodes, edges };
 
-  return { nodes, edges };
+  // Otherwise auto-layout, then re-apply any saved positions so previously
+  // placed cards stay put while brand-new ones get a sensible dagre slot.
+  const laidOut = layoutGraph<CardNodeData>(nodes, edges) as {
+    nodes: CardFlowNode[];
+    edges: Edge[];
+  };
+  if (!savedPositions || savedPositions.size === 0) return laidOut;
+
+  return {
+    nodes: laidOut.nodes.map((node) => {
+      const saved = savedPositions.get(node.id);
+      return saved ? { ...node, position: saved } : node;
+    }),
+    edges: laidOut.edges,
+  };
 }
 
 export function refreshNodeData(

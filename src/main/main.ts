@@ -5,6 +5,10 @@ import { applyLinuxDesktopEntry } from "./icon";
 import { registerIpc } from "./ipc";
 import { openProfilePicker } from "./windows";
 
+if (process.env.ARMIN_DATA_DIR) {
+  app.setPath("userData", process.env.ARMIN_DATA_DIR);
+}
+
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
   app.quit();

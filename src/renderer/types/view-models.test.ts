@@ -24,6 +24,8 @@ function card(overrides: Partial<CardWithMeta> = {}): CardWithMeta {
     updatedAt: now,
     tags: [],
     locked: false,
+    posX: null,
+    posY: null,
     ...overrides,
   };
 }
@@ -36,16 +38,10 @@ describe("view-model helpers", () => {
     expect(formatDueLabel(card({ state: 0 }), now)).toBe("New");
     expect(formatDueLabel(card({ due: now }), now)).toBe("Due now");
     expect(
-      formatDueLabel(
-        card({ due: new Date("2026-06-07T12:06:00.000Z") }),
-        now,
-      ),
+      formatDueLabel(card({ due: new Date("2026-06-07T12:06:00.000Z") }), now),
     ).toBe("in 6m");
     expect(
-      formatDueLabel(
-        card({ due: new Date("2026-06-10T12:00:00.000Z") }),
-        now,
-      ),
+      formatDueLabel(card({ due: new Date("2026-06-10T12:00:00.000Z") }), now),
     ).toBe("in 3 days");
   });
 
@@ -66,9 +62,11 @@ describe("view-model helpers", () => {
   });
 
   it("preserves deck context for browse cards", () => {
-    expect(toUiBrowseCard({ ...card(), deckName: "JavaScript" })).toMatchObject({
-      deckName: "JavaScript",
-      deckId: "deck-1",
-    });
+    expect(toUiBrowseCard({ ...card(), deckName: "JavaScript" })).toMatchObject(
+      {
+        deckName: "JavaScript",
+        deckId: "deck-1",
+      },
+    );
   });
 });

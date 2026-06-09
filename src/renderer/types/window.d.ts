@@ -45,7 +45,7 @@ export interface ArminApi {
       sort: string;
       state?: number;
       deckId?: string;
-      tag?: string;
+      tags?: string[];
     }): Promise<{
       cards: BrowseCard[];
       filteredTotal: number;
@@ -80,6 +80,10 @@ export interface ArminApi {
     get(deckId: string): Promise<DeckGraph>;
     addPrereq(prereqId: string, dependentId: string): Promise<{ ok: true }>;
     removePrereq(prereqId: string, dependentId: string): Promise<{ ok: true }>;
+    saveLayout(
+      deckId: string,
+      placements: { cardId: string; x: number; y: number }[],
+    ): Promise<{ ok: true }>;
   };
   settings: {
     get(): Promise<Settings>;
@@ -118,6 +122,7 @@ declare global {
   interface Window {
     armin: ArminApi;
     arminShell?: ArminShell;
+    __ARMIN_E2E__?: boolean;
   }
 }
 

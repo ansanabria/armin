@@ -32,11 +32,6 @@ export function wouldCreateCycle(
   return false;
 }
 
-export function isIsolatedNode(
-  nodeId: string,
-  edges: GraphEdge[],
-): boolean {
-  return !edges.some(
-    (e) => e.prereqId === nodeId || e.dependentId === nodeId,
-  );
+export function isIsolatedNode(nodeId: string, edges: GraphEdge[]): boolean {
+  return !edges.some((e) => e.prereqId === nodeId || e.dependentId === nodeId);
 }

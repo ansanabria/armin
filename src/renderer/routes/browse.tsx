@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -10,7 +11,10 @@ import { Tag, Layers, AlertTriangle, Library, CircleDot } from "lucide-react";
 import { CardFormDialog } from "@/components/card-form-dialog";
 import { CardTile } from "@/components/card-tile";
 import { SortControl } from "@/components/sort-control";
-import { SearchableSelect } from "@/components/ui/combobox";
+import {
+  SearchableMultiSelect,
+  SearchableSelect,
+} from "@/components/ui/combobox";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -46,7 +50,7 @@ export default function BrowsePage() {
   const [sort, setSort] = useState<BrowseSortKey>("created-new");
   const [stateFilter, setStateFilter] = useState<string>(ALL_STATES);
   const [deckFilter, setDeckFilter] = useState("");
-  const [tagFilter, setTagFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<UiBrowseCard | null>(null);
 
@@ -57,7 +61,7 @@ export default function BrowsePage() {
       if (Number.isInteger(state)) filters.state = state;
     }
     if (deckFilter) filters.deckId = deckFilter;
-    if (tagFilter) filters.tag = tagFilter;
+    if (tagFilter.length > 0) filters.tags = tagFilter;
     return filters;
   }, [sort, stateFilter, deckFilter, tagFilter]);
 
@@ -80,13 +84,17 @@ export default function BrowsePage() {
         sort: browseFilters.sort,
         state: browseFilters.state,
         deckId: browseFilters.deckId,
-        tag: browseFilters.tag,
+        tags: browseFilters.tags,
       }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
-      const loaded = allPages.reduce((count, page) => count + page.cards.length, 0);
+      const loaded = allPages.reduce(
+        (count, page) => count + page.cards.length,
+        0,
+      );
       return loaded < lastPage.filteredTotal ? loaded : undefined;
     },
+    placeholderData: keepPreviousData,
   });
 
   const displayed = useMemo(
@@ -184,10 +192,7 @@ export default function BrowsePage() {
   );
 
   const tagOptions = useMemo(
-    () => [
-      { value: "", label: "All tags" },
-      ...allTags.map((tag) => ({ value: tag, label: tag })),
-    ],
+    () => allTags.map((tag) => ({ value: tag, label: tag })),
     [allTags],
   );
 
@@ -321,7 +326,7 @@ export default function BrowsePage() {
                       </>
                     }
                   >
-                    <SearchableSelect
+                    <SearchableMultiSelect
                       value={tagFilter}
                       onValueChange={setTagFilter}
                       options={tagOptions}

@@ -86,29 +86,31 @@ function CardActionsMenu({
   onGoToDeck?: () => void;
 }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Card actions"
-            className="shrink-0"
+    <div className="pointer-events-auto shrink-0">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Card actions"
+              className="shrink-0"
+            />
+          }
+        >
+          <EllipsisVertical className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-40">
+          <CardActionItems
+            onOpen={onOpen}
+            onDelete={onDelete}
+            onGoToDeck={onGoToDeck}
+            Item={DropdownMenuItem}
+            Separator={DropdownMenuSeparator}
           />
-        }
-      >
-        <EllipsisVertical className="h-4 w-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-40">
-        <CardActionItems
-          onOpen={onOpen}
-          onDelete={onDelete}
-          onGoToDeck={onGoToDeck}
-          Item={DropdownMenuItem}
-          Separator={DropdownMenuSeparator}
-        />
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
@@ -211,102 +213,101 @@ export const CardTile = memo(function CardTile({
       <ContextMenu>
         <ContextMenuTrigger
           className={cn(
-            "group flex min-h-[13.5rem] flex-1 flex-col p-4 transition-[border-color,background-color,box-shadow] duration-150",
+            "group relative flex min-h-[13.5rem] w-full flex-1 cursor-pointer flex-col p-4 transition-[border-color,background-color,box-shadow] duration-150",
             "border border-border bg-surface",
             "hover:border-border-strong hover:bg-surface-sunken hover:shadow-sm",
             card.locked && "opacity-65",
           )}
-          render={<div className="flex min-h-0 flex-1 flex-col" />}
         >
-          {deckName ? (
-            <div className="flex items-center justify-between gap-2">
-              <p className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
-                <Layers className="h-3 w-3 shrink-0" aria-hidden />
-                <span className="truncate">{deckName}</span>
-              </p>
-              <CardActionsMenu
-                onOpen={onOpen}
-                onDelete={openDeleteConfirm}
-                onGoToDeck={onGoToDeck}
-              />
-            </div>
-          ) : null}
-
-          <div
-            className={cn(
-              "flex items-center gap-2",
-              deckName ? "mt-2" : "justify-between",
-            )}
-          >
-            <StateBadge
-              state={card.state}
-              locked={card.locked}
-              className="min-w-0 shrink-0"
-            />
-            {!deckName && (
-              <CardActionsMenu
-                onOpen={onOpen}
-                onDelete={openDeleteConfirm}
-                onGoToDeck={onGoToDeck}
-              />
-            )}
-          </div>
-
           <button
             type="button"
             onClick={onOpen}
             aria-label={`View and edit card: ${card.front}`}
-            className={cn(
-              "mt-3 flex flex-1 flex-col text-left",
-              "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
-            )}
-          >
-            <div className="flex flex-col gap-1">
-              <CardPreviewText
-                content={card.front}
-                className="line-clamp-2 text-sm font-medium text-ink"
+            className="absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+          />
+          <div className="pointer-events-none relative z-10 flex min-h-0 flex-1 flex-col">
+            {deckName ? (
+              <div className="flex items-center justify-between gap-2">
+                <p className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
+                  <Layers className="h-3 w-3 shrink-0" aria-hidden />
+                  <span className="truncate">{deckName}</span>
+                </p>
+                <CardActionsMenu
+                  onOpen={onOpen}
+                  onDelete={openDeleteConfirm}
+                  onGoToDeck={onGoToDeck}
+                />
+              </div>
+            ) : null}
+
+            <div
+              className={cn(
+                "flex items-center gap-2",
+                deckName ? "mt-2" : "justify-between",
+              )}
+            >
+              <StateBadge
+                state={card.state}
+                locked={card.locked}
+                className="min-w-0 shrink-0"
               />
-              <CardPreviewText
-                content={card.back}
-                className="line-clamp-3 text-[0.8125rem] leading-relaxed text-muted"
-              />
+              {!deckName && (
+                <CardActionsMenu
+                  onOpen={onOpen}
+                  onDelete={openDeleteConfirm}
+                  onGoToDeck={onGoToDeck}
+                />
+              )}
             </div>
 
-            {(card.tags?.length > 0 || showDueLabel(card)) && (
-              <div
-                className={cn(
-                  "mt-auto flex items-end gap-3 pt-3",
-                  showDueLabel(card) &&
-                    (card.tags?.length ? "justify-between" : "justify-end"),
-                )}
-              >
-                {card.tags?.length > 0 && (
-                  <ul className="flex min-w-0 flex-wrap gap-1">
-                    {card.tags.map((tag) => (
-                      <li
-                        key={tag}
-                        className="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted"
-                      >
-                        {tag}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {showDueLabel(card) && (
-                  <span
-                    className={cn(
-                      "shrink-0 font-mono text-xs tabular-nums",
-                      card.dueLabel === "Due now"
-                        ? "text-accent"
-                        : "text-muted",
-                    )}
-                  >
-                    {card.dueLabel}
-                  </span>
-                )}
+            <div className="mt-3 flex flex-1 flex-col">
+              <div className="flex flex-col gap-1">
+                <CardPreviewText
+                  content={card.front}
+                  className="line-clamp-2 text-sm font-medium text-ink"
+                />
+                <CardPreviewText
+                  content={card.back}
+                  className="line-clamp-3 text-[0.8125rem] leading-relaxed text-muted"
+                />
               </div>
-            )}
-          </button>
+
+              {(card.tags?.length > 0 || showDueLabel(card)) && (
+                <div
+                  className={cn(
+                    "mt-auto flex items-end gap-3 pt-3",
+                    showDueLabel(card) &&
+                      (card.tags?.length ? "justify-between" : "justify-end"),
+                  )}
+                >
+                  {card.tags?.length > 0 && (
+                    <ul className="flex min-w-0 flex-wrap gap-1">
+                      {card.tags.map((tag) => (
+                        <li
+                          key={tag}
+                          className="rounded-sm bg-surface-sunken px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted"
+                        >
+                          {tag}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {showDueLabel(card) && (
+                    <span
+                      className={cn(
+                        "shrink-0 font-mono text-xs tabular-nums",
+                        card.dueLabel === "Due now"
+                          ? "text-accent"
+                          : "text-muted",
+                      )}
+                    >
+                      {card.dueLabel}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </ContextMenuTrigger>
 
         <ContextMenuContent className="min-w-40">

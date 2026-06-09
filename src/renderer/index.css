@@ -92,19 +92,6 @@
     text-rendering: optimizeLegibility;
   }
 
-  main {
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-border-strong) transparent;
-  }
-  main::-webkit-scrollbar {
-    width: 10px;
-  }
-  main::-webkit-scrollbar-thumb {
-    background-color: var(--color-border-strong);
-    border: 3px solid var(--color-bg);
-    border-radius: 0;
-  }
-
   h1,
   h2,
   h3 {
@@ -124,6 +111,19 @@
     color: var(--color-accent-deep);
   }
 
+  a[href],
+  button:not(:disabled),
+  label[for],
+  select:not(:disabled),
+  summary,
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="link"]:not([aria-disabled="true"]),
+  [role="switch"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -297,7 +297,9 @@
     background-image:
       linear-gradient(var(--armin-grid-h) 1px, transparent 1px),
       linear-gradient(90deg, var(--armin-grid-v) 1px, transparent 1px);
-    background-size: 100% var(--notebook-cell), var(--notebook-cell) 100%;
+    background-size:
+      100% var(--notebook-cell),
+      var(--notebook-cell) 100%;
   }
 
   /* Same-document route transitions (TanStack Router + View Transitions API). */
@@ -431,6 +433,52 @@
     &::view-transition-new(route-content) {
       animation: 280ms var(--ease-out-quart) both vt-slide-in-back;
     }
+  }
+
+  /* Themed scrollbars for inputs and other in-app scroll regions. */
+  .armin-scrollbar,
+  textarea {
+    --armin-scrollbar-gutter: var(--color-surface);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  .armin-scrollbar-gutter-bg {
+    --armin-scrollbar-gutter: var(--color-bg);
+  }
+
+  .armin-scrollbar::-webkit-scrollbar,
+  textarea::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .armin-scrollbar::-webkit-scrollbar-track,
+  textarea::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .armin-scrollbar::-webkit-scrollbar-thumb,
+  textarea::-webkit-scrollbar-thumb {
+    background-color: var(--color-border-strong);
+    border: 2px solid var(--armin-scrollbar-gutter);
+  }
+
+  .armin-scrollbar::-webkit-scrollbar-thumb:hover,
+  textarea::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-ui-3);
+  }
+
+  .armin-scrollbar::-webkit-scrollbar-button,
+  textarea::-webkit-scrollbar-button {
+    display: none;
+    height: 0;
+    width: 0;
+  }
+
+  .armin-scrollbar::-webkit-scrollbar-corner,
+  textarea::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }
 

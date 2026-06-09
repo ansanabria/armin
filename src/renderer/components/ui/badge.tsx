@@ -25,9 +25,17 @@ const STATE_CONFIG: Record<
   { label: string; cls: string; Icon: typeof Plus }
 > = {
   0: { label: "New", cls: "bg-new-bg text-new", Icon: Plus },
-  1: { label: "Learning", cls: "bg-learning-bg text-learning", Icon: GraduationCap },
+  1: {
+    label: "Learning",
+    cls: "bg-learning-bg text-learning",
+    Icon: GraduationCap,
+  },
   2: { label: "Review", cls: "bg-review-bg text-review", Icon: Check },
-  3: { label: "Relearning", cls: "bg-relearning-bg text-relearning", Icon: RotateCcw },
+  3: {
+    label: "Relearning",
+    cls: "bg-relearning-bg text-relearning",
+    Icon: RotateCcw,
+  },
 };
 
 /**

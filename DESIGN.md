@@ -127,6 +127,7 @@ Armin should feel like reading on warm cream stock under afternoon window light:
 This system rejects generic SaaS dashboards (no white-card grids, no cool-gray paper), cluttered Anki chrome, flashy marketing motion, and gamified badges.
 
 **Key Characteristics:**
+
 - Warm Flexoki paper field; surfaces are tonal steps, not pure white cards on gray.
 - One accent (cyan) for primary actions, focus, active nav; FSRS hues are reserved semantics.
 - Flat by default: hairline borders, shadows only on dialogs and popovers.
@@ -138,25 +139,30 @@ This system rejects generic SaaS dashboards (no white-card grids, no cool-gray p
 Flexoki light base ramp on warm paper, with cyan accent and reserved study semantics.
 
 ### Paper & UI ramp
+
 - **Paper** (`oklch(0.987 0.012 95)`): page background, review card, inputs.
 - **Bg-2** (`oklch(0.948 0.012 95)`): sunken fills, hover rows, due-today bar.
 - **Ui / Ui-2 / Ui-3**: border steps for dividers, input strokes, hover borders.
 
 ### Ink
+
 - **Ink** (`oklch(0.16 0.006 60)`): primary text (~Flexoki black).
 - **Muted** (`oklch(0.52 0.01 95)`): labels, placeholders (≥4.5:1 on paper).
 
 ### Accent
+
 - **Accent** (`oklch(0.52 0.08 180)`): primary buttons, focus rings, active nav, due counts.
 - **Accent Deep**: hover on primary.
 - **Accent Tint**: selection, icon circles, input focus glow.
 - **On-accent**: paper-toned text on filled accent and rating buttons.
 
 ### Study semantics (reserved)
+
 - **Ratings (filled):** Again (red), Hard (orange), Good (green), Easy (blue). Flexoki 600 values in OKLCH.
 - **Card states (soft chips):** pale bg + dark same-hue text, always labelled.
 
 ### Named Rules
+
 **Reserved-Semantics Rule.** Rating hues are for review meaning only. Brand accent is cyan, never a rating color.
 
 **Warm-Paper Rule.** The page is warm cream paper. Warmth lives in the field and ink, not in decorative tinted panels.
@@ -168,6 +174,7 @@ Flexoki light base ramp on warm paper, with cyan accent and reserved study seman
 **Mono:** JetBrains Mono (code, keyboard hints, progress counts)
 
 ### Hierarchy
+
 - **Display** (600, 1.75rem): "Decks", deck names.
 - **Headline** (600, 1.25rem): dialog titles, "All caught up".
 - **Title** (500, 1.25rem): card front in review (sans).
@@ -188,21 +195,25 @@ Flat by default. Tonal paper steps and hairline borders define structure.
 ## 5. Components
 
 ### Buttons
+
 - **Primary:** accent fill, on-accent text. Hover → accent-deep.
 - **Outline:** paper surface, ui-2 border; hover fills bg-2.
 - **Ghost:** hover fills bg-2.
 - **Focus:** 2px accent ring, 2px offset.
 
 ### Navigation
+
 - Paper field, hairline bottom border, no glass blur.
 - Active route: cyan bottom border + accent text.
 - Brand: serif wordmark, accent brain icon.
 
 ### Deck list
+
 - Ruled rows (`divide-y`), not floating card grids.
 - Serif deck names; sans metadata.
 
 ### Review card (signature)
+
 - Centered, max ~52ch, hairline border, generous padding.
 - Sans card front/back; accent "Show answer" primary.
 - Rating grid: Flexoki semantic fills, paper text, mono intervals.
@@ -210,6 +221,7 @@ Flat by default. Tonal paper steps and hairline borders define structure.
 ## 6. Do's and Don'ts
 
 ### Do:
+
 - Use Flexoki warm paper + ink ramp for 90% of surfaces.
 - Use cyan accent sparingly for primary action, focus, active nav.
 - Keep FSRS colors in rating grid and state chips only.
@@ -217,6 +229,7 @@ Flat by default. Tonal paper steps and hairline borders define structure.
 - Keep focus rings visible (keyboard-first).
 
 ### Don't:
+
 - Pure white `#fff` cards on cool-gray paper.
 - Clay/petrol or generic SaaS blue-gray palettes.
 - Identical floating card grids for deck lists.
