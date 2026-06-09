@@ -27,7 +27,7 @@ jobs:
         run: npm ci
 
       - name: Install Electron binary
-        run: node node_modules/electron/install.js
+        run: npx install-electron --no
 
       - name: Install E2E dependencies
         run: sudo apt-get update && sudo apt-get install -y xvfb
@@ -80,7 +80,7 @@ jobs:
         run: npm ci
 
       - name: Install Electron binary
-        run: node node_modules/electron/install.js
+        run: npx install-electron --no
 
       - name: Build icons
         run: npm run icons
