@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           rm -rf node_modules/electron/dist node_modules/electron/path.txt
-          force_no_cache=true npx install-electron --no
+          force_no_cache=true npx --no-install install-electron --no
 
       - name: Diagnose Electron binary
         shell: bash
@@ -107,7 +107,7 @@ jobs:
         shell: bash
         run: |
           rm -rf node_modules/electron/dist node_modules/electron/path.txt
-          force_no_cache=true npx install-electron --no
+          force_no_cache=true npx --no-install install-electron --no
 
       - name: Diagnose Electron binary
         shell: bash
