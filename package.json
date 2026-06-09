@@ -2,10 +2,18 @@
   "name": "armin",
   "productName": "Armin",
   "desktopName": "armin.desktop",
-  "version": "1.0.0",
-  "description": "Armin - Flashcard app",
+  "version": "0.1.0-alpha.1",
+  "description": "Local-first hierarchical spaced-repetition flashcards for desktop.",
   "main": ".vite/build/main.js",
   "private": true,
+  "homepage": "https://github.com/ansanabria/armin#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ansanabria/armin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ansanabria/armin/issues"
+  },
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
@@ -24,7 +32,12 @@
     "db:studio": "drizzle-kit studio",
     "icons": "node scripts/build-logo-svg.mjs && node scripts/generate-icons.mjs"
   },
-  "keywords": [],
+  "keywords": [
+    "electron",
+    "flashcards",
+    "local-first",
+    "spaced-repetition"
+  ],
   "author": {
     "name": "Andy Spike",
     "email": "ansanabria@proton.me"
@@ -39,7 +52,10 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.2",
     "@electron-forge/plugin-fuses": "^7.11.2",
     "@electron-forge/plugin-vite": "^7.11.2",
+    "@electron-forge/publisher-github": "^7.11.2",
     "@electron/fuses": "^1.8.0",
+    "@playwright/test": "^1.58.2",
+    "@reforged/maker-appimage": "^5.2.0",
     "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.0",
     "@types/dagre": "^0.7.54",
@@ -60,7 +76,6 @@
     "tsx": "^4.22.4",
     "typescript": "^5.9.3",
     "vite": "^5.4.21",
-    "@playwright/test": "^1.58.2",
     "vitest": "^4.1.8"
   },
   "dependencies": {
