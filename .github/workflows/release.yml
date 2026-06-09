@@ -27,7 +27,10 @@ jobs:
         run: npm ci
 
       - name: Install Electron binary
-        run: npm run electron:install
+        shell: bash
+        run: |
+          node node_modules/electron/install.js
+          node node_modules/electron/cli.js --version
 
       - name: Install E2E dependencies
         run: sudo apt-get update && sudo apt-get install -y xvfb
@@ -48,7 +51,7 @@ jobs:
         run: npm run test:e2e:build
 
       - name: Verify Electron binary after packaging
-        run: node -e "const fs = require('node:fs'); const electron = require('electron'); if (!fs.existsSync(electron)) throw new Error(`${electron} does not exist`); console.log(electron)"
+        run: node node_modules/electron/cli.js --version
 
       - name: Run E2E tests
         run: xvfb-run --auto-servernum npm run test:e2e
@@ -83,7 +86,10 @@ jobs:
         run: npm ci
 
       - name: Install Electron binary
-        run: npm run electron:install
+        shell: bash
+        run: |
+          node node_modules/electron/install.js
+          node node_modules/electron/cli.js --version
 
       - name: Build icons
         run: npm run icons
