@@ -1,32 +1,4 @@
 import { spawnSync } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
-
-const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
-const tagName = `v${packageJson.version}`;
-const dryRun = process.argv.includes("--dry-run");
-const artifactDirectory = path.resolve("out/make");
-
-function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    env: options.env ?? process.env,
-    encoding: "utf8",
-    shell: process.platform === "win32",
-    stdio: options.capture ? ["ignore", "pipe", "pipe"] : "inherit",
-  });
-
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    const detail = options.capture ? result.stderr.trim() : "";
-    throw new Error(
-      `${command} ${args.join(" ")} failed with exit code ${result.status}` +
-        (detail ? `:\n${detail}` : ""),
-    );
-  }
-
-  return result;
-}
-
 function githubToken() {
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
 
@@ -77,43 +49,15 @@ const env = {
   GITHUB_TOKEN: githubToken(),
 };
 
-process.env.GITHUB_TOKEN = env.GITHUB_TOKEN;
+const result = spawnSync(
+  process.platform === "win32" ? "npm.cmd" : "npm",
+  ["exec", "--", "electron-forge", "publish"],
+  {
+    env,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  },
+);
 
-run(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "make"], { env });
-
-const releaseExists = spawnSync("gh", ["release", "view", tagName], {
-  env,
-  encoding: "utf8",
-  shell: process.platform === "win32",
-  stdio: ["ignore", "pipe", "pipe"],
-});
-
-if (releaseExists.status !== 0) {
-  run(
-    "gh",
-    [
-      "release",
-      "create",
-      tagName,
-      "--prerelease",
-      "--title",
-      tagName,
-      "--generate-notes",
-    ],
-    { env },
-  );
-}
-
-const artifacts = await waitForArtifacts(artifactDirectory);
-
-if (artifacts.length === 0) {
-  throw new Error("No release artifacts were found in out/make.");
-}
-
-if (dryRun) {
-  console.log(`Dry run: would upload ${artifacts.length} artifact(s) to ${tagName}:`);
-  for (const artifact of artifacts) console.log(`- ${artifact}`);
-  process.exit(0);
-}
-
-run("gh", ["release", "upload", tagName, ...artifacts, "--clobber"], { env });
+if (result.error) throw result.error;
+process.exit(result.status ?? 1);
