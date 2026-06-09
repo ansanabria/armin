@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 function githubToken() {
   if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN;
@@ -22,9 +23,11 @@ const env = {
   GITHUB_TOKEN: githubToken(),
 };
 
-const forge =
-  process.platform === "win32" ? "electron-forge.cmd" : "electron-forge";
-const result = spawnSync(forge, ["publish"], {
+const forgeCli = fileURLToPath(
+  new URL("../node_modules/@electron-forge/cli/dist/electron-forge.js", import.meta.url),
+);
+
+const result = spawnSync(process.execPath, [forgeCli, "publish"], {
   env,
   stdio: "inherit",
 });
