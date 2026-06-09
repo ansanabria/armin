@@ -79,11 +79,6 @@ jobs:
       - name: Build icons
         run: npm run icons
 
-      - name: Setup stable Node for Forge publish
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       - name: Publish artifacts
         run: npm run publish
         env:
