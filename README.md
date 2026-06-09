@@ -51,6 +51,12 @@ never be a SaaS.
 - **MCP (Model Context Protocol)** — the local server AI agents connect to in order
   to create cards.
 
+## Releases
+
+Alpha builds are published from GitHub tags. See
+[docs/release.md](docs/release.md) for the release checklist, artifact targets,
+and current unsigned-build notes.
+
 ## MCP server
 
 Armin includes a local stdio MCP server for coding agents. Agents can create

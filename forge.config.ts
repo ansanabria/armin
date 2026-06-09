@@ -2,12 +2,11 @@ import path from "node:path";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
-import { MakerDeb } from "@electron-forge/maker-deb";
-import { MakerRpm } from "@electron-forge/maker-rpm";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-natives";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
+import { MakerAppImage } from "@reforged/maker-appimage";
 
 const config: ForgeConfig = {
   packagerConfig: {
@@ -19,13 +18,30 @@ const config: ForgeConfig = {
   makers: [
     new MakerSquirrel({}),
     new MakerZIP({}, ["darwin"]),
-    new MakerRpm({}),
-    new MakerDeb({
+    new MakerAppImage({
       options: {
-        icon: path.resolve(__dirname, "assets/icons/icon-256.png"),
+        bin: "Armin",
+        icon: path.resolve(__dirname, "assets/icons/icon.svg"),
         categories: ["Education", "Office"],
+        genericName: "Flashcard app",
+        keywords: ["flashcards", "spaced repetition", "study"],
       },
     }),
+  ],
+  publishers: [
+    {
+      name: "@electron-forge/publisher-github",
+      config: {
+        repository: {
+          owner: "ansanabria",
+          name: "armin",
+        },
+        prerelease: true,
+        draft: false,
+        force: true,
+        generateReleaseNotes: true,
+      },
+    },
   ],
   plugins: [
     new AutoUnpackNativesPlugin({}),
