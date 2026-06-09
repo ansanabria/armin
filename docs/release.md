@@ -1,0 +1,57 @@
+# Release checklist
+
+Armin Alpha releases are published as GitHub prereleases from version tags.
+
+## Alpha 1 distribution
+
+- Linux: AppImage
+- Windows: Squirrel installer
+- macOS: ZIP
+- Auto-update: deferred for Alpha 1
+- Code signing/notarization: deferred for Alpha 1
+
+Linux users can manage the AppImage with Gear Lever. Because the Alpha artifacts
+are unsigned, Windows and macOS may show trust or security warnings during
+installation or first launch.
+
+## Local checks
+
+Run these before creating a release tag:
+
+```bash
+npm run icons
+npm run lint
+npm run test
+npm run test:mcp
+npm run test:e2e:build
+npm run test:e2e
+```
+
+## Publish
+
+1. Update `package.json` to the release version, for example
+   `0.1.0-alpha.1`.
+2. Commit the release changes.
+3. Create and push a matching tag:
+
+```bash
+git tag v0.1.0-alpha.1
+git push origin main --tags
+```
+
+The `Release` GitHub Actions workflow builds each platform on its native runner
+and publishes all artifacts to the GitHub prerelease for the tag.
+
+## Smoke test artifacts
+
+For each artifact downloaded from the GitHub release:
+
+- Launch the app.
+- Create a profile.
+- Create a deck and card.
+- Restart the app and confirm data persists.
+- Start a review session.
+- Open settings and confirm MCP setup instructions render correctly.
+
+For Linux, also import the AppImage into Gear Lever and confirm it launches from
+the desktop entry.
