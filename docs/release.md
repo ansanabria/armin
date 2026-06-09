@@ -14,6 +14,15 @@ Linux users can manage the AppImage with Gear Lever. Because the Alpha artifacts
 are unsigned, Windows and macOS may show trust or security warnings during
 installation or first launch.
 
+## Toolchain
+
+The release workflow runs entirely on Node 24 (npm 11), including the Forge
+publish step. Use the same locally (`.nvmrc` pins Node 24) so `package-lock.json`
+stays npm-11 compatible. Avoid regenerating the lockfile under npm 10 (Node 22):
+npm 10 drops the `libc` fields npm 11 records, and npm 10's `npm ci` then rejects
+an npm-11 lockfile as out of sync around the optional `esbuild@0.28.0` platform
+packages.
+
 ## Local checks
 
 Run these before creating a release tag:

@@ -17,33 +17,6 @@ function githubToken() {
   );
 }
 
-function findArtifacts(directory) {
-  if (!fs.existsSync(directory)) return [];
-
-  return fs
-    .readdirSync(directory, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => path.join(entry.parentPath, entry.name))
-    .filter((file) => !file.endsWith(".yml") && !file.endsWith(".yaml"))
-    .sort();
-}
-
-function sleep(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-async function waitForArtifacts(directory) {
-  const deadline = Date.now() + 180_000;
-
-  while (Date.now() < deadline) {
-    const artifacts = findArtifacts(directory);
-    if (artifacts.length > 0) return artifacts;
-    await sleep(1000);
-  }
-
-  return [];
-}
-
 const env = {
   ...process.env,
   GITHUB_TOKEN: githubToken(),
