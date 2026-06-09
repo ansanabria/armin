@@ -51,6 +51,13 @@ const api = {
   mcp: {
     getSetup: () => invoke("mcp:getSetup"),
   },
+  import: {
+    analyzeAnki: (bytes: Uint8Array, fileName: string) =>
+      invoke("import:analyzeAnki", { bytes, fileName }),
+    commitAnki: (input: unknown) => invoke("import:commitAnki", input),
+    createDeckWithCards: (input: unknown) =>
+      invoke("import:createDeckWithCards", input),
+  },
   onDataChanged: (cb: () => void) => {
     const listener = () => cb();
     ipcRenderer.on("armin:data-changed", listener);
