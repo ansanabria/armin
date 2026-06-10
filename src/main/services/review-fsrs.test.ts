@@ -65,7 +65,7 @@ describe("review FSRS integration", () => {
     expect(options).toHaveLength(4);
 
     for (const option of options) {
-      const expected = preview[option.rating as Rating].card;
+      const expected = preview[option.rating].card;
       const actual = options.find((o) => o.rating === option.rating);
       expect(actual?.due).toEqual(expected.due);
     }

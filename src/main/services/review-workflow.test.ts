@@ -87,6 +87,75 @@ describe("review workflow", () => {
     expect(queue).toHaveLength(1);
   });
 
+  it("previewCard offers four graded outcomes without committing", async () => {
+    const ctx = await makeContext("preview");
+    await settings.updateSettings(ctx, { enableFuzz: false });
+    const deck = await decks.createDeck(ctx, { name: "Preview" });
+    const note = await basic(ctx, deck.id, "Peek", "Answer");
+    const card = await getOnlyCard(ctx, note.id);
+
+    const options = await review.previewCard(ctx, card.id);
+
+    expect(options.map((option) => option.rating)).toEqual([
+      Rating.Again,
+      Rating.Hard,
+      Rating.Good,
+      Rating.Easy,
+    ]);
+    for (const option of options) {
+      expect(option.due.getTime()).toBeGreaterThanOrEqual(FIXED_NOW.getTime());
+      expect(option.label).toMatch(/^\d+(\.\d+)?(m|h|d|mo|y)$/);
+    }
+    // Easy never schedules sooner than Again.
+    expect(options[3].due.getTime()).toBeGreaterThanOrEqual(
+      options[0].due.getTime(),
+    );
+
+    // Preview must not mutate the card or write a review log.
+    const untouched = await getOnlyCard(ctx, note.id);
+    expect(untouched.reps).toBe(0);
+    expect(untouched.state).toBe(State.New);
+  });
+
+  it("previewCard and rateCard reject unknown cards", async () => {
+    const ctx = await makeContext("missing-card");
+    await expect(review.previewCard(ctx, "ghost")).rejects.toThrow(/not found/);
+    await expect(review.rateCard(ctx, "ghost", Rating.Good)).rejects.toThrow(
+      /not found/,
+    );
+  });
+
+  it("scopes the daily new-card count per deck for deck queues", async () => {
+    const ctx = await makeContext("per-deck-cap");
+    await settings.updateSettings(ctx, { newCardsPerDay: 1 });
+
+    const deckA = await decks.createDeck(ctx, { name: "A" });
+    const deckB = await decks.createDeck(ctx, { name: "B" });
+    const noteA = await basic(ctx, deckA.id, "A1", "A");
+    await basic(ctx, deckB.id, "B1", "B");
+
+    const cardA = await getOnlyCard(ctx, noteA.id);
+    await review.rateCard(ctx, cardA.id, Rating.Good);
+
+    expect(await review.countNewCardsIntroducedToday(ctx, deckA.id)).toBe(1);
+    expect(await review.countNewCardsIntroducedToday(ctx, deckB.id)).toBe(0);
+    expect(await review.countNewCardsIntroducedToday(ctx)).toBe(1);
+
+    // Deck B's own allowance is untouched by deck A's introduction.
+    const queueB = await review.getQueue(ctx, deckB.id);
+    expect(queueB.filter((item) => item.deckId === deckB.id)).toHaveLength(1);
+  });
+
+  it("labels global queue items with their deck name", async () => {
+    const ctx = await makeContext("global-deck-name");
+    const deck = await decks.createDeck(ctx, { name: "Named deck" });
+    await basic(ctx, deck.id, "Q", "A");
+
+    const queue = await review.getGlobalQueue(ctx);
+    expect(queue).toHaveLength(1);
+    expect(queue[0].deckName).toBe("Named deck");
+  });
+
   it("unlocks dependents through real rateCard progression", async () => {
     const ctx = await makeContext("rate-unlock");
     await settings.updateSettings(ctx, {
