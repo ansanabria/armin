@@ -12,6 +12,11 @@ import {
 } from "./card-types";
 import { newCardFields, pendingCardFields, State } from "./scheduler";
 import type { ServiceContext } from "./context";
+import {
+  getDependentIds,
+  persistLockedForNoteIds,
+  syncNoteScheduling,
+} from "./graph";
 
 const { cards, notes, noteTags, tags } = schema;
 
@@ -384,10 +389,21 @@ export async function deleteNote(
   ctx: ServiceContext,
   id: string,
 ): Promise<void> {
+  // Collect dependents before the delete cascades the prereq edges away.
+  const dependentIds = await getDependentIds(ctx, id);
+
   // cards.note_id has no DB-level FK on migrated databases, so remove the
   // generated review items explicitly (review_logs cascade off cards).
   await ctx.db.transaction(async (tx) => {
     await tx.delete(cards).where(eq(cards.noteId, id)).run();
     await tx.delete(notes).where(eq(notes.id, id)).run();
   });
+
+  // The deleted note may have been the lock holding dependents back.
+  if (dependentIds.length > 0) {
+    await persistLockedForNoteIds(ctx, dependentIds);
+    for (const dependentId of dependentIds) {
+      await syncNoteScheduling(ctx, dependentId);
+    }
+  }
 }

@@ -1,0 +1,183 @@
+import { eq } from "drizzle-orm";
+import { describe, expect, it } from "vitest";
+import { schema } from "../db";
+import { getOnlyCard, makeContext, securePrereq, useTestDb } from "../test/db";
+import * as decks from "./decks";
+import * as graph from "./graph";
+import * as notes from "./notes";
+import { isPendingSchedule } from "./scheduler";
+
+useTestDb();
+
+function basic(
+  ctx: Awaited<ReturnType<typeof makeContext>>,
+  deckId: string,
+  front: string,
+  back: string,
+) {
+  return notes.createNote({
+    ctx,
+    deckId,
+    type: "basic",
+    content: { front, back },
+  });
+}
+
+describe("prerequisite edges", () => {
+  it("rejects edges when either note does not exist", async () => {
+    const ctx = await makeContext("edge-missing");
+    const deck = await decks.createDeck(ctx, { name: "Missing" });
+    const note = await basic(ctx, deck.id, "A", "A");
+
+    await expect(graph.addPrereq(ctx, note.id, "ghost-id")).rejects.toThrow(
+      /must exist/,
+    );
+    await expect(graph.addPrereq(ctx, "ghost-id", note.id)).rejects.toThrow(
+      /must exist/,
+    );
+  });
+
+  it("rejects edges across decks", async () => {
+    const ctx = await makeContext("edge-cross-deck");
+    const deckA = await decks.createDeck(ctx, { name: "A" });
+    const deckB = await decks.createDeck(ctx, { name: "B" });
+    const a = await basic(ctx, deckA.id, "A", "A");
+    const b = await basic(ctx, deckB.id, "B", "B");
+
+    await expect(graph.addPrereq(ctx, a.id, b.id)).rejects.toThrow(
+      /one deck/,
+    );
+  });
+
+  it("removePrereq unlocks the dependent and restores scheduling", async () => {
+    const ctx = await makeContext("edge-remove");
+    const deck = await decks.createDeck(ctx, { name: "Remove" });
+    const prereq = await basic(ctx, deck.id, "P", "P");
+    const dependent = await basic(ctx, deck.id, "D", "D");
+
+    await graph.addPrereq(ctx, prereq.id, dependent.id);
+    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(true);
+    expect(isPendingSchedule(await getOnlyCard(ctx, dependent.id))).toBe(true);
+
+    await graph.removePrereq(ctx, prereq.id, dependent.id);
+
+    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(false);
+    const card = await getOnlyCard(ctx, dependent.id);
+    expect(isPendingSchedule(card)).toBe(false);
+    expect(card.locked).toBe(false);
+  });
+
+  it("locks transitively: each level unlocks only when its prereq is secured", async () => {
+    const ctx = await makeContext("edge-chain");
+    const deck = await decks.createDeck(ctx, { name: "Chain" });
+    const a = await basic(ctx, deck.id, "A", "A");
+    const b = await basic(ctx, deck.id, "B", "B");
+    const c = await basic(ctx, deck.id, "C", "C");
+    await graph.addPrereq(ctx, a.id, b.id);
+    await graph.addPrereq(ctx, b.id, c.id);
+
+    expect(await graph.isUnlocked(ctx, b.id)).toBe(false);
+    expect(await graph.isUnlocked(ctx, c.id)).toBe(false);
+
+    await securePrereq(ctx, a.id);
+    await graph.refreshLockedAfterPrereqSecured(ctx, a.id);
+
+    expect(await graph.isUnlocked(ctx, b.id)).toBe(true);
+    // C still waits on B, which is unlocked but not secured.
+    expect(await graph.isUnlocked(ctx, c.id)).toBe(false);
+
+    await securePrereq(ctx, b.id);
+    await graph.refreshLockedAfterPrereqSecured(ctx, b.id);
+
+    expect(await graph.isUnlocked(ctx, c.id)).toBe(true);
+  });
+
+  it("a dependent with multiple prereqs needs all of them secured", async () => {
+    const ctx = await makeContext("edge-multi");
+    const deck = await decks.createDeck(ctx, { name: "Multi" });
+    const a = await basic(ctx, deck.id, "A", "A");
+    const b = await basic(ctx, deck.id, "B", "B");
+    const dependent = await basic(ctx, deck.id, "D", "D");
+    await graph.addPrereq(ctx, a.id, dependent.id);
+    await graph.addPrereq(ctx, b.id, dependent.id);
+
+    await securePrereq(ctx, a.id);
+    await graph.refreshLockedAfterPrereqSecured(ctx, a.id);
+    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
+
+    await securePrereq(ctx, b.id);
+    await graph.refreshLockedAfterPrereqSecured(ctx, b.id);
+    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+  });
+
+  it("refreshAllLockedStates clears stale lock flags", async () => {
+    const ctx = await makeContext("refresh-all");
+    const deck = await decks.createDeck(ctx, { name: "Stale" });
+    const note = await basic(ctx, deck.id, "A", "A");
+
+    // Simulate a stale denormalized flag with no backing edge.
+    await ctx.db
+      .update(schema.notes)
+      .set({ locked: true })
+      .where(eq(schema.notes.id, note.id))
+      .run();
+    await ctx.db
+      .update(schema.cards)
+      .set({ locked: true })
+      .where(eq(schema.cards.noteId, note.id))
+      .run();
+
+    await graph.refreshAllLockedStates(ctx);
+
+    expect((await notes.getNote(ctx, note.id))?.locked).toBe(false);
+    expect((await getOnlyCard(ctx, note.id)).locked).toBe(false);
+  });
+});
+
+describe("canvas layout", () => {
+  it("saveLayout persists positions and ignores notes outside the deck", async () => {
+    const ctx = await makeContext("layout");
+    const deck = await decks.createDeck(ctx, { name: "Canvas" });
+    const other = await decks.createDeck(ctx, { name: "Other" });
+    const inside = await basic(ctx, deck.id, "In", "In");
+    const outside = await basic(ctx, other.id, "Out", "Out");
+
+    await graph.saveLayout(ctx, deck.id, [
+      { noteId: inside.id, x: 10, y: 20 },
+      { noteId: outside.id, x: 99, y: 99 },
+    ]);
+
+    const insideNote = await notes.getNote(ctx, inside.id);
+    expect(insideNote?.posX).toBe(10);
+    expect(insideNote?.posY).toBe(20);
+
+    const outsideNote = await notes.getNote(ctx, outside.id);
+    expect(outsideNote?.posX).toBeNull();
+    expect(outsideNote?.posY).toBeNull();
+  });
+
+  it("getDeckGraph exposes positions, lock state, and display text", async () => {
+    const ctx = await makeContext("deck-graph");
+    const deck = await decks.createDeck(ctx, { name: "Graph" });
+    const prereq = await basic(ctx, deck.id, "Front P", "Back P");
+    const dependent = await basic(ctx, deck.id, "Front D", "Back D");
+    await graph.addPrereq(ctx, prereq.id, dependent.id);
+    await graph.saveLayout(ctx, deck.id, [{ noteId: prereq.id, x: 1, y: 2 }]);
+
+    const result = await graph.getDeckGraph(ctx, deck.id);
+    expect(result.edges).toEqual([
+      { prereqId: prereq.id, dependentId: dependent.id },
+    ]);
+
+    const prereqNode = result.nodes.find((node) => node.id === prereq.id);
+    expect(prereqNode).toMatchObject({
+      front: "Front P",
+      back: "Back P",
+      locked: false,
+      x: 1,
+      y: 2,
+    });
+    const dependentNode = result.nodes.find((node) => node.id === dependent.id);
+    expect(dependentNode?.locked).toBe(true);
+  });
+});

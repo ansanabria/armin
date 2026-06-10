@@ -33,7 +33,9 @@ export async function launchArmin(
   }
 
   const app = await electron.launch({
-    executablePath: electronPath,
+    // The electron package's default export is the binary path at runtime,
+    // even though its types describe the Electron API namespace.
+    executablePath: electronPath as unknown as string,
     args: [
       MAIN_ENTRY,
       `--user-data-dir=${dataDir}`,
