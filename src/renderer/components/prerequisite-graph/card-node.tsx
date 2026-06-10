@@ -9,11 +9,14 @@ import {
 } from "@xyflow/react";
 import { StateBadge, type CardState } from "@/components/ui/badge";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { CardTypeBadge } from "@/components/card-type-badge";
+import type { CardType } from "../../../main/services/card-types";
 import { cn } from "@/lib/utils";
 
 export type CardNodeData = {
   front: string;
   back: string;
+  type: CardType;
   state: CardState;
   locked: boolean;
   isIsolated: boolean;
@@ -65,6 +68,7 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
 
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <StateBadge state={data.state} locked={data.locked} />
+        <CardTypeBadge type={data.type} />
         {data.isIsolated && (
           <span className="text-[0.625rem] font-medium uppercase tracking-wide text-muted">
             Isolated

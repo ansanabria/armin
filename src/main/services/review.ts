@@ -1,11 +1,14 @@
-import { and, asc, eq, gte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray } from "drizzle-orm";
 import { Rating, type Grade } from "ts-fsrs";
 import { schema } from "../db";
 import type { Card } from "../db/schema";
-import type { CardWithMeta, BrowseCard } from "./cards";
-import { withCardMeta } from "./cards";
+import {
+  parseStoredContent,
+  type CardContent,
+  type CardType,
+} from "./card-types";
 import type { ServiceContext } from "./context";
-import { activateUnlockedDependents, getLockedByCardIds } from "./graph";
+import { activateUnlockedDependents } from "./graph";
 import {
   buildScheduler,
   fromFsrsCard,
@@ -16,9 +19,26 @@ import {
 import { getSettings } from "./settings";
 import { shuffle } from "./shuffle";
 
-const { cards, decks, reviewLogs } = schema;
+const { cards, decks, notes, reviewLogs } = schema;
 
 const GRADES: Grade[] = [Rating.Again, Rating.Hard, Rating.Good, Rating.Easy];
+
+/**
+ * A queued review item. It carries the FSRS-scheduled `cardId` plus the owning
+ * note's type and content, so the renderer can branch its presentation while
+ * `previewCard`/`rateCard` keep operating on the card.
+ */
+export type ReviewQueueItem = {
+  cardId: string;
+  noteId: string;
+  deckId: string;
+  deckName?: string;
+  type: CardType;
+  subKey: string;
+  content: CardContent;
+  front: string;
+  back: string;
+};
 
 function formatInterval(from: Date, to: Date): string {
   const ms = Math.max(0, to.getTime() - from.getTime());
@@ -68,7 +88,8 @@ export async function countNewCardsIntroducedToday(
 
 /**
  * Build a session queue: due reviews first (shuffled), then frontier new cards
- * (shuffled, capped by the daily new-card limit).
+ * (shuffled, capped by the daily new-card limit). Operates on review items
+ * (`cards` rows); locked items are filtered via the denormalized `locked` flag.
  */
 export async function buildSessionQueue(
   ctx: ServiceContext,
@@ -77,13 +98,7 @@ export async function buildSessionQueue(
 ): Promise<Card[]> {
   const now = new Date();
   const { newCardsPerDay } = await getSettings(ctx);
-  const lockedById = await getLockedByCardIds(
-    ctx,
-    deckCards.map((card) => card.id),
-  );
-  const unlocked = deckCards.filter(
-    (card) => !(lockedById.get(card.id) ?? false),
-  );
+  const unlocked = deckCards.filter((card) => !card.locked);
 
   const reviews = unlocked.filter(
     (card) =>
@@ -105,28 +120,64 @@ export async function buildSessionQueue(
   return [...shuffle([...reviews]), ...cappedFrontier];
 }
 
-/** Due, unlocked cards for a deck in session order. */
+/** Attach the owning note's type/content to a set of card rows. */
+async function toReviewItems(
+  ctx: ServiceContext,
+  cardRows: Card[],
+  deckNameByCardId?: Map<string, string>,
+): Promise<ReviewQueueItem[]> {
+  if (cardRows.length === 0) return [];
+  const noteIds = [...new Set(cardRows.map((card) => card.noteId))];
+  const noteRows = await ctx.db
+    .select({ id: notes.id, type: notes.type, content: notes.content })
+    .from(notes)
+    .where(inArray(notes.id, noteIds))
+    .all();
+  const noteById = new Map(
+    noteRows.map((note) => [
+      note.id,
+      parseStoredContent(note.type, note.content),
+    ]),
+  );
+
+  return cardRows.map((card) => {
+    const parsed = noteById.get(card.noteId);
+    if (!parsed) {
+      throw new Error(`Note ${card.noteId} not found for card ${card.id}`);
+    }
+    return {
+      cardId: card.id,
+      noteId: card.noteId,
+      deckId: card.deckId,
+      deckName: deckNameByCardId?.get(card.id),
+      type: parsed.type,
+      subKey: card.subKey,
+      content: parsed.content,
+      front: card.front,
+      back: card.back,
+    };
+  });
+}
+
+/** Due, unlocked review items for a deck in session order. */
 export async function getQueue(
   ctx: ServiceContext,
   deckId: string,
-): Promise<CardWithMeta[]> {
+): Promise<ReviewQueueItem[]> {
   const deckCards = await ctx.db
     .select()
     .from(cards)
     .where(eq(cards.deckId, deckId))
     .all();
   const ordered = await buildSessionQueue(ctx, deckCards, deckId);
-  return Promise.all(ordered.map((card) => withCardMeta(ctx, card)));
+  return toReviewItems(ctx, ordered);
 }
 
 export async function getGlobalQueue(
   ctx: ServiceContext,
-): Promise<BrowseCard[]> {
+): Promise<ReviewQueueItem[]> {
   const rows = await ctx.db
-    .select({
-      card: cards,
-      deckName: decks.name,
-    })
+    .select({ card: cards, deckName: decks.name })
     .from(cards)
     .innerJoin(decks, eq(cards.deckId, decks.id))
     .orderBy(asc(cards.due))
@@ -136,14 +187,11 @@ export async function getGlobalQueue(
     ctx,
     rows.map(({ card }) => card),
   );
-  const byId = new Map(rows.map(({ card, deckName }) => [card.id, deckName]));
-
-  return Promise.all(
-    ordered.map(async (card) => ({
-      ...(await withCardMeta(ctx, card)),
-      deckName: byId.get(card.id) ?? "",
-    })),
+  const deckNameByCardId = new Map(
+    rows.map(({ card, deckName }) => [card.id, deckName]),
   );
+
+  return toReviewItems(ctx, ordered, deckNameByCardId);
 }
 
 export type PreviewOption = { rating: Grade; due: Date; label: string };
@@ -173,7 +221,7 @@ export async function rateCard(
   ctx: ServiceContext,
   cardId: string,
   rating: Grade,
-): Promise<CardWithMeta> {
+): Promise<ReviewQueueItem> {
   const now = new Date();
   const scheduler = await buildScheduler(ctx);
   const updated = await ctx.db.transaction(async (tx) => {
@@ -212,6 +260,7 @@ export async function rateCard(
     return updated!;
   });
 
-  await activateUnlockedDependents(ctx, cardId);
-  return withCardMeta(ctx, updated);
+  await activateUnlockedDependents(ctx, updated.noteId);
+  const [item] = await toReviewItems(ctx, [updated]);
+  return item;
 }

@@ -18,7 +18,7 @@ import {
   getDb,
 } from "../src/main/db/index";
 import { runMigrations } from "../src/main/db/migrate";
-import { listCards } from "../src/main/services/cards";
+import { listNotes } from "../src/main/services/notes";
 import { listBrowsePage } from "../src/main/services/browse";
 import { getDeck } from "../src/main/services/decks";
 
@@ -77,27 +77,34 @@ async function seedDeck(
     const end = Math.min(start + batchSize - 1, count);
     const statements = [];
     for (let i = start; i <= end; i++) {
+      const noteId = randomUUID();
       const cardId = randomUUID();
+      const front = `Card ${i}: benchmark front with **markdown** and \`code\``;
+      const back = `Card ${i}: benchmark back answer line two line three`;
       statements.push({
-        sql: `INSERT INTO cards (
-          id, deck_id, front, back, type,
-          due, stability, difficulty, elapsed_days, scheduled_days,
-          learning_steps, reps, lapses, state, last_review,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 'basic', ?, 0, 0, 0, 0, 0, 0, 0, 0, NULL, ?, ?)`,
+        sql: `INSERT INTO notes (
+          id, deck_id, type, content, pos_x, pos_y, locked, created_at, updated_at
+        ) VALUES (?, ?, 'basic', ?, NULL, NULL, 0, ?, ?)`,
         args: [
-          cardId,
+          noteId,
           targetDeckId,
-          `Card ${i}: benchmark front with **markdown** and \`code\``,
-          `Card ${i}: benchmark back answer line two line three`,
+          JSON.stringify({ front, back }),
           now,
-          now + i,
-          now + i,
+          now,
         ],
       });
       statements.push({
-        sql: `INSERT INTO card_tags (card_id, tag_id) VALUES (?, ?)`,
-        args: [cardId, resolvedTagId],
+        sql: `INSERT INTO cards (
+          id, note_id, deck_id, sub_key, front, back,
+          due, stability, difficulty, elapsed_days, scheduled_days,
+          learning_steps, reps, lapses, state, last_review,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, '', ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, NULL, ?, ?)`,
+        args: [cardId, noteId, targetDeckId, front, back, now + i, now, now + i],
+      });
+      statements.push({
+        sql: `INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)`,
+        args: [noteId, resolvedTagId],
       });
     }
     await client.batch(statements);
@@ -145,7 +152,7 @@ async function runServiceBenchmarks(targetDeckId: string) {
   const timings: Record<string, number> = {};
 
   let t0 = performance.now();
-  await listCards(ctx, targetDeckId);
+  await listNotes(ctx, targetDeckId);
   timings.listCardsMs = performance.now() - t0;
 
   t0 = performance.now();

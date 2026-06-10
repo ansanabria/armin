@@ -2,8 +2,8 @@ import { eq } from "drizzle-orm";
 import { Rating } from "ts-fsrs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "../db";
-import { makeContext, useTestDb } from "../test/db";
-import * as cards from "./cards";
+import { getOnlyCard, makeContext, useTestDb } from "../test/db";
+import * as notes from "./notes";
 import * as decks from "./decks";
 import * as graph from "./graph";
 import * as review from "./review";
@@ -13,6 +13,20 @@ import { isPendingSchedule, State } from "./scheduler";
 useTestDb();
 
 const FIXED_NOW = new Date("2026-06-08T12:00:00.000Z");
+
+function basic(
+  ctx: Awaited<ReturnType<typeof makeContext>>,
+  deckId: string,
+  front: string,
+  back: string,
+) {
+  return notes.createNote({
+    ctx,
+    deckId,
+    type: "basic",
+    content: { front, back },
+  });
+}
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -27,12 +41,8 @@ describe("review workflow", () => {
   it("excludes future-due review cards from the queue", async () => {
     const ctx = await makeContext("future-due");
     const deck = await decks.createDeck(ctx, { name: "Future" });
-    const card = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Later",
-      back: "Answer",
-    });
+    const note = await basic(ctx, deck.id, "Later", "Answer");
+    const card = await getOnlyCard(ctx, note.id);
 
     await review.rateCard(ctx, card.id, Rating.Good);
     await ctx.db
@@ -42,19 +52,15 @@ describe("review workflow", () => {
       .run();
 
     const queue = await review.getQueue(ctx, deck.id);
-    expect(queue.map((c) => c.id)).not.toContain(card.id);
+    expect(queue.map((item) => item.cardId)).not.toContain(card.id);
   });
 
   it("includes learning cards that are due now", async () => {
     const ctx = await makeContext("learning-due");
     await settings.updateSettings(ctx, { enableFuzz: false });
     const deck = await decks.createDeck(ctx, { name: "Learning" });
-    const card = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Learn",
-      back: "Answer",
-    });
+    const note = await basic(ctx, deck.id, "Learn", "Answer");
+    const card = await getOnlyCard(ctx, note.id);
 
     await review.rateCard(ctx, card.id, Rating.Again);
     await ctx.db
@@ -64,7 +70,7 @@ describe("review workflow", () => {
       .run();
 
     const queue = await review.getQueue(ctx, deck.id);
-    expect(queue.some((c) => c.id === card.id)).toBe(true);
+    expect(queue.some((item) => item.cardId === card.id)).toBe(true);
   });
 
   it("shares the daily new-card cap across decks in the global queue", async () => {
@@ -74,22 +80,11 @@ describe("review workflow", () => {
     const deckA = await decks.createDeck(ctx, { name: "A" });
     const deckB = await decks.createDeck(ctx, { name: "B" });
 
-    await cards.createCard({
-      ctx,
-      deckId: deckA.id,
-      front: "A1",
-      back: "A",
-    });
-    await cards.createCard({
-      ctx,
-      deckId: deckB.id,
-      front: "B1",
-      back: "B",
-    });
+    await basic(ctx, deckA.id, "A1", "A");
+    await basic(ctx, deckB.id, "B1", "B");
 
     const queue = await review.getGlobalQueue(ctx);
     expect(queue).toHaveLength(1);
-    expect(queue[0].state).toBe(State.New);
   });
 
   it("unlocks dependents through real rateCard progression", async () => {
@@ -102,38 +97,31 @@ describe("review workflow", () => {
     });
 
     const deck = await decks.createDeck(ctx, { name: "Unlock" });
-    const prereq = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Foundation",
-      back: "Base",
-    });
-    const dependent = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Advanced",
-      back: "Top",
-    });
+    const prereq = await basic(ctx, deck.id, "Foundation", "Base");
+    const dependent = await basic(ctx, deck.id, "Advanced", "Top");
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
-    expect((await cards.getCard(ctx, dependent.id))?.locked).toBe(true);
+    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(true);
 
-    let rated = await review.rateCard(ctx, prereq.id, Rating.Good);
-    while (rated.state !== State.Review || rated.stability < 0.5) {
+    const prereqCard = await getOnlyCard(ctx, prereq.id);
+    await review.rateCard(ctx, prereqCard.id, Rating.Good);
+    let prereqState = await getOnlyCard(ctx, prereq.id);
+    while (prereqState.state !== State.Review || prereqState.stability < 0.5) {
       vi.advanceTimersByTime(24 * 60 * 60 * 1000);
       await ctx.db
         .update(schema.cards)
         .set({ due: new Date() })
-        .where(eq(schema.cards.id, prereq.id))
+        .where(eq(schema.cards.id, prereqCard.id))
         .run();
-      rated = await review.rateCard(ctx, prereq.id, Rating.Good);
+      await review.rateCard(ctx, prereqCard.id, Rating.Good);
+      prereqState = await getOnlyCard(ctx, prereq.id);
     }
 
-    const dependentCard = await cards.getCard(ctx, dependent.id);
-    expect(dependentCard?.locked).toBe(false);
-    expect(isPendingSchedule(dependentCard!)).toBe(false);
+    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(false);
+    const dependentCard = await getOnlyCard(ctx, dependent.id);
+    expect(isPendingSchedule(dependentCard)).toBe(false);
 
     const queue = await review.getQueue(ctx, deck.id);
-    expect(queue.map((c) => c.id)).toContain(dependent.id);
+    expect(queue.map((item) => item.noteId)).toContain(dependent.id);
   });
 });

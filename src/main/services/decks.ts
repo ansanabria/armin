@@ -1,12 +1,12 @@
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { schema } from "../db";
 import type { Deck } from "../db/schema";
 import type { ServiceContext } from "./context";
-import { createCard } from "./cards";
+import { createNote } from "./notes";
 import { buildSessionQueue } from "./review";
 import { State } from "./scheduler";
 
-const { decks, cards } = schema;
+const { decks, cards, notes } = schema;
 
 export type DeckWithStats = Deck & {
   total: number;
@@ -20,11 +20,14 @@ async function withStats(
   ctx: ServiceContext,
   deck: Deck,
 ): Promise<DeckWithStats> {
-  const deckCards = await ctx.db
-    .select()
-    .from(cards)
-    .where(eq(cards.deckId, deck.id))
-    .all();
+  const [noteCountRow, deckCards] = await Promise.all([
+    ctx.db
+      .select({ value: count() })
+      .from(notes)
+      .where(eq(notes.deckId, deck.id))
+      .get(),
+    ctx.db.select().from(cards).where(eq(cards.deckId, deck.id)).all(),
+  ]);
   const due = (await buildSessionQueue(ctx, deckCards, deck.id)).length;
   const learning = deckCards.filter(
     (card) => card.state === State.Learning || card.state === State.Relearning,
@@ -35,7 +38,8 @@ async function withStats(
 
   return {
     ...deck,
-    total: deckCards.length,
+    // A "card" to the user is a note; review-item counts (cards) drive the rest.
+    total: noteCountRow?.value ?? 0,
     due,
     newCount: deckCards.filter((card) => card.state === State.New).length,
     learning,
@@ -112,11 +116,11 @@ export async function createDeckWithCards(
   });
 
   for (const card of input.cards) {
-    await createCard({
+    await createNote({
       ctx,
       deckId: deck.id,
-      front: card.front,
-      back: card.back,
+      type: "basic",
+      content: { front: card.front, back: card.back },
       tags: card.tags,
     });
   }

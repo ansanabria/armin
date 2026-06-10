@@ -1,6 +1,13 @@
 import { eq } from "drizzle-orm";
-import type { Card, Deck } from "../main/db/schema";
+import type { Deck, Note } from "../main/db/schema";
 import { schema } from "../main/db";
+import {
+  generateReviewItems,
+  isCardType,
+  serializeContent,
+  validateContent,
+  type CardType,
+} from "../main/services/card-types";
 import { getDeck } from "../main/services/decks";
 import { getDeckGraph, refreshLockedForDeck } from "../main/services/graph";
 import type { ServiceContext } from "../main/services/context";
@@ -8,9 +15,12 @@ import { newCardFields } from "../main/services/scheduler";
 
 export type HierarchyCardInput = {
   clientId: string;
-  front: string;
-  back: string;
+  /** Shorthand for basic cards; ignored when `content` is provided. */
+  front?: string;
+  back?: string;
   type?: string;
+  /** Type-specific content. Defaults to `{ front, back }` for basic. */
+  content?: unknown;
   prerequisites?: string[];
 };
 
@@ -23,7 +33,7 @@ export type ImportHierarchyInput = {
 
 export type ImportedHierarchy = {
   deck: Deck;
-  cards: Array<Card & { clientId: string }>;
+  cards: Array<Note & { clientId: string }>;
   edges: { prereqClientId: string; dependentClientId: string }[];
 };
 
@@ -82,6 +92,18 @@ function assertAcyclicHierarchy(cards: HierarchyCardInput[]) {
   }
 }
 
+function resolveTypedContent(card: HierarchyCardInput) {
+  const rawType = card.type ?? "basic";
+  if (!isCardType(rawType)) {
+    throw new Error(`Card "${card.clientId}" has unknown type "${rawType}".`);
+  }
+  const type: CardType = rawType;
+  const raw =
+    card.content ?? ({ front: card.front, back: card.back } as unknown);
+  const content = validateContent(type, raw);
+  return { type, content };
+}
+
 export async function importCardHierarchy(
   ctx: ServiceContext,
   input: ImportHierarchyInput,
@@ -93,6 +115,12 @@ export async function importCardHierarchy(
   if (!input.deckId && !input.deckName?.trim()) {
     throw new Error("Either deckId or deckName is required.");
   }
+
+  // Validate every card up front so a bad payload fails before any writes.
+  const resolved = input.cards.map((card) => ({
+    card,
+    ...resolveTypedContent(card),
+  }));
 
   return ctx.db
     .transaction(async (tx) => {
@@ -117,32 +145,46 @@ export async function importCardHierarchy(
           .get();
       }
 
-      const cardsByClientId = new Map<string, Card>();
-      const createdCards: Array<Card & { clientId: string }> = [];
+      const notesByClientId = new Map<string, Note>();
+      const createdNotes: Array<Note & { clientId: string }> = [];
 
-      for (const card of input.cards) {
-        const created = await tx
-          .insert(schema.cards)
+      for (const { card, type, content } of resolved) {
+        const note = await tx
+          .insert(schema.notes)
           .values({
             deckId: deck.id,
-            front: card.front,
-            back: card.back,
-            type: card.type ?? "basic",
-            ...newCardFields(),
+            type,
+            content: serializeContent(content),
+            locked: false,
           })
           .returning()
           .get();
-        cardsByClientId.set(card.clientId, created);
-        createdCards.push({ ...created, clientId: card.clientId });
+
+        for (const item of generateReviewItems(type, content)) {
+          await tx
+            .insert(schema.cards)
+            .values({
+              noteId: note!.id,
+              deckId: deck.id,
+              subKey: item.subKey,
+              front: item.front,
+              back: item.back,
+              ...newCardFields(),
+            })
+            .run();
+        }
+
+        notesByClientId.set(card.clientId, note!);
+        createdNotes.push({ ...note!, clientId: card.clientId });
       }
 
       const edges: ImportedHierarchy["edges"] = [];
       for (const card of input.cards) {
-        const dependent = cardsByClientId.get(card.clientId)!;
+        const dependent = notesByClientId.get(card.clientId)!;
         for (const prereqClientId of card.prerequisites ?? []) {
-          const prereq = cardsByClientId.get(prereqClientId)!;
+          const prereq = notesByClientId.get(prereqClientId)!;
           await tx
-            .insert(schema.cardPrereqs)
+            .insert(schema.notePrereqs)
             .values({ prereqId: prereq.id, dependentId: dependent.id })
             .onConflictDoNothing()
             .run();
@@ -153,7 +195,7 @@ export async function importCardHierarchy(
         }
       }
 
-      return { deck, cards: createdCards, edges };
+      return { deck, cards: createdNotes, edges };
     })
     .then(async (result) => {
       await refreshLockedForDeck(ctx, result.deck.id);

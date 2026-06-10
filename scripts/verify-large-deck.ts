@@ -55,19 +55,28 @@ async function main() {
     const end = Math.min(start + 99, count);
     const stmts = [];
     for (let i = start; i <= end; i++) {
+      const noteId = randomUUID();
       const id = randomUUID();
+      const front = `Front ${i}`;
+      const back = `Back ${i}`;
+      stmts.push({
+        sql: `INSERT INTO notes (
+          id, deck_id, type, content, pos_x, pos_y, locked, created_at, updated_at
+        ) VALUES (?, ?, 'basic', ?, NULL, NULL, 0, ?, ?)`,
+        args: [noteId, deckId, JSON.stringify({ front, back }), now, now + i],
+      });
       stmts.push({
         sql: `INSERT INTO cards (
-          id, deck_id, front, back, type, due, stability, difficulty,
+          id, note_id, deck_id, sub_key, front, back, due, stability, difficulty,
           elapsed_days, scheduled_days, learning_steps, reps, lapses, state,
           created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 'basic', ?, 0, 0, 0, 0, 0, 0, 0, 0, ?, ?)`,
-        args: [id, deckId, `Front ${i}`, `Back ${i}`, now, now + i, now + i],
+        ) VALUES (?, ?, ?, '', ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?, ?)`,
+        args: [id, noteId, deckId, front, back, now + i, now, now + i],
       });
       if (i % 10 === 0) {
         stmts.push({
-          sql: `INSERT INTO card_tags (card_id, tag_id) VALUES (?, ?)`,
-          args: [id, tagId],
+          sql: `INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)`,
+          args: [noteId, tagId],
         });
       }
     }
@@ -109,7 +118,7 @@ async function main() {
     limit: BROWSE_PAGE_SIZE,
     sort: "front-asc",
     deckId,
-    tag: "large",
+    tags: ["large"],
   });
   const tags = await listDeckTagNames(ctx, deckId);
 

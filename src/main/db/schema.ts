@@ -31,19 +31,57 @@ export const decks = sqliteTable("decks", {
 });
 
 /**
- * A card holds its content plus the FSRS scheduling state inline, mirroring the
- * `Card` shape from `ts-fsrs` so the scheduler can read/write it directly.
+ * A note is the authored unit the user creates and edits. It owns the content
+ * (a type-specific JSON blob), tags, prerequisite edges, the graph position and
+ * the lock state. A note generates one or more {@link cards} review items.
  */
-export const cards = sqliteTable(
-  "cards",
+export const notes = sqliteTable(
+  "notes",
   {
     id: uuid(),
     deckId: text("deck_id")
       .notNull()
       .references(() => decks.id, { onDelete: "cascade" }),
+    /** One of CardType: basic | basic_reversed | cloze | type_answer | diagram. */
+    type: text("type").notNull().default("basic"),
+    /** Type-specific content, serialized as JSON. */
+    content: text("content").notNull(),
+
+    /** Persisted prerequisite-graph canvas position; null until placed. */
+    posX: real("pos_x"),
+    posY: real("pos_y"),
+    /** Denormalized prerequisite lock; synced when graph or prereq FSRS changes. */
+    locked: integer("locked", { mode: "boolean" }).notNull().default(false),
+
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("notes_deck_id_idx").on(t.deckId),
+    index("notes_deck_created_idx").on(t.deckId, t.createdAt),
+    index("notes_deck_locked_idx").on(t.deckId, t.locked),
+  ],
+);
+
+/**
+ * A card is a generated review item belonging to a {@link notes} row. It holds
+ * the FSRS scheduling state inline, mirroring the `Card` shape from `ts-fsrs`,
+ * plus the cached rendered display strings for this review item.
+ */
+export const cards = sqliteTable(
+  "cards",
+  {
+    id: uuid(),
+    noteId: text("note_id")
+      .notNull()
+      .references(() => notes.id, { onDelete: "cascade" }),
+    deckId: text("deck_id")
+      .notNull()
+      .references(() => decks.id, { onDelete: "cascade" }),
+    /** Stable per-note key identifying which review item this is (e.g. "", "fwd", "c1"). */
+    subKey: text("sub_key").notNull().default(""),
     front: text("front").notNull(),
     back: text("back").notNull(),
-    type: text("type").notNull().default("basic"),
 
     // --- FSRS state (see ts-fsrs `Card`) ---
     due: integer("due", { mode: "timestamp_ms" }).notNull(),
@@ -57,18 +95,15 @@ export const cards = sqliteTable(
     // State enum: 0=New, 1=Learning, 2=Review, 3=Relearning
     state: integer("state").notNull().default(0),
     lastReview: integer("last_review", { mode: "timestamp_ms" }),
-    /** Denormalized prerequisite lock; synced when graph or prereq FSRS changes. */
+    /** Mirror of the owning note's lock; queue filters on this. */
     locked: integer("locked", { mode: "boolean" }).notNull().default(false),
-
-    /** Persisted prerequisite-graph canvas position; null until the card is placed. */
-    posX: real("pos_x"),
-    posY: real("pos_y"),
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     index("cards_deck_id_idx").on(t.deckId),
+    index("cards_note_id_idx").on(t.noteId),
     index("cards_deck_created_idx").on(t.deckId, t.createdAt),
     index("cards_deck_due_idx").on(t.deckId, t.due),
     index("cards_deck_state_idx").on(t.deckId, t.state),
@@ -77,23 +112,23 @@ export const cards = sqliteTable(
 );
 
 /**
- * Prerequisite edges forming the knowledge DAG: `prereqId` must be learned
- * before `dependentId` becomes reviewable.
+ * Prerequisite edges forming the knowledge DAG between notes: `prereqId` must be
+ * learned before `dependentId` becomes reviewable.
  */
-export const cardPrereqs = sqliteTable(
-  "card_prereqs",
+export const notePrereqs = sqliteTable(
+  "note_prereqs",
   {
     prereqId: text("prereq_id")
       .notNull()
-      .references(() => cards.id, { onDelete: "cascade" }),
+      .references(() => notes.id, { onDelete: "cascade" }),
     dependentId: text("dependent_id")
       .notNull()
-      .references(() => cards.id, { onDelete: "cascade" }),
+      .references(() => notes.id, { onDelete: "cascade" }),
   },
   (t) => [
     primaryKey({ columns: [t.prereqId, t.dependentId] }),
-    index("card_prereqs_dependent_idx").on(t.dependentId),
-    index("card_prereqs_prereq_idx").on(t.prereqId),
+    index("note_prereqs_dependent_idx").on(t.dependentId),
+    index("note_prereqs_prereq_idx").on(t.prereqId),
   ],
 );
 
@@ -121,19 +156,19 @@ export const tags = sqliteTable("tags", {
   createdAt: createdAt(),
 });
 
-export const cardTags = sqliteTable(
-  "card_tags",
+export const noteTags = sqliteTable(
+  "note_tags",
   {
-    cardId: text("card_id")
+    noteId: text("note_id")
       .notNull()
-      .references(() => cards.id, { onDelete: "cascade" }),
+      .references(() => notes.id, { onDelete: "cascade" }),
     tagId: text("tag_id")
       .notNull()
       .references(() => tags.id, { onDelete: "cascade" }),
   },
   (t) => [
-    primaryKey({ columns: [t.cardId, t.tagId] }),
-    index("card_tags_tag_id_idx").on(t.tagId),
+    primaryKey({ columns: [t.noteId, t.tagId] }),
+    index("note_tags_tag_id_idx").on(t.tagId),
   ],
 );
 
@@ -164,6 +199,8 @@ export const settings = sqliteTable("settings", {
 
 export type Deck = typeof decks.$inferSelect;
 export type NewDeck = typeof decks.$inferInsert;
+export type Note = typeof notes.$inferSelect;
+export type NewNote = typeof notes.$inferInsert;
 export type Card = typeof cards.$inferSelect;
 export type NewCard = typeof cards.$inferInsert;
 export type ReviewLog = typeof reviewLogs.$inferSelect;

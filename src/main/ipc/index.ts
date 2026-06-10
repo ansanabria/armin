@@ -5,8 +5,9 @@ import { runMigrations } from "../db/migrate";
 import { setActiveProfileId } from "../profiles/active";
 import type { ServiceContext } from "../services/context";
 import * as decks from "../services/decks";
-import * as cards from "../services/cards";
+import * as notes from "../services/notes";
 import * as browse from "../services/browse";
+import { CARD_TYPES } from "../services/card-types";
 import { BROWSE_SORT_KEYS } from "../../shared/browse";
 import * as review from "../services/review";
 import * as graph from "../services/graph";
@@ -119,14 +120,14 @@ export function registerIpc() {
     return { ok: true };
   });
 
-  // --- cards ---
+  // --- cards (a user "card" is a note; channels kept for renderer stability) ---
   registerForProfile(
     "cards:list",
     z.object({ deckId: z.string() }),
-    (ctx, { deckId }) => cards.listCards(ctx, deckId),
+    (ctx, { deckId }) => notes.listNotes(ctx, deckId),
   );
   registerForProfile("cards:listAll", z.void().optional(), (ctx) =>
-    cards.listAllCards(ctx),
+    notes.listAllNotes(ctx),
   );
   registerForProfile(
     "cards:browse",
@@ -148,31 +149,36 @@ export function registerIpc() {
     z.object({ deckId: z.string() }),
     (ctx, { deckId }) => browse.listDeckTagNames(ctx, deckId),
   );
-  registerForProfile("cards:get", id, (ctx, { id }) => cards.getCard(ctx, id));
+  registerForProfile("cards:get", id, (ctx, { id }) => notes.getNote(ctx, id));
   registerForProfile(
     "cards:create",
     z.object({
       deckId: z.string(),
-      front: z.string().min(1),
-      back: z.string().min(1),
-      type: z.string().optional(),
+      type: z.enum(CARD_TYPES),
+      content: z.unknown(),
       tags: z.array(z.string()).optional(),
     }),
-    (ctx, input) => cards.createCard({ ctx, ...input }),
+    (ctx, input) =>
+      notes.createNote({
+        ctx,
+        deckId: input.deckId,
+        type: input.type,
+        content: input.content,
+        tags: input.tags,
+      }),
   );
   registerForProfile(
     "cards:update",
     z.object({
       id: z.string(),
-      front: z.string().min(1).optional(),
-      back: z.string().min(1).optional(),
-      type: z.string().optional(),
+      type: z.enum(CARD_TYPES).optional(),
+      content: z.unknown().optional(),
       tags: z.array(z.string()).optional(),
     }),
-    (ctx, { id, ...patch }) => cards.updateCard(ctx, id, patch),
+    (ctx, { id, ...patch }) => notes.updateNote(ctx, id, patch),
   );
   registerForProfile("cards:delete", id, async (ctx, { id }) => {
-    await cards.deleteCard(ctx, id);
+    await notes.deleteNote(ctx, id);
     return { ok: true };
   });
 
@@ -262,7 +268,7 @@ export function registerIpc() {
       deckId: z.string(),
       placements: z.array(
         z.object({
-          cardId: z.string(),
+          noteId: z.string(),
           x: z.number(),
           y: z.number(),
         }),
