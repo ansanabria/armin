@@ -45,7 +45,7 @@ npm run test:e2e
 
 ```bash
 git tag v0.1.0-alpha.1
-git push origin main --tags
+git push origin master --tags
 ```
 
 The `Release` GitHub Actions workflow builds each platform on its native runner
