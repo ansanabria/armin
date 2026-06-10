@@ -1,7 +1,7 @@
 import { count } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { schema } from "../main/db";
-import * as cards from "../main/services/cards";
+import * as notes from "../main/services/notes";
 import * as decks from "../main/services/decks";
 import { makeContext, useTestDb } from "../main/test/db";
 import { importCardHierarchy, readDeckGraph } from "./import-hierarchy";
@@ -32,7 +32,7 @@ describe("importCardHierarchy", () => {
     ]);
 
     const dependent = result.cards.find((c) => c.clientId === "ts")!;
-    const persistedDependent = await cards.getCard(ctx, dependent.id);
+    const persistedDependent = await notes.getNote(ctx, dependent.id);
     expect(persistedDependent?.locked).toBe(true);
 
     const graph = await readDeckGraph(ctx, result.deck.id);

@@ -51,7 +51,7 @@ const edgeTypes = { floating: FloatingEdge };
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
 
-type NodePlacement = { cardId: string; x: number; y: number };
+type NodePlacement = { noteId: string; x: number; y: number };
 
 type MenuState = { kind: "node"; x: number; y: number; nodeId: string } | null;
 type ConnectMenuState = {
@@ -330,6 +330,7 @@ function PrerequisiteGraphCanvas({
             data: {
               front: source.front,
               back: source.back,
+              type: source.type,
               state: source.state,
               locked: source.locked,
               isIsolated: node.data.isIsolated,
@@ -345,7 +346,7 @@ function PrerequisiteGraphCanvas({
     (flowNodes: CardFlowNode[]) => {
       onPersistLayout?.(
         flowNodes.map((node) => ({
-          cardId: node.id,
+          noteId: node.id,
           x: node.position.x,
           y: node.position.y,
         })),

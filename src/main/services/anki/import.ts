@@ -731,7 +731,7 @@ async function writeDeck(
   parsedCards: ParsedCard[],
   keepScheduling: boolean,
 ): Promise<string> {
-  const { decks, cards, cardTags } = schema;
+  const { decks, cards, notes, noteTags } = schema;
 
   return ctx.db.transaction(async (tx) => {
     const deck = await tx.insert(decks).values({ name }).returning().get();
@@ -740,33 +740,48 @@ async function writeDeck(
     // Resolve the tag set once for the whole deck (case-insensitive, deduped).
     const tagIdByLower = await resolveTags(tx, parsedCards);
 
-    const cardTagRows: { cardId: string; tagId: string }[] = [];
+    // Each imported card is a basic note that generates one review item.
+    const noteTagRows: { noteId: string; tagId: string }[] = [];
+    const noteValues: { id: string; deckId: string; type: string; content: string }[] = [];
     const cardValues = parsedCards.map((card) => {
-      const id = randomUUID();
+      const noteId = randomUUID();
+      noteValues.push({
+        id: noteId,
+        deckId,
+        type: "basic",
+        content: JSON.stringify({ front: card.front, back: card.back }),
+      });
       for (const tag of card.tags) {
         const tagId = tagIdByLower.get(tag.toLocaleLowerCase());
-        if (tagId) cardTagRows.push({ cardId: id, tagId });
+        if (tagId) noteTagRows.push({ noteId, tagId });
       }
       return {
-        id,
+        id: randomUUID(),
+        noteId,
         deckId,
+        subKey: "",
         front: card.front,
         back: card.back,
-        type: "basic",
         ...(keepScheduling && card.schedule ? card.schedule : newCardFields()),
       };
     });
 
+    for (let i = 0; i < noteValues.length; i += CARD_CHUNK) {
+      await tx
+        .insert(notes)
+        .values(noteValues.slice(i, i + CARD_CHUNK))
+        .run();
+    }
     for (let i = 0; i < cardValues.length; i += CARD_CHUNK) {
       await tx
         .insert(cards)
         .values(cardValues.slice(i, i + CARD_CHUNK))
         .run();
     }
-    for (let i = 0; i < cardTagRows.length; i += CARD_CHUNK) {
+    for (let i = 0; i < noteTagRows.length; i += CARD_CHUNK) {
       await tx
-        .insert(cardTags)
-        .values(cardTagRows.slice(i, i + CARD_CHUNK))
+        .insert(noteTags)
+        .values(noteTagRows.slice(i, i + CARD_CHUNK))
         .onConflictDoNothing()
         .run();
     }

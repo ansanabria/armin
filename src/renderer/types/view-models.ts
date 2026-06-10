@@ -1,9 +1,12 @@
 import type { CardState } from "@/components/ui/badge";
 import type {
-  BrowseCard,
-  CardWithMeta,
+  BrowseNote,
+  CardContent,
+  CardType,
   DeckGraph,
   DeckWithStats,
+  NoteWithMeta,
+  ReviewQueueItem,
 } from "@/types/window";
 
 export type UiDeck = DeckWithStats;
@@ -11,6 +14,8 @@ export type UiDeck = DeckWithStats;
 export type UiCard = {
   id: string;
   deckId: string;
+  type: CardType;
+  content: CardContent;
   front: string;
   back: string;
   state: CardState;
@@ -26,6 +31,10 @@ export type UiBrowseCard = UiCard & {
 
 export type UiReviewCard = {
   id: string;
+  noteId: string;
+  type: CardType;
+  content: CardContent;
+  subKey: string;
   front: string;
   back: string;
   deck?: string;
@@ -36,6 +45,7 @@ export type UiGraphNode = {
   id: string;
   front: string;
   back: string;
+  type: CardType;
   state: CardState;
   locked: boolean;
   x: number | null;
@@ -76,7 +86,10 @@ function compactFutureLabel(due: Date, now = new Date()) {
   return `in ${years}y`;
 }
 
-export function formatDueLabel(card: CardWithMeta, now = new Date()) {
+export function formatDueLabel(
+  card: { locked: boolean; state: number; due: Date | string | number },
+  now = new Date(),
+) {
   if (card.locked) return "Locked";
   if (card.state === 0) return "New";
 
@@ -85,34 +98,40 @@ export function formatDueLabel(card: CardWithMeta, now = new Date()) {
   return compactFutureLabel(due, now);
 }
 
-export function toUiCard(card: CardWithMeta): UiCard {
+export function toUiCard(note: NoteWithMeta): UiCard {
   return {
-    id: card.id,
-    deckId: card.deckId,
-    front: card.front,
-    back: card.back,
-    state: card.state as CardState,
-    locked: card.locked,
-    dueLabel: formatDueLabel(card),
-    createdAt: toDate(card.createdAt)?.toISOString() ?? "",
-    tags: card.tags,
+    id: note.id,
+    deckId: note.deckId,
+    type: note.type,
+    content: note.content,
+    front: note.front,
+    back: note.back,
+    state: note.state as CardState,
+    locked: note.locked,
+    dueLabel: formatDueLabel(note),
+    createdAt: toDate(note.createdAt)?.toISOString() ?? "",
+    tags: note.tags,
   };
 }
 
-export function toUiBrowseCard(card: BrowseCard): UiBrowseCard {
+export function toUiBrowseCard(note: BrowseNote): UiBrowseCard {
   return {
-    ...toUiCard(card),
-    deckName: card.deckName,
+    ...toUiCard(note),
+    deckName: note.deckName,
   };
 }
 
-export function toUiReviewCard(card: CardWithMeta | BrowseCard): UiReviewCard {
+export function toUiReviewCard(item: ReviewQueueItem): UiReviewCard {
   return {
-    id: card.id,
-    front: card.front,
-    back: card.back,
-    deck: "deckName" in card ? card.deckName : undefined,
-    deckId: card.deckId,
+    id: item.cardId,
+    noteId: item.noteId,
+    type: item.type,
+    content: item.content,
+    subKey: item.subKey,
+    front: item.front,
+    back: item.back,
+    deck: item.deckName,
+    deckId: item.deckId,
   };
 }
 

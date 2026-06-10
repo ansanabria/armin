@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { count, eq } from "drizzle-orm";
 import { schema } from "../db";
-import { makeContext, securePrereq, useTestDb } from "../test/db";
+import { getOnlyCard, makeContext, securePrereq, useTestDb } from "../test/db";
 import * as browse from "./browse";
-import * as cards from "./cards";
+import * as notes from "./notes";
 import * as decks from "./decks";
 import * as graph from "./graph";
 import * as review from "./review";
@@ -11,6 +11,23 @@ import * as settings from "./settings";
 import { isPendingSchedule, PENDING_DUE, State } from "./scheduler";
 
 useTestDb();
+
+/** Create a basic note (one card) from front/back shorthand. */
+function basic(
+  ctx: Awaited<ReturnType<typeof makeContext>>,
+  deckId: string,
+  front: string,
+  back: string,
+  tags?: string[],
+) {
+  return notes.createNote({
+    ctx,
+    deckId,
+    type: "basic",
+    content: { front, back },
+    tags,
+  });
+}
 
 describe("core services", () => {
   it("isolates deck data by profile database", async () => {
@@ -27,50 +44,45 @@ describe("core services", () => {
     const ctx = await makeContext("tags");
     const deck = await decks.createDeck(ctx, { name: "TypeScript" });
 
-    const card = await cards.createCard({
+    const card = await notes.createNote({
       ctx,
       deckId: deck.id,
-      front: "What is unknown?",
-      back: "A safer top type.",
+      type: "basic",
+      content: { front: "What is unknown?", back: "A safer top type." },
       tags: [" types ", "Types", "", "narrowing"],
     });
 
     expect(card.tags).toEqual(["narrowing", "types"]);
 
-    const updated = await cards.updateCard(ctx, card.id, {
+    const updated = await notes.updateNote(ctx, card.id, {
       tags: ["safety", "Safety"],
     });
 
     expect(updated?.tags).toEqual(["safety"]);
-    expect((await cards.listCards(ctx, deck.id))[0].tags).toEqual(["safety"]);
+    expect((await notes.listNotes(ctx, deck.id))[0].tags).toEqual(["safety"]);
   });
 
   it("excludes locked dependents from the review queue", async () => {
     const ctx = await makeContext("queue");
     const deck = await decks.createDeck(ctx, { name: "Graph" });
-    const prereq = await cards.createCard({
+    const prereq = await basic(ctx, deck.id, "Foundation", "Base answer");
+    const dependent = await basic(
       ctx,
-      deckId: deck.id,
-      front: "Foundation",
-      back: "Base answer",
-    });
-    const dependent = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Advanced",
-      back: "Depends on foundation",
-    });
+      deck.id,
+      "Advanced",
+      "Depends on foundation",
+    );
 
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
-    const dependentCard = await cards.getCard(ctx, dependent.id);
-    expect(isPendingSchedule(dependentCard!)).toBe(true);
-    expect(dependentCard?.due).toEqual(PENDING_DUE);
+    const dependentCard = await getOnlyCard(ctx, dependent.id);
+    expect(isPendingSchedule(dependentCard)).toBe(true);
+    expect(dependentCard.due).toEqual(PENDING_DUE);
 
     const queue = await review.getQueue(ctx, deck.id);
     const [stats] = await decks.listDecks(ctx);
 
-    expect(queue.map((card) => card.id)).toEqual([prereq.id]);
+    expect(queue.map((item) => item.noteId)).toEqual([prereq.id]);
     expect(stats).toMatchObject({
       total: 2,
       due: 1,
@@ -83,24 +95,14 @@ describe("core services", () => {
   it("requires prereq stability floor before unlocking dependents", async () => {
     const ctx = await makeContext("stability-floor");
     const deck = await decks.createDeck(ctx, { name: "Floor" });
-    const prereq = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Foundation",
-      back: "Base",
-    });
-    const dependent = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Advanced",
-      back: "Top",
-    });
+    const prereq = await basic(ctx, deck.id, "Foundation", "Base");
+    const dependent = await basic(ctx, deck.id, "Advanced", "Top");
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
     await ctx.db
       .update(schema.cards)
       .set({ state: State.Review, stability: 1.2 })
-      .where(eq(schema.cards.id, prereq.id))
+      .where(eq(schema.cards.noteId, prereq.id))
       .run();
 
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
@@ -109,26 +111,17 @@ describe("core services", () => {
     await graph.activateUnlockedDependents(ctx, prereq.id);
 
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
-    const dependentCard = await cards.getCard(ctx, dependent.id);
-    expect(isPendingSchedule(dependentCard!)).toBe(false);
+    const dependentCard = await getOnlyCard(ctx, dependent.id);
+    expect(isPendingSchedule(dependentCard)).toBe(false);
   });
 
   it("orders due reviews before new cards in the session queue", async () => {
     const ctx = await makeContext("queue-order");
     const deck = await decks.createDeck(ctx, { name: "Order" });
-    const reviewCard = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Review me",
-      back: "Answer",
-    });
-    const newCard = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "New card",
-      back: "Answer",
-    });
+    const reviewNote = await basic(ctx, deck.id, "Review me", "Answer");
+    const newNote = await basic(ctx, deck.id, "New card", "Answer");
 
+    const reviewCard = await getOnlyCard(ctx, reviewNote.id);
     await review.rateCard(ctx, reviewCard.id, 3);
     await ctx.db
       .update(schema.cards)
@@ -137,8 +130,10 @@ describe("core services", () => {
       .run();
 
     const queue = await review.getQueue(ctx, deck.id);
-    const reviewIndex = queue.findIndex((card) => card.id === reviewCard.id);
-    const newIndex = queue.findIndex((card) => card.id === newCard.id);
+    const reviewIndex = queue.findIndex(
+      (item) => item.noteId === reviewNote.id,
+    );
+    const newIndex = queue.findIndex((item) => item.noteId === newNote.id);
 
     expect(reviewIndex).toBeGreaterThanOrEqual(0);
     expect(newIndex).toBeGreaterThanOrEqual(0);
@@ -150,51 +145,20 @@ describe("core services", () => {
     const deck = await decks.createDeck(ctx, { name: "Cap" });
     await settings.updateSettings(ctx, { newCardsPerDay: 1 });
 
-    await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "New 1",
-      back: "A",
-    });
-    await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "New 2",
-      back: "B",
-    });
-    await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "New 3",
-      back: "C",
-    });
+    await basic(ctx, deck.id, "New 1", "A");
+    await basic(ctx, deck.id, "New 2", "B");
+    await basic(ctx, deck.id, "New 3", "C");
 
     const queue = await review.getQueue(ctx, deck.id);
     expect(queue).toHaveLength(1);
-    expect(queue[0].state).toBe(State.New);
   });
 
   it("prevents graph self-links, duplicates, and cycles", async () => {
     const ctx = await makeContext("graph");
     const deck = await decks.createDeck(ctx, { name: "Cycles" });
-    const a = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "A",
-      back: "A",
-    });
-    const b = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "B",
-      back: "B",
-    });
-    const c = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "C",
-      back: "C",
-    });
+    const a = await basic(ctx, deck.id, "A", "A");
+    const b = await basic(ctx, deck.id, "B", "B");
+    const c = await basic(ctx, deck.id, "C", "C");
 
     await expect(graph.addPrereq(ctx, a.id, a.id)).rejects.toThrow(
       /own prerequisite/,
@@ -212,14 +176,11 @@ describe("core services", () => {
   it("rates a card and appends a review log", async () => {
     const ctx = await makeContext("review");
     const deck = await decks.createDeck(ctx, { name: "Review" });
-    const card = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Prompt",
-      back: "Answer",
-    });
+    const note = await basic(ctx, deck.id, "Prompt", "Answer");
+    const card = await getOnlyCard(ctx, note.id);
 
-    const rated = await review.rateCard(ctx, card.id, 3);
+    await review.rateCard(ctx, card.id, 3);
+    const rated = await getOnlyCard(ctx, note.id);
     const logCount = await ctx.db
       .select({ value: count() })
       .from(schema.reviewLogs)
@@ -233,25 +194,15 @@ describe("core services", () => {
   it("activates dependents when a prereq becomes secured", async () => {
     const ctx = await makeContext("activate");
     const deck = await decks.createDeck(ctx, { name: "Activate" });
-    const prereq = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Foundation",
-      back: "Base",
-    });
-    const dependent = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Advanced",
-      back: "Top",
-    });
+    const prereq = await basic(ctx, deck.id, "Foundation", "Base");
+    const dependent = await basic(ctx, deck.id, "Advanced", "Top");
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
     await securePrereq(ctx, prereq.id);
     await graph.activateUnlockedDependents(ctx, prereq.id);
 
     const queue = await review.getQueue(ctx, deck.id);
-    expect(queue.map((card) => card.id).sort()).toEqual(
+    expect(queue.map((item) => item.noteId).sort()).toEqual(
       [prereq.id, dependent.id].sort(),
     );
   });
@@ -261,21 +212,9 @@ describe("core services", () => {
     const alpha = await decks.createDeck(ctx, { name: "Alpha" });
     const beta = await decks.createDeck(ctx, { name: "Beta" });
 
-    const older = await cards.createCard({
-      ctx,
-      deckId: alpha.id,
-      front: "Alpha older",
-      back: "A",
-      tags: ["shared"],
-    });
+    const older = await basic(ctx, alpha.id, "Alpha older", "A", ["shared"]);
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const newer = await cards.createCard({
-      ctx,
-      deckId: beta.id,
-      front: "Beta newer",
-      back: "B",
-      tags: ["beta-only"],
-    });
+    const newer = await basic(ctx, beta.id, "Beta newer", "B", ["beta-only"]);
 
     expect(await browse.listAllTagNames(ctx)).toEqual(["beta-only", "shared"]);
 
@@ -321,20 +260,8 @@ describe("core services", () => {
   it("lists deck tag names without loading all cards", async () => {
     const ctx = await makeContext("deck-tags");
     const deck = await decks.createDeck(ctx, { name: "Tagged" });
-    await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "One",
-      back: "A",
-      tags: ["alpha", "shared"],
-    });
-    await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Two",
-      back: "B",
-      tags: ["beta", "shared"],
-    });
+    await basic(ctx, deck.id, "One", "A", ["alpha", "shared"]);
+    await basic(ctx, deck.id, "Two", "B", ["beta", "shared"]);
 
     expect(await browse.listDeckTagNames(ctx, deck.id)).toEqual([
       "alpha",
@@ -346,19 +273,8 @@ describe("core services", () => {
   it("pages deck-scoped browse results with sort and tag filter", async () => {
     const ctx = await makeContext("deck-browse");
     const deck = await decks.createDeck(ctx, { name: "Paged" });
-    const tagged = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Tagged card",
-      back: "A",
-      tags: ["focus"],
-    });
-    await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Other card",
-      back: "B",
-    });
+    const tagged = await basic(ctx, deck.id, "Tagged card", "A", ["focus"]);
+    await basic(ctx, deck.id, "Other card", "B");
 
     const firstPage = await browse.listBrowsePage(ctx, {
       offset: 0,
@@ -385,57 +301,41 @@ describe("core services", () => {
   it("buildSessionQueue uses batched unlock lookup", async () => {
     const ctx = await makeContext("batch-unlock");
     const deck = await decks.createDeck(ctx, { name: "Batch" });
-    const cardsInDeck = [];
+    const notesInDeck = [];
     for (let i = 0; i < 5; i++) {
-      cardsInDeck.push(
-        await cards.createCard({
-          ctx,
-          deckId: deck.id,
-          front: `Card ${i + 1}`,
-          back: "Answer",
-        }),
-      );
+      notesInDeck.push(await basic(ctx, deck.id, `Card ${i + 1}`, "Answer"));
     }
-    const prereq = cardsInDeck[0];
-    const dependent = cardsInDeck[4];
+    const prereq = notesInDeck[0];
+    const dependent = notesInDeck[4];
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
+    const dependentCard = await getOnlyCard(ctx, dependent.id);
     const deckRows = await ctx.db
       .select()
       .from(schema.cards)
       .where(eq(schema.cards.deckId, deck.id))
       .all();
     const queue = await review.buildSessionQueue(ctx, deckRows, deck.id);
-    expect(queue.map((card) => card.id)).not.toContain(dependent.id);
+    expect(queue.map((card) => card.id)).not.toContain(dependentCard.id);
     expect(queue.length).toBeGreaterThan(0);
   });
 
   it("persists locked state when prerequisites are added", async () => {
     const ctx = await makeContext("persist-locked");
     const deck = await decks.createDeck(ctx, { name: "Locked" });
-    const prereq = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Foundation",
-      back: "Base",
-    });
-    const dependent = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Advanced",
-      back: "Top",
-    });
+    const prereq = await basic(ctx, deck.id, "Foundation", "Base");
+    const dependent = await basic(ctx, deck.id, "Advanced", "Top");
 
-    expect((await cards.getCard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(false);
 
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
-    expect((await cards.getCard(ctx, dependent.id))?.locked).toBe(true);
+    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(true);
 
     await securePrereq(ctx, prereq.id);
     await graph.refreshLockedAfterPrereqSecured(ctx, prereq.id);
 
-    expect((await cards.getCard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(false);
   });
 
   it("pages due-soon browse results without loading the full deck", async () => {
@@ -443,12 +343,7 @@ describe("core services", () => {
     const deck = await decks.createDeck(ctx, { name: "Due sort" });
 
     for (let i = 0; i < 120; i++) {
-      await cards.createCard({
-        ctx,
-        deckId: deck.id,
-        front: `Card ${String(i).padStart(3, "0")}`,
-        back: "Answer",
-      });
+      await basic(ctx, deck.id, `Card ${String(i).padStart(3, "0")}`, "Answer");
     }
 
     const page = await browse.listBrowsePage(ctx, {

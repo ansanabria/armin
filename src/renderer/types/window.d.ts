@@ -1,8 +1,12 @@
-import type { Card, Deck, Settings } from "../../main/db/schema";
+import type { Card, Deck, Note, Settings } from "../../main/db/schema";
 import type { DeckWithStats } from "../../main/services/decks";
-import type { BrowseCard, CardWithMeta } from "../../main/services/cards";
+import type { BrowseNote, NoteWithMeta } from "../../main/services/notes";
+import type { CardType, CardContent } from "../../main/services/card-types";
 import type { SettingsUpdate } from "../../main/services/settings";
-import type { PreviewOption } from "../../main/services/review";
+import type {
+  PreviewOption,
+  ReviewQueueItem,
+} from "../../main/services/review";
 import type { DeckGraph } from "../../main/services/graph";
 import type { McpSetup } from "../../shared/mcp";
 import type {
@@ -37,8 +41,8 @@ export interface ArminApi {
     delete(id: string): Promise<{ ok: true }>;
   };
   cards: {
-    list(deckId: string): Promise<CardWithMeta[]>;
-    listAll(): Promise<BrowseCard[]>;
+    list(deckId: string): Promise<NoteWithMeta[]>;
+    listAll(): Promise<BrowseNote[]>;
     browse(input: {
       offset: number;
       limit: number;
@@ -47,34 +51,32 @@ export interface ArminApi {
       deckId?: string;
       tags?: string[];
     }): Promise<{
-      cards: BrowseCard[];
+      cards: BrowseNote[];
       filteredTotal: number;
       libraryTotal: number;
     }>;
     listTags(): Promise<string[]>;
     listDeckTags(deckId: string): Promise<string[]>;
-    get(id: string): Promise<CardWithMeta | undefined>;
+    get(id: string): Promise<NoteWithMeta | undefined>;
     create(input: {
       deckId: string;
-      front: string;
-      back: string;
-      type?: string;
+      type: CardType;
+      content: CardContent;
       tags?: string[];
-    }): Promise<CardWithMeta>;
+    }): Promise<NoteWithMeta>;
     update(input: {
       id: string;
-      front?: string;
-      back?: string;
-      type?: string;
+      type?: CardType;
+      content?: CardContent;
       tags?: string[];
-    }): Promise<CardWithMeta | undefined>;
+    }): Promise<NoteWithMeta | undefined>;
     delete(id: string): Promise<{ ok: true }>;
   };
   review: {
-    queue(deckId: string): Promise<CardWithMeta[]>;
-    queueAll(): Promise<BrowseCard[]>;
+    queue(deckId: string): Promise<ReviewQueueItem[]>;
+    queueAll(): Promise<ReviewQueueItem[]>;
     preview(cardId: string): Promise<PreviewOption[]>;
-    rate(cardId: string, rating: Grade): Promise<CardWithMeta>;
+    rate(cardId: string, rating: Grade): Promise<ReviewQueueItem>;
   };
   graph: {
     get(deckId: string): Promise<DeckGraph>;
@@ -82,7 +84,7 @@ export interface ArminApi {
     removePrereq(prereqId: string, dependentId: string): Promise<{ ok: true }>;
     saveLayout(
       deckId: string,
-      placements: { cardId: string; x: number; y: number }[],
+      placements: { noteId: string; x: number; y: number }[],
     ): Promise<{ ok: true }>;
   };
   settings: {
@@ -128,11 +130,15 @@ declare global {
 
 export type {
   Card,
+  Note,
   Deck,
   Settings,
   DeckWithStats,
-  CardWithMeta,
-  BrowseCard,
+  NoteWithMeta,
+  BrowseNote,
+  CardType,
+  CardContent,
   PreviewOption,
+  ReviewQueueItem,
   DeckGraph,
 };

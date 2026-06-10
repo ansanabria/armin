@@ -401,8 +401,8 @@ export default function DeckPage() {
         onExitComplete={handleDialogExitComplete}
         mode={editing ? "edit" : "create"}
         cardId={editing?.id ?? null}
-        initialFront={editing?.front ?? ""}
-        initialBack={editing?.back ?? ""}
+        initialType={editing?.type ?? "basic"}
+        initialContent={editing?.content ?? null}
         initialTags={editing?.tags ?? []}
         onSubmit={saveCard}
       />

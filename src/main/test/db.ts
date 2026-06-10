@@ -16,8 +16,11 @@ export async function makeContext(profileId: string): Promise<ServiceContext> {
   return { profileId, db: getDb(profileId) };
 }
 
-/** Mark a prerequisite as secured in FSRS Review state above the stability floor. */
-export async function securePrereq(ctx: ServiceContext, cardId: string) {
+/**
+ * Mark a note's prerequisite as secured: every generated card moves into FSRS
+ * Review state above the stability floor.
+ */
+export async function securePrereq(ctx: ServiceContext, noteId: string) {
   await ctx.db
     .update(schema.cards)
     .set({
@@ -29,8 +32,18 @@ export async function securePrereq(ctx: ServiceContext, cardId: string) {
       lastReview: new Date(),
       reps: 2,
     })
-    .where(eq(schema.cards.id, cardId))
+    .where(eq(schema.cards.noteId, noteId))
     .run();
+}
+
+/** The single generated card for a basic note (test convenience). */
+export async function getOnlyCard(ctx: ServiceContext, noteId: string) {
+  const rows = await ctx.db
+    .select()
+    .from(schema.cards)
+    .where(eq(schema.cards.noteId, noteId))
+    .all();
+  return rows[0];
 }
 
 /** Register beforeEach/afterEach hooks for an isolated temp SQLite root. */
