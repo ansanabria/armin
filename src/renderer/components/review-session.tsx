@@ -1,15 +1,22 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, AlertTriangle } from "lucide-react";
+import { CheckCircle2, AlertTriangle, Check, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DiagramReview } from "@/components/diagram-review";
 import { reviewKeys } from "@/lib/armin-query";
 import type { Grade, PreviewOption } from "@/types/window";
 import type { UiReviewCard } from "@/types/view-models";
+import {
+  matchesTypeAnswer,
+  type DiagramContent,
+  type TypeAnswerContent,
+} from "../../main/services/card-types";
 import { cn } from "@/lib/utils";
 
 const RATINGS: {
@@ -62,6 +69,8 @@ export function ReviewSession({
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [rating, setRating] = useState<Grade | null>(null);
+  /** Typed answer for type_answer cards. */
+  const [typed, setTyped] = useState("");
   /** Frozen at session start so refetched queues don't shrink mid-review. */
   const [sessionQueue, setSessionQueue] = useState<UiReviewCard[] | null>(null);
 
@@ -70,6 +79,15 @@ export function ReviewSession({
   const done =
     !isLoading && !isError && index >= cards.length && cards.length > 0;
   const empty = !isLoading && !isError && cards.length === 0;
+
+  const isTypeAnswer = card?.type === "type_answer";
+  const typeAnswerContent =
+    card?.type === "type_answer" ? (card.content as TypeAnswerContent) : null;
+  const diagramContent =
+    card?.type === "diagram" ? (card.content as DiagramContent) : null;
+  const isCorrect = typeAnswerContent
+    ? matchesTypeAnswer(typed, typeAnswerContent)
+    : false;
 
   const preview = useQuery({
     queryKey: card
@@ -86,12 +104,18 @@ export function ReviewSession({
     ]),
   );
 
+  const reveal = () => {
+    if (!card) return;
+    setFlipped(true);
+  };
+
   const rate = async (grade: Grade) => {
     if (!card || rating) return;
     setRating(grade);
     try {
       await onRate(card.id, grade);
       setFlipped(false);
+      setTyped("");
       setIndex((i) => i + 1);
     } catch {
       // The route-level mutation handler owns the user-visible error toast.
@@ -103,6 +127,7 @@ export function ReviewSession({
   useEffect(() => {
     setIndex(0);
     setFlipped(false);
+    setTyped("");
     setSessionQueue(null);
   }, [isLoading, isError, resetKey]);
 
@@ -112,13 +137,27 @@ export function ReviewSession({
     }
   }, [isLoading, isError, queue, sessionQueue]);
 
+  // Reset per-card input state whenever the visible card changes.
+  useEffect(() => {
+    setFlipped(false);
+    setTyped("");
+  }, [card?.id]);
+
   useEffect(() => {
     if (isLoading || isError || !card) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!flipped && (e.key === " " || e.key === "Enter")) {
-        e.preventDefault();
-        setFlipped(true);
-      } else if (flipped && ["1", "2", "3", "4"].includes(e.key)) {
+      const target = e.target as HTMLElement | null;
+      const inField =
+        target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+      if (!flipped) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          reveal();
+        } else if (e.key === " " && !inField) {
+          e.preventDefault();
+          reveal();
+        }
+      } else if (["1", "2", "3", "4"].includes(e.key) && !inField) {
         void rate(Number(e.key) as Grade);
       }
     };
@@ -205,31 +244,76 @@ export function ReviewSession({
           <Progress value={index} max={cards.length} className="mb-8" />
 
           <div className="flex min-h-[300px] flex-col items-center justify-center rounded-xl border border-border-strong bg-paper px-10 py-12 text-center">
-            <MarkdownContent
-              content={card.front}
-              className="max-w-[52ch] text-pretty text-xl font-medium leading-snug text-balance"
-            />
-            {flipped && (
-              <div className="animate-flip-in flex w-full flex-col items-center">
-                <div className="my-7 h-px w-16 bg-border-strong" />
+            {diagramContent ? (
+              <DiagramReview
+                content={diagramContent}
+                targetId={card.subKey}
+                flipped={flipped}
+                label={card.back}
+              />
+            ) : (
+              <>
                 <MarkdownContent
-                  content={card.back}
-                  className="max-w-[52ch] text-pretty text-lg leading-relaxed text-ink/90"
+                  content={card.front}
+                  className="max-w-[52ch] text-pretty text-xl font-medium leading-snug text-balance"
                 />
-              </div>
+
+                {isTypeAnswer && (
+                  <div className="mt-6 w-full max-w-sm">
+                    <Input
+                      autoFocus
+                      value={typed}
+                      disabled={flipped}
+                      onChange={(e) => setTyped(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !flipped) {
+                          e.preventDefault();
+                          reveal();
+                        }
+                      }}
+                      placeholder="Type your answer…"
+                      aria-label="Your answer"
+                      className="text-center"
+                    />
+                  </div>
+                )}
+
+                {flipped && (
+                  <div className="animate-flip-in flex w-full flex-col items-center">
+                    <div className="my-7 h-px w-16 bg-border-strong" />
+                    {isTypeAnswer && (
+                      <div
+                        className={cn(
+                          "mb-3 inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-sm font-medium",
+                          isCorrect
+                            ? "bg-review-bg text-good"
+                            : "bg-relearning-bg text-relearning",
+                        )}
+                      >
+                        {isCorrect ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <XCircle className="h-4 w-4" />
+                        )}
+                        {isCorrect ? "Correct" : "Not quite"}
+                      </div>
+                    )}
+                    <MarkdownContent
+                      content={card.back}
+                      className="max-w-[52ch] text-pretty text-lg leading-relaxed text-ink/90"
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
 
           <div className="mt-6">
             {!flipped ? (
-              <Button
-                size="lg"
-                className="w-full"
-                onClick={() => setFlipped(true)}
-              >
-                Show answer
+              <Button size="lg" className="w-full" onClick={reveal}>
+                {isTypeAnswer ? "Check answer" : "Show answer"}
                 <Kbd className="ml-1 border-on-accent/25 bg-on-accent/10 text-on-accent shadow-none">
-                  Space
+                  {isTypeAnswer ? "Enter" : "Space"}
                 </Kbd>
               </Button>
             ) : (
@@ -239,7 +323,16 @@ export function ReviewSession({
                     key={r.grade}
                     onClick={() => void rate(r.grade)}
                     disabled={rating !== null}
-                    className={`flex flex-col items-center gap-0.5 rounded-md px-3 py-2.5 text-sm font-medium text-on-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-bg ${r.bg}`}
+                    className={cn(
+                      "flex flex-col items-center gap-0.5 rounded-md px-3 py-2.5 text-sm font-medium text-on-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+                      r.bg,
+                      // Nudge the user toward Again/Good after an auto-check.
+                      isTypeAnswer &&
+                        ((isCorrect && r.grade === 3) ||
+                          (!isCorrect && r.grade === 1))
+                        ? "ring-2 ring-ink ring-offset-2 ring-offset-bg"
+                        : undefined,
+                    )}
                   >
                     <span className="flex items-center gap-1.5">
                       {r.label}

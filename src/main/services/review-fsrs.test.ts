@@ -2,8 +2,8 @@ import { count, eq } from "drizzle-orm";
 import { createEmptyCard, fsrs, Rating, type Card as FsrsCard } from "ts-fsrs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { schema } from "../db";
-import { makeContext, useTestDb } from "../test/db";
-import * as cards from "./cards";
+import { getOnlyCard, makeContext, useTestDb } from "../test/db";
+import * as notes from "./notes";
 import * as decks from "./decks";
 import * as review from "./review";
 import * as settings from "./settings";
@@ -40,19 +40,26 @@ describe("review FSRS integration", () => {
     return ctx;
   }
 
+  function basic(
+    ctx: Awaited<ReturnType<typeof makeContext>>,
+    deckId: string,
+  ) {
+    return notes.createNote({
+      ctx,
+      deckId,
+      type: "basic",
+      content: { front: "Q", back: "A" },
+    });
+  }
+
   it("previewCard matches ts-fsrs repeat for all ratings", async () => {
     const ctx = await ctxWithDeterministicFsrs();
     const deck = await decks.createDeck(ctx, { name: "Preview" });
-    const card = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Q",
-      back: "A",
-    });
+    const note = await basic(ctx, deck.id);
+    const card = await getOnlyCard(ctx, note.id);
 
     const scheduler = referenceScheduler();
-    const dbCard = await cards.getCard(ctx, card.id);
-    const preview = scheduler.repeat(toFsrsCard(dbCard!), FIXED_NOW);
+    const preview = scheduler.repeat(toFsrsCard(card), FIXED_NOW);
 
     const options = await review.previewCard(ctx, card.id);
     expect(options).toHaveLength(4);
@@ -67,22 +74,18 @@ describe("review FSRS integration", () => {
   it("rateCard persists ts-fsrs next state and review log", async () => {
     const ctx = await ctxWithDeterministicFsrs();
     const deck = await decks.createDeck(ctx, { name: "Rate" });
-    const card = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Q",
-      back: "A",
-    });
+    const note = await basic(ctx, deck.id);
+    const card = await getOnlyCard(ctx, note.id);
 
     const scheduler = referenceScheduler();
-    const dbCard = await cards.getCard(ctx, card.id);
     const { card: expected, log } = scheduler.next(
-      toFsrsCard(dbCard!),
+      toFsrsCard(card),
       FIXED_NOW,
       Rating.Good,
     );
 
-    const rated = await review.rateCard(ctx, card.id, Rating.Good);
+    await review.rateCard(ctx, card.id, Rating.Good);
+    const rated = await getOnlyCard(ctx, note.id);
     const persisted = fromFsrsCard(toFsrsCard(rated));
 
     expect(persisted.due).toEqual(expected.due);
@@ -112,14 +115,11 @@ describe("review FSRS integration", () => {
   it("first Good rating transitions a new card out of New state", async () => {
     const ctx = await ctxWithDeterministicFsrs();
     const deck = await decks.createDeck(ctx, { name: "New" });
-    const card = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Q",
-      back: "A",
-    });
+    const note = await basic(ctx, deck.id);
+    const card = await getOnlyCard(ctx, note.id);
 
-    const rated = await review.rateCard(ctx, card.id, Rating.Good);
+    await review.rateCard(ctx, card.id, Rating.Good);
+    const rated = await getOnlyCard(ctx, note.id);
     expect(rated.reps).toBeGreaterThan(0);
 
     const scheduler = referenceScheduler();
@@ -131,17 +131,13 @@ describe("review FSRS integration", () => {
   it("Again on a mature card records a lapse in review log", async () => {
     const ctx = await ctxWithDeterministicFsrs();
     const deck = await decks.createDeck(ctx, { name: "Lapse" });
-    const card = await cards.createCard({
-      ctx,
-      deckId: deck.id,
-      front: "Q",
-      back: "A",
-    });
+    const note = await basic(ctx, deck.id);
+    const card = await getOnlyCard(ctx, note.id);
 
     await review.rateCard(ctx, card.id, Rating.Good);
     vi.setSystemTime(new Date("2026-06-15T12:00:00.000Z"));
 
-    const matured = await cards.getCard(ctx, card.id);
+    const matured = await getOnlyCard(ctx, note.id);
     await ctx.db
       .update(schema.cards)
       .set({ due: new Date("2026-06-15T12:00:00.000Z") })
@@ -150,12 +146,13 @@ describe("review FSRS integration", () => {
 
     const scheduler = referenceScheduler();
     const { card: expected } = scheduler.next(
-      toFsrsCard(matured!),
+      toFsrsCard(matured),
       new Date("2026-06-15T12:00:00.000Z"),
       Rating.Again,
     );
 
-    const rated = await review.rateCard(ctx, card.id, Rating.Again);
+    await review.rateCard(ctx, card.id, Rating.Again);
+    const rated = await getOnlyCard(ctx, note.id);
     expect(rated.lapses).toBe(expected.lapses);
 
     const logCount = await ctx.db

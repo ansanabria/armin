@@ -36,6 +36,13 @@
       "when": 1781200000000,
       "tag": "0004_card_positions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781300000000,
+      "tag": "0005_notes_split",
+      "breakpoints": true
     }
   ]
 }

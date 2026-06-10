@@ -16,6 +16,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { StateBadge } from "@/components/ui/badge";
+import { CardTypeBadge } from "@/components/card-type-badge";
 import { Dialog } from "@/components/ui/dialog";
 import type { UiCard } from "@/types/view-models";
 import {
@@ -251,6 +252,7 @@ export const CardTile = memo(function CardTile({
                 locked={card.locked}
                 className="min-w-0 shrink-0"
               />
+              <CardTypeBadge type={card.type} />
               {!deckName && (
                 <CardActionsMenu
                   onOpen={onOpen}

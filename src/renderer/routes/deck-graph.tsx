@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/toast";
 import { deckKeys, graphKeys, invalidateCoreData } from "@/lib/armin-query";
 import { toUiDeckGraph, type UiDeckGraph } from "@/types/view-models";
 import type { CardFormValues } from "@/components/card-form-dialog";
+import type { CardContent, CardType } from "@/types/window";
 import { cn } from "@/lib/utils";
 
 const viewportStorageKey = (deckId: string) => `armin:graph-viewport:${deckId}`;
@@ -69,6 +70,10 @@ export default function DeckGraphPage() {
   const [graph, setGraph] = useState<UiDeckGraph>({ nodes: [], edges: [] });
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingType, setEditingType] = useState<CardType>("basic");
+  const [editingContent, setEditingContent] = useState<CardContent | null>(
+    null,
+  );
   const [pendingPlacement, setPendingPlacement] = useState<XYPosition | null>(
     null,
   );
@@ -82,10 +87,6 @@ export default function DeckGraphPage() {
   const [graphReady, setGraphReady] = useState(false);
   const [canvasMounted, setCanvasMounted] = useState(false);
   const [canvasReady, setCanvasReady] = useState(false);
-
-  const editingNode = editingId
-    ? graph.nodes.find((n) => n.id === editingId)
-    : null;
 
   useEffect(() => {
     if (persistedGraph) {
@@ -126,12 +127,17 @@ export default function DeckGraphPage() {
     setOpen(true);
   };
 
-  const openEdit = (nodeId: string) => {
+  const openEdit = async (nodeId: string) => {
     const node = graph.nodes.find((n) => n.id === nodeId);
     if (!node) return;
     setEditingId(nodeId);
     setPendingPlacement(null);
     setPendingConnectFrom(null);
+    // Fetch the full note content before opening: the form hydrates on the
+    // open transition, and graph nodes only carry display strings.
+    const note = await window.armin.cards.get(nodeId);
+    setEditingType(note?.type ?? node.type);
+    setEditingContent(note?.content ?? null);
     setOpen(true);
   };
 
@@ -145,7 +151,7 @@ export default function DeckGraphPage() {
           [card.id]: pendingPlacement,
         }));
         void window.armin.graph.saveLayout(deckId, [
-          { cardId: card.id, x: pendingPlacement.x, y: pendingPlacement.y },
+          { noteId: card.id, x: pendingPlacement.x, y: pendingPlacement.y },
         ]);
       }
       if (pendingConnectFrom) {
@@ -205,16 +211,16 @@ export default function DeckGraphPage() {
   });
 
   const saveLayout = useMutation({
-    mutationFn: (placements: { cardId: string; x: number; y: number }[]) =>
+    mutationFn: (placements: { noteId: string; x: number; y: number }[]) =>
       window.armin.graph.saveLayout(deckId, placements),
     onError: () => toast({ tone: "error", title: "Couldn’t save layout" }),
   });
 
-  const saveCard = async ({ front, back, tags }: CardFormValues) => {
+  const saveCard = async (values: CardFormValues) => {
     if (editingId) {
-      await updateCard.mutateAsync({ id: editingId, front, back, tags });
+      await updateCard.mutateAsync({ id: editingId, ...values });
     } else {
-      await createCard.mutateAsync({ front, back, tags });
+      await createCard.mutateAsync(values);
     }
   };
 
@@ -343,8 +349,8 @@ export default function DeckGraphPage() {
         onExitComplete={handleDialogExitComplete}
         mode={editingId ? "edit" : "create"}
         cardId={editingId}
-        initialFront={editingNode?.front ?? ""}
-        initialBack={editingNode?.back ?? ""}
+        initialType={editingId ? editingType : "basic"}
+        initialContent={editingId ? editingContent : null}
         onSubmit={saveCard}
       />
     </div>

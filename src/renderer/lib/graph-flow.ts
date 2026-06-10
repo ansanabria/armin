@@ -50,6 +50,7 @@ export function toFlowNode(
     data: {
       front: node.front,
       back: node.back,
+      type: node.type,
       state: node.state,
       locked: node.locked,
       isIsolated: isIsolatedNode(node.id, edges),

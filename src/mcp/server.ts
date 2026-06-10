@@ -3,7 +3,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import * as z from "zod/v4";
 import { closeDb, getDb, initDb } from "../main/db";
 import { runMigrations } from "../main/db/migrate";
-import { createCard, getCard, listCards } from "../main/services/cards";
+import { createNote, getNote, listNotes } from "../main/services/notes";
+import { isCardType } from "../main/services/card-types";
 import { createDeck, listDecks } from "../main/services/decks";
 import { addPrereq } from "../main/services/graph";
 import type { ServiceContext } from "../main/services/context";
@@ -69,13 +70,42 @@ server.registerTool(
       "Create one card in an existing deck. Use import_card_hierarchy for batch hierarchy creation.",
     inputSchema: z.object({
       deckId: idSchema.describe("Destination deck ID."),
-      front: z.string().min(1).describe("Question, prompt, or card front."),
-      back: z.string().min(1).describe("Answer, explanation, or card back."),
-      type: z.string().optional().describe("Card type. Defaults to basic."),
+      front: z
+        .string()
+        .optional()
+        .describe("Card front (basic types). Shorthand for content.front."),
+      back: z
+        .string()
+        .optional()
+        .describe("Card back (basic types). Shorthand for content.back."),
+      type: z
+        .string()
+        .optional()
+        .describe(
+          "Card type: basic | basic_reversed | cloze | type_answer | diagram. Defaults to basic.",
+        ),
+      content: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe(
+          "Type-specific content object. Defaults to { front, back } for basic.",
+        ),
     }),
   },
-  async (input) =>
-    jsonResult({ card: await createCard({ ctx: ctx(), ...input }) }),
+  async (input) => {
+    const rawType = input.type ?? "basic";
+    if (!isCardType(rawType)) {
+      throw new Error(`Unknown card type: ${rawType}`);
+    }
+    const content = input.content ?? { front: input.front, back: input.back };
+    const card = await createNote({
+      ctx: ctx(),
+      deckId: input.deckId,
+      type: rawType,
+      content,
+    });
+    return jsonResult({ card });
+  },
 );
 
 server.registerTool(
@@ -127,16 +157,24 @@ server.registerTool(
               ),
               front: z
                 .string()
-                .min(1)
-                .describe("Question, prompt, or card front."),
+                .optional()
+                .describe("Card front (basic types)."),
               back: z
                 .string()
-                .min(1)
-                .describe("Answer, explanation, or card back."),
+                .optional()
+                .describe("Card back (basic types)."),
               type: z
                 .string()
                 .optional()
-                .describe("Card type. Defaults to basic."),
+                .describe(
+                  "Card type: basic | basic_reversed | cloze | type_answer | diagram. Defaults to basic.",
+                ),
+              content: z
+                .record(z.string(), z.any())
+                .optional()
+                .describe(
+                  "Type-specific content object. Defaults to { front, back } for basic.",
+                ),
               prerequisites: z
                 .array(idSchema)
                 .optional()
@@ -175,7 +213,7 @@ server.registerTool(
       deckId: idSchema.describe("Deck ID to inspect."),
     }),
   },
-  async ({ deckId }) => jsonResult({ cards: await listCards(ctx(), deckId) }),
+  async ({ deckId }) => jsonResult({ cards: await listNotes(ctx(), deckId) }),
 );
 
 server.registerTool(
@@ -187,7 +225,7 @@ server.registerTool(
       id: idSchema.describe("Card ID."),
     }),
   },
-  async ({ id }) => jsonResult({ card: await getCard(ctx(), id) }),
+  async ({ id }) => jsonResult({ card: await getNote(ctx(), id) }),
 );
 
 async function main() {

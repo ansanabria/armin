@@ -1,12 +1,11 @@
-import { and, asc, count, desc, eq, sql, type SQL } from "drizzle-orm";
+import { and, count, eq, sql, type SQL } from "drizzle-orm";
 import { schema } from "../db";
 import { BROWSE_PAGE_SIZE, type BrowseSortKey } from "../../shared/browse";
 import type { ServiceContext } from "./context";
-import type { BrowseCard } from "./cards";
-import { getTagsForCards } from "./cards";
-import { sqlDueSortPriority } from "./due-sort";
+import { hydrateNotes, type BrowseNote } from "./notes";
+import { dueSortPriority } from "./due-sort";
 
-const { cards, cardTags, tags, decks } = schema;
+const { cards, notes, noteTags, tags, decks } = schema;
 
 export type BrowseQuery = {
   offset: number;
@@ -18,7 +17,7 @@ export type BrowseQuery = {
 };
 
 export type BrowsePage = {
-  cards: BrowseCard[];
+  cards: BrowseNote[];
   filteredTotal: number;
   libraryTotal: number;
 };
@@ -26,11 +25,16 @@ export type BrowsePage = {
 function browseFilters(query: BrowseQuery): SQL | undefined {
   const parts: SQL[] = [];
 
-  if (query.state !== undefined) {
-    parts.push(eq(cards.state, query.state));
-  }
   if (query.deckId) {
-    parts.push(eq(cards.deckId, query.deckId));
+    parts.push(eq(notes.deckId, query.deckId));
+  }
+  if (query.state !== undefined) {
+    parts.push(
+      sql`exists (
+        select 1 from ${cards} c
+        where c.note_id = ${notes.id} and c.state = ${query.state}
+      )`,
+    );
   }
   if (query.tags && query.tags.length > 0) {
     const tagList = sql.join(
@@ -39,9 +43,9 @@ function browseFilters(query: BrowseQuery): SQL | undefined {
     );
     parts.push(
       sql`exists (
-        select 1 from ${cardTags} ct
-        inner join ${tags} t on t.id = ct.tag_id
-        where ct.card_id = ${cards.id} and t.name in (${tagList})
+        select 1 from ${noteTags} nt
+        inner join ${tags} t on t.id = nt.tag_id
+        where nt.note_id = ${notes.id} and t.name in (${tagList})
       )`,
     );
   }
@@ -49,76 +53,70 @@ function browseFilters(query: BrowseQuery): SQL | undefined {
   return parts.length > 0 ? and(...parts) : undefined;
 }
 
-function browseBaseQuery(ctx: ServiceContext, filters: SQL | undefined) {
-  const q = ctx.db
-    .select({ card: cards, deckName: decks.name })
-    .from(cards)
-    .innerJoin(decks, eq(cards.deckId, decks.id));
-
-  return filters ? q.where(filters) : q;
-}
-
-function sqlOrderBy(sort: BrowseSortKey, now = new Date()) {
-  const duePriority = sqlDueSortPriority(now.getTime());
-
-  switch (sort) {
-    case "due-soon":
-      return [asc(duePriority), asc(cards.front)];
-    case "due-later":
-      return [desc(duePriority), asc(cards.front)];
-    case "locked-first":
-      return [desc(cards.locked), asc(cards.front)];
-    case "locked-last":
-      return [asc(cards.locked), asc(cards.front)];
-    case "created-new":
-      return [desc(cards.createdAt)];
-    case "created-old":
-      return [asc(cards.createdAt)];
-    case "front-asc":
-      return [asc(cards.front)];
-    case "front-desc":
-      return [desc(cards.front)];
-    case "back-asc":
-      return [asc(cards.back)];
-    case "back-desc":
-      return [desc(cards.back)];
-    case "state-asc":
-      return [asc(cards.state)];
-    case "state-desc":
-      return [desc(cards.state)];
-    case "deck-asc":
-      return [asc(decks.name), asc(cards.front)];
-    case "deck-desc":
-      return [desc(decks.name), asc(cards.front)];
-    default:
-      return [desc(cards.createdAt)];
-  }
-}
-
-async function hydrateBrowseCards(
-  ctx: ServiceContext,
-  rows: { card: typeof cards.$inferSelect; deckName: string }[],
-): Promise<BrowseCard[]> {
-  if (rows.length === 0) return [];
-
-  const cardIds = rows.map((row) => row.card.id);
-  const tagsByCardId = await getTagsForCards(ctx.db, cardIds);
-
-  return rows.map(({ card, deckName }) => ({
-    ...card,
-    tags: tagsByCardId.get(card.id) ?? [],
-    locked: card.locked,
-    deckName,
-  }));
-}
-
-async function countCards(
+async function countNotes(
   ctx: ServiceContext,
   filters: SQL | undefined,
 ): Promise<number> {
-  const base = ctx.db.select({ value: count() }).from(cards);
+  const base = ctx.db.select({ value: count() }).from(notes);
   const row = filters ? await base.where(filters).get() : await base.get();
   return row?.value ?? 0;
+}
+
+function sortBrowseNotes(
+  items: BrowseNote[],
+  sort: BrowseSortKey,
+  now = new Date(),
+): BrowseNote[] {
+  const byFront = (a: BrowseNote, b: BrowseNote) =>
+    a.front.localeCompare(b.front);
+  const next = [...items];
+
+  switch (sort) {
+    case "due-soon":
+      return next.sort(
+        (a, b) =>
+          dueSortPriority(a, now) - dueSortPriority(b, now) || byFront(a, b),
+      );
+    case "due-later":
+      return next.sort(
+        (a, b) =>
+          dueSortPriority(b, now) - dueSortPriority(a, now) || byFront(a, b),
+      );
+    case "locked-first":
+      return next.sort(
+        (a, b) => Number(b.locked) - Number(a.locked) || byFront(a, b),
+      );
+    case "locked-last":
+      return next.sort(
+        (a, b) => Number(a.locked) - Number(b.locked) || byFront(a, b),
+      );
+    case "created-new":
+      return next.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    case "created-old":
+      return next.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    case "front-asc":
+      return next.sort(byFront);
+    case "front-desc":
+      return next.sort((a, b) => b.front.localeCompare(a.front));
+    case "back-asc":
+      return next.sort((a, b) => a.back.localeCompare(b.back));
+    case "back-desc":
+      return next.sort((a, b) => b.back.localeCompare(a.back));
+    case "state-asc":
+      return next.sort((a, b) => a.state - b.state || byFront(a, b));
+    case "state-desc":
+      return next.sort((a, b) => b.state - a.state || byFront(a, b));
+    case "deck-asc":
+      return next.sort(
+        (a, b) => a.deckName.localeCompare(b.deckName) || byFront(a, b),
+      );
+    case "deck-desc":
+      return next.sort(
+        (a, b) => b.deckName.localeCompare(a.deckName) || byFront(a, b),
+      );
+    default:
+      return next.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
 }
 
 export async function listBrowsePage(
@@ -130,24 +128,44 @@ export async function listBrowsePage(
   const filters = browseFilters(query);
 
   const [filteredTotal, libraryTotal] = await Promise.all([
-    countCards(ctx, filters),
-    countCards(ctx, undefined),
+    countNotes(ctx, filters),
+    countNotes(ctx, undefined),
   ]);
 
   if (filteredTotal === 0) {
     return { cards: [], filteredTotal, libraryTotal };
   }
 
-  const orderBy = sqlOrderBy(query.sort);
-  const pageRows = await browseBaseQuery(ctx, filters)
-    .orderBy(...orderBy)
-    .limit(limit)
-    .offset(offset)
-    .all();
+  // Front/back/state/due are derived from generated cards, so we hydrate the
+  // filtered set and sort in memory. The sort is deterministic per call, which
+  // keeps offset-based pagination stable across page fetches.
+  const rows = await (filters
+    ? ctx.db
+        .select({ note: notes, deckName: decks.name })
+        .from(notes)
+        .innerJoin(decks, eq(notes.deckId, decks.id))
+        .where(filters)
+        .all()
+    : ctx.db
+        .select({ note: notes, deckName: decks.name })
+        .from(notes)
+        .innerJoin(decks, eq(notes.deckId, decks.id))
+        .all());
 
-  const pageCards = await hydrateBrowseCards(ctx, pageRows);
+  const hydrated = await hydrateNotes(
+    ctx,
+    rows.map((row) => row.note),
+  );
+  const deckNameById = new Map(rows.map((row) => [row.note.id, row.deckName]));
+  const browseNotes: BrowseNote[] = hydrated.map((note) => ({
+    ...note,
+    deckName: deckNameById.get(note.id) ?? "",
+  }));
 
-  return { cards: pageCards, filteredTotal, libraryTotal };
+  const sorted = sortBrowseNotes(browseNotes, query.sort);
+  const page = sorted.slice(offset, offset + limit);
+
+  return { cards: page, filteredTotal, libraryTotal };
 }
 
 export async function listAllTagNames(ctx: ServiceContext): Promise<string[]> {
@@ -165,10 +183,10 @@ export async function listDeckTagNames(
 ): Promise<string[]> {
   const rows = await ctx.db
     .selectDistinct({ name: tags.name })
-    .from(cardTags)
-    .innerJoin(tags, eq(cardTags.tagId, tags.id))
-    .innerJoin(cards, eq(cardTags.cardId, cards.id))
-    .where(eq(cards.deckId, deckId))
+    .from(noteTags)
+    .innerJoin(tags, eq(noteTags.tagId, tags.id))
+    .innerJoin(notes, eq(noteTags.noteId, notes.id))
+    .where(eq(notes.deckId, deckId))
     .orderBy(tags.name)
     .all();
   return rows.map((row) => row.name);

@@ -45,7 +45,7 @@ const api = {
       invoke("graph:removePrereq", { prereqId, dependentId }),
     saveLayout: (
       deckId: string,
-      placements: { cardId: string; x: number; y: number }[],
+      placements: { noteId: string; x: number; y: number }[],
     ) => invoke("graph:saveLayout", { deckId, placements }),
   },
   settings: {

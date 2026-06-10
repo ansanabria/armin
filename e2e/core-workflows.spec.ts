@@ -176,8 +176,9 @@ async function expectReviewCompleted(
   await expect
     .poll(() =>
       page.evaluate(async (id) => {
+        // A reviewed note leaves the New state (0); aggregate state reflects it.
         const card = await window.armin.cards.get(id);
-        return card?.reps ?? 0;
+        return card && card.state !== 0 ? 1 : 0;
       }, cardId),
     )
     .toBe(1);

@@ -416,8 +416,8 @@ export default function BrowsePage() {
         onExitComplete={handleDialogExitComplete}
         mode="edit"
         cardId={editing?.id ?? null}
-        initialFront={editing?.front ?? ""}
-        initialBack={editing?.back ?? ""}
+        initialType={editing?.type ?? "basic"}
+        initialContent={editing?.content ?? null}
         initialTags={editing?.tags ?? []}
         onSubmit={saveCard}
       />
