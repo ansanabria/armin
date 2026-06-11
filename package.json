@@ -21,6 +21,7 @@
     "publish": "node scripts/publish.mjs",
     "mcp": "tsx src/mcp/server.ts",
     "lint": "eslint --ext .ts,.tsx .",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:mcp": "vitest run --config vitest.mcp.config.ts",
     "test:e2e": "playwright test",
