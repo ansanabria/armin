@@ -123,6 +123,96 @@ describe("updateNote reconciliation", () => {
   });
 });
 
+describe("deleteNote", () => {
+  it("removes the note, its generated cards, and tag links", async () => {
+    const ctx = await makeContext("delete-note");
+    const deck = await decks.createDeck(ctx, { name: "Delete" });
+    const note = await notes.createNote({
+      ctx,
+      deckId: deck.id,
+      type: "basic_reversed",
+      content: { front: "F", back: "B" },
+      tags: ["doomed"],
+    });
+    expect(await cardsForNote(ctx, note.id)).toHaveLength(2);
+
+    await notes.deleteNote(ctx, note.id);
+
+    expect(await notes.getNote(ctx, note.id)).toBeUndefined();
+    expect(await cardsForNote(ctx, note.id)).toHaveLength(0);
+    const tagLinks = await ctx.db
+      .select()
+      .from(schema.noteTags)
+      .where(eq(schema.noteTags.noteId, note.id))
+      .all();
+    expect(tagLinks).toHaveLength(0);
+  });
+
+  it("unlocks dependents when their only prerequisite is deleted", async () => {
+    const ctx = await makeContext("delete-prereq");
+    const deck = await decks.createDeck(ctx, { name: "Orphan" });
+    const prereq = await notes.createNote({
+      ctx,
+      deckId: deck.id,
+      type: "basic",
+      content: { front: "P", back: "P" },
+    });
+    const dependent = await notes.createNote({
+      ctx,
+      deckId: deck.id,
+      type: "basic",
+      content: { front: "D", back: "D" },
+    });
+    await graph.addPrereq(ctx, prereq.id, dependent.id);
+    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(true);
+
+    await notes.deleteNote(ctx, prereq.id);
+
+    const after = await notes.getNote(ctx, dependent.id);
+    expect(after?.locked).toBe(false);
+    const [dependentCard] = await cardsForNote(ctx, dependent.id);
+    expect(dependentCard.locked).toBe(false);
+    expect(dependentCard.state).toBe(State.New);
+    // Re-enters the schedulable frontier instead of staying pending forever.
+    expect(dependentCard.due.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("keeps dependents locked while another unsecured prerequisite remains", async () => {
+    const ctx = await makeContext("delete-one-prereq");
+    const deck = await decks.createDeck(ctx, { name: "Partial" });
+    const prereqA = await notes.createNote({
+      ctx,
+      deckId: deck.id,
+      type: "basic",
+      content: { front: "A", back: "A" },
+    });
+    const prereqB = await notes.createNote({
+      ctx,
+      deckId: deck.id,
+      type: "basic",
+      content: { front: "B", back: "B" },
+    });
+    const dependent = await notes.createNote({
+      ctx,
+      deckId: deck.id,
+      type: "basic",
+      content: { front: "D", back: "D" },
+    });
+    await graph.addPrereq(ctx, prereqA.id, dependent.id);
+    await graph.addPrereq(ctx, prereqB.id, dependent.id);
+
+    await notes.deleteNote(ctx, prereqA.id);
+
+    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(true);
+
+    const [bCard] = await cardsForNote(ctx, prereqB.id);
+    await secureCard(ctx, bCard.id);
+    await graph.refreshLockedAfterPrereqSecured(ctx, prereqB.id);
+
+    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(false);
+  });
+});
+
 describe("note-level securing", () => {
   it("unlocks a dependent only when every prereq card is secured", async () => {
     const ctx = await makeContext("all-secured");

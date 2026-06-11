@@ -1,4 +1,4 @@
-import { count } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { schema } from "../main/db";
 import * as notes from "../main/services/notes";
@@ -102,6 +102,58 @@ describe("importCardHierarchy", () => {
         ],
       }),
     ).rejects.toThrow(/cycle/);
+  });
+
+  it("imports typed content cards alongside basic shorthand", async () => {
+    const ctx = await makeContext("import-typed");
+    const result = await importCardHierarchy(ctx, {
+      deckName: "Typed",
+      cards: [
+        { clientId: "plain", front: "F", back: "B" },
+        {
+          clientId: "gap",
+          type: "cloze",
+          content: { text: "{{c1::a}} and {{c2::b}}" },
+          prerequisites: ["plain"],
+        },
+      ],
+    });
+
+    const cloze = result.cards.find((card) => card.clientId === "gap")!;
+    const clozeCards = await ctx.db
+      .select()
+      .from(schema.cards)
+      .where(eq(schema.cards.noteId, cloze.id))
+      .all();
+    expect(clozeCards.map((card) => card.subKey).sort()).toEqual(["c1", "c2"]);
+  });
+
+  it("rejects unknown card types before writing anything", async () => {
+    const ctx = await makeContext("import-bad-type");
+    await expect(
+      importCardHierarchy(ctx, {
+        deckName: "Bad",
+        cards: [
+          { clientId: "ok", front: "F", back: "B" },
+          { clientId: "bad", type: "mystery", content: {} },
+        ],
+      }),
+    ).rejects.toThrow(/unknown type/);
+
+    const deckCount = await ctx.db
+      .select({ value: count() })
+      .from(schema.decks)
+      .get();
+    expect(deckCount?.value).toBe(0);
+  });
+
+  it("requires a deck identifier", async () => {
+    const ctx = await makeContext("import-no-deck");
+    await expect(
+      importCardHierarchy(ctx, {
+        cards: [{ clientId: "a", front: "A", back: "A" }],
+      }),
+    ).rejects.toThrow(/deckId or deckName/);
   });
 
   it("rolls back when deckId does not exist", async () => {
