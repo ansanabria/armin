@@ -44,6 +44,9 @@
     "email": "ansanabria@proton.me"
   },
   "license": "MIT",
+  "overrides": {
+    "yauzl": "^3.3.1"
+  },
   "devDependencies": {
     "@electron-forge/cli": "^7.11.2",
     "@electron-forge/maker-deb": "^7.11.2",

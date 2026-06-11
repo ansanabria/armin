@@ -46,7 +46,28 @@ jobs:
       - name: Build icons
         run: npm run icons
 
+      - name: Record publish start time
+        shell: bash
+        run: echo "PUBLISH_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - name: Publish artifacts
         run: npm run publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # electron-forge publish can exit 0 without uploading anything (e.g.
+      # the yauzl@2 silent failure on Node 24.16+, electron/forge#4277), so
+      # fail unless this job actually created or refreshed release assets.
+      - name: Verify release assets were uploaded
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          uploaded=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" \
+            --jq "[.assets[] | select(.updated_at >= \"${PUBLISH_STARTED_AT}\")] | length")
+          if [ "${uploaded}" -eq 0 ]; then
+            echo "::error::Publish exited 0 but no assets on ${tag} were created or updated after ${PUBLISH_STARTED_AT}."
+            exit 1
+          fi
+          echo "${uploaded} asset(s) uploaded to ${tag}."
