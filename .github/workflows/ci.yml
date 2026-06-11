@@ -48,6 +48,12 @@ jobs:
       - name: Build Electron app for E2E
         run: npm run test:e2e:build
 
+      # electron-forge can exit 0 without packaging anything (e.g. the
+      # yauzl@2 silent failure on Node 24.16+, electron/forge#4277), so
+      # assert the packaged app actually exists.
+      - name: Check packaged app output
+        run: test -x out/Armin-linux-x64/Armin
+
       - name: Run E2E tests
         run: xvfb-run --auto-servernum npm run test:e2e
 
