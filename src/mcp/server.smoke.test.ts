@@ -9,10 +9,13 @@ let dataDir: string;
 let transport: StdioClientTransport | null = null;
 let client: Client | null = null;
 
-function parseToolText(result: {
-  content: Array<{ type: string; text?: string }>;
-}) {
-  const text = result.content.find((c) => c.type === "text")?.text;
+// callTool returns a union that includes legacy `toolResult` shapes, so dig
+// the text content out defensively instead of typing the whole union.
+function parseToolText(result: unknown) {
+  const { content } = result as {
+    content?: Array<{ type: string; text?: string }>;
+  };
+  const text = content?.find((c) => c.type === "text")?.text;
   if (!text) throw new Error("Missing tool text content");
   return JSON.parse(text) as Record<string, unknown>;
 }
