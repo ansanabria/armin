@@ -94,10 +94,13 @@ out/
 # Armin profile data
 .armin-data
 
-# Agent tooling (local IDE / runtime state; skills live in .agents/)
+# Agent tooling
 .cursor/
 .opencode/
 .claude/worktrees/
 
 # Production build
 dist/
+
+# Test results
+test-results/
