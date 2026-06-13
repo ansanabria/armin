@@ -113,7 +113,7 @@ describe("importCardHierarchy", () => {
         {
           clientId: "gap",
           type: "cloze",
-          content: { text: "{{c1::a}} and {{c2::b}}" },
+          content: { text: "{{1::a}} and {{2::b}}" },
           prerequisites: ["plain"],
         },
       ],

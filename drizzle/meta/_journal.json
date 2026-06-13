@@ -43,6 +43,13 @@
       "when": 1781300000000,
       "tag": "0005_notes_split",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781400000000,
+      "tag": "0006_cloze_drop_c_prefix",
+      "breakpoints": true
     }
   ]
 }
