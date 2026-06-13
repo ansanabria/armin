@@ -199,7 +199,7 @@ export function CardFormDialog({
     >
       <div className="space-y-4">
         <Field label="Type">
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex w-full gap-1.5">
             {TYPE_OPTIONS.map((option) => (
               <button
                 key={option.value}
@@ -207,7 +207,7 @@ export function CardFormDialog({
                 onClick={() => setType(option.value)}
                 aria-pressed={type === option.value}
                 className={cn(
-                  "rounded-md border px-2.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                  "min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-center text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                   type === option.value
                     ? "border-accent bg-accent text-on-accent"
                     : "border-border-strong bg-surface text-muted hover:text-ink",
@@ -345,22 +345,50 @@ function ClozeField({
     if (!el) return;
     const start = el.selectionStart ?? 0;
     const end = el.selectionEnd ?? 0;
+    const hadSelection = end > start;
     const selected = value.slice(start, end) || "answer";
+    // Assign the next cluster number so every deletion carries a stable,
+    // explicit identity (reordering can't reattach FSRS history to the wrong
+    // card). The user never has to type the number.
     const nextCluster = (clozeClusters(value).at(-1) ?? 0) + 1;
-    const wrapped = `{{c${nextCluster}::${selected}}}`;
+    const prefix = `{{${nextCluster}::`;
+    const wrapped = `${prefix}${selected}}}`;
     const next = value.slice(0, start) + wrapped + value.slice(end);
     onChange(next);
     requestAnimationFrame(() => {
       el.focus();
-      const caret = start + wrapped.length;
-      el.setSelectionRange(caret, caret);
+      // Reselect the answer: keep the wrapped text highlighted, or select the
+      // "answer" placeholder so it can be typed straight over.
+      const innerStart = start + prefix.length;
+      const innerEnd = innerStart + selected.length;
+      el.setSelectionRange(hadSelection ? innerEnd : innerStart, innerEnd);
     });
+  };
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    // Ctrl/Cmd+Shift+C wraps the current selection as a cloze (matches Anki).
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      event.shiftKey &&
+      event.key.toLowerCase() === "c"
+    ) {
+      event.preventDefault();
+      wrapSelection();
+    }
   };
 
   return (
     <Field
       label="Text"
-      hint="Wrap answers in {{c1::…}}. Each cluster becomes one review."
+      hint={
+        <>
+          Select text and press <Kbd>Ctrl/⌘</Kbd>
+          <Kbd>Shift</Kbd>
+          <Kbd>C</Kbd> to wrap it as {"{{1::…}}"} (the number is added for you).
+          Each number is one review; reuse a number to blank several together,
+          or add a hint with {"{{1::answer::hint}}"}.
+        </>
+      }
     >
       <div className="space-y-2">
         <Textarea
@@ -369,7 +397,8 @@ function ClozeField({
           aria-label="Cloze text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="The {{c1::mitochondria}} is the powerhouse of the {{c2::cell}}."
+          onKeyDown={onKeyDown}
+          placeholder="The {{1::mitochondria}} is the powerhouse of the {{2::cell}}."
           className="min-h-[120px]"
         />
         <div className="flex flex-wrap items-center gap-2">
@@ -478,7 +507,7 @@ function Field({
   children,
 }: {
   label: string;
-  hint?: string;
+  hint?: ReactNode;
   children: ReactNode;
 }) {
   return (

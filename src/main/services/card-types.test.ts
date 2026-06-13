@@ -12,20 +12,41 @@ import {
 } from "./card-types";
 
 describe("cloze parsing", () => {
-  it("extracts deletions with clusters and optional hints", () => {
-    const text = "The {{c1::mitochondria}} powers the {{c2::cell::organelle}}.";
+  it("reads explicit cluster numbers and optional hints", () => {
+    const text = "The {{1::mitochondria}} powers the {{2::cell::organelle}}.";
     expect(parseClozes(text)).toEqual([
       { cluster: 1, answer: "mitochondria", hint: undefined },
       { cluster: 2, answer: "cell", hint: "organelle" },
     ]);
   });
 
+  it("groups deletions that reuse a cluster number", () => {
+    expect(parseClozes("{{1::Na}} and {{1::Cl}}")).toEqual([
+      { cluster: 1, answer: "Na", hint: undefined },
+      { cluster: 1, answer: "Cl", hint: undefined },
+    ]);
+  });
+
+  it("keeps a single ':' inside an answer", () => {
+    expect(parseClozes("{{1::ratio is 3:2}}")).toEqual([
+      { cluster: 1, answer: "ratio is 3:2", hint: undefined },
+    ]);
+  });
+
+  it("auto-numbers bare deletions as a fallback, above any explicit cluster", () => {
+    expect(parseClozes("{{3::a}} {{b}} {{c::hint}}")).toEqual([
+      { cluster: 3, answer: "a", hint: undefined },
+      { cluster: 4, answer: "b", hint: undefined },
+      { cluster: 5, answer: "c", hint: "hint" },
+    ]);
+  });
+
   it("dedupes and sorts cluster numbers", () => {
-    expect(clozeClusters("{{c2::b}} {{c1::a}} {{c2::c}}")).toEqual([1, 2]);
+    expect(clozeClusters("{{2::b}} {{1::a}} {{2::c}}")).toEqual([1, 2]);
   });
 
   it("blanks the target cluster and reveals the rest", () => {
-    const text = "The {{c1::mitochondria}} powers the {{c2::cell}}.";
+    const text = "The {{1::mitochondria}} powers the {{2::cell}}.";
     expect(renderClozeText(text, 1)).toBe("The […] powers the cell.");
     expect(renderClozeText(text, 2)).toBe("The mitochondria powers the […].");
     expect(renderClozeText(text, null)).toBe(
@@ -33,8 +54,14 @@ describe("cloze parsing", () => {
     );
   });
 
+  it("blanks every deletion sharing an explicit cluster together", () => {
+    const text = "{{1::Na}} pairs with {{1::Cl}} to form {{salt}}.";
+    expect(renderClozeText(text, 1)).toBe("[…] pairs with […] to form salt.");
+    expect(renderClozeText(text, 2)).toBe("Na pairs with Cl to form […].");
+  });
+
   it("uses the hint inside the blank when present", () => {
-    expect(renderClozeText("{{c1::Paris::capital}}", 1)).toBe("[capital]");
+    expect(renderClozeText("{{1::Paris::capital}}", 1)).toBe("[capital]");
   });
 });
 
@@ -56,7 +83,7 @@ describe("generateReviewItems", () => {
 
   it("makes one item per cloze cluster", () => {
     const items = generateReviewItems("cloze", {
-      text: "{{c1::a}} and {{c2::b}}",
+      text: "{{1::a}} and {{2::b}}",
     });
     expect(items.map((i) => i.subKey)).toEqual(["c1", "c2"]);
     expect(items[0].front).toBe("[…] and b");
@@ -106,7 +133,7 @@ describe("type_answer matching", () => {
 
 describe("noteDisplay", () => {
   it("summarizes each type for tiles", () => {
-    expect(noteDisplay("cloze", { text: "{{c1::a}} b" })).toEqual({
+    expect(noteDisplay("cloze", { text: "{{1::a}} b" })).toEqual({
       front: "[…] b",
       back: "a b",
     });
