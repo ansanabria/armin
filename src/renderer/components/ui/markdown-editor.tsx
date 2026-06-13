@@ -63,7 +63,6 @@ export function MarkdownEditor({
         heading: false,
         blockquote: false,
         codeBlock: false,
-        horizontalRule: false,
       }),
       Markdown,
       Image.configure({ allowBase64: true }),
