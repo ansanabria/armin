@@ -36,7 +36,7 @@ export const basicContentSchema = z.object({
 const clozeContentSchema = z
   .object({ text: z.string().min(1) })
   .refine((c) => clozeClusters(c.text).length > 0, {
-    message: "Cloze text must contain at least one {{c1::…}} deletion.",
+    message: "Cloze text must contain at least one {{…}} deletion.",
     path: ["text"],
   });
 
@@ -126,9 +126,23 @@ export function serializeContent(content: CardContent): string {
 }
 
 // --- Cloze parsing ---
+//
+// Authoring syntax is a single `{{…}}` wrapper around the deleted span. The
+// canonical form carries an explicit cluster number (the editor inserts it):
+//   {{N::answer}}          — cluster N (reuse N to blank several deletions together)
+//   {{N::answer::hint}}    — cluster N with a hint shown inside the blank
+// A leading run of digits before the first `::` is read as the cluster number.
+// Bare forms are still accepted as a fallback (e.g. hand-typed or agent-authored
+// notes) and are auto-numbered in document order, starting one above the highest
+// explicit cluster:
+//   {{answer}}             — bare; cluster auto-assigned by position
+//   {{answer::hint}}       — bare with a hint
+//
+// Explicit numbers are what keep a deletion's identity (and its generated card's
+// FSRS history) stable across edits, so the editor never emits a bare form.
 
-/** Matches {{c1::answer}} or {{c1::answer::hint}}; resets lastIndex on each use. */
-const CLOZE_RE = /\{\{c(\d+)::([\s\S]*?)(?:::([\s\S]*?))?\}\}/g;
+/** Matches any `{{…}}` wrapper; the body is parsed separately. */
+const CLOZE_RE = /\{\{([\s\S]+?)\}\}/g;
 
 export type ClozeDeletion = {
   cluster: number;
@@ -136,19 +150,54 @@ export type ClozeDeletion = {
   hint?: string;
 };
 
-/** Extract every cloze deletion in document order. */
+type RawCloze = {
+  /** Cluster pinned by the author, or null when it should be auto-assigned. */
+  explicitCluster: number | null;
+  answer: string;
+  hint?: string;
+};
+
+/** Parse the inside of a `{{…}}` wrapper into its parts. */
+function parseClozeBody(body: string): RawCloze {
+  const sep = body.indexOf("::");
+  if (sep === -1) {
+    return { explicitCluster: null, answer: body };
+  }
+  const head = body.slice(0, sep);
+  const rest = body.slice(sep + 2);
+  if (/^\d+$/.test(head)) {
+    const cluster = Number(head);
+    const hintSep = rest.indexOf("::");
+    if (hintSep === -1) {
+      return { explicitCluster: cluster, answer: rest };
+    }
+    return {
+      explicitCluster: cluster,
+      answer: rest.slice(0, hintSep),
+      hint: rest.slice(hintSep + 2) || undefined,
+    };
+  }
+  return { explicitCluster: null, answer: head, hint: rest || undefined };
+}
+
+/** Extract every cloze deletion in document order, resolving cluster numbers. */
 export function parseClozes(text: string): ClozeDeletion[] {
-  const deletions: ClozeDeletion[] = [];
   const re = new RegExp(CLOZE_RE.source, "g");
+  const raws: RawCloze[] = [];
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null) {
-    deletions.push({
-      cluster: Number(match[1]),
-      answer: match[2],
-      hint: match[3] || undefined,
-    });
+    raws.push(parseClozeBody(match[1]));
   }
-  return deletions;
+  const maxExplicit = raws.reduce(
+    (max, r) => (r.explicitCluster != null && r.explicitCluster > max ? r.explicitCluster : max),
+    0,
+  );
+  let nextAuto = maxExplicit + 1;
+  return raws.map((r) => ({
+    cluster: r.explicitCluster ?? nextAuto++,
+    answer: r.answer,
+    hint: r.hint,
+  }));
 }
 
 /** Distinct cluster numbers present in the text, sorted ascending. */
@@ -161,6 +210,16 @@ function clozeBlank(hint?: string): string {
   return hint ? `[${hint}]` : "[…]";
 }
 
+/** Replace each `{{…}}` in document order, feeding `fn` the resolved deletion. */
+function replaceClozes(
+  text: string,
+  fn: (deletion: ClozeDeletion) => string,
+): string {
+  const deletions = parseClozes(text);
+  let i = 0;
+  return text.replace(new RegExp(CLOZE_RE.source, "g"), () => fn(deletions[i++]));
+}
+
 /**
  * Render cloze text. When `blankCluster` is set, deletions in that cluster are
  * replaced with a blank and all other deletions are revealed as their answer;
@@ -170,23 +229,15 @@ export function renderClozeText(
   text: string,
   blankCluster: number | null,
 ): string {
-  return text.replace(
-    new RegExp(CLOZE_RE.source, "g"),
-    (_full, num: string, answer: string, hint?: string) => {
-      const cluster = Number(num);
-      if (blankCluster != null && cluster === blankCluster) {
-        return clozeBlank(hint);
-      }
-      return answer;
-    },
+  return replaceClozes(text, (d) =>
+    blankCluster != null && d.cluster === blankCluster
+      ? clozeBlank(d.hint)
+      : d.answer,
   );
 }
 
 function renderAllClozesBlanked(text: string): string {
-  return text.replace(
-    new RegExp(CLOZE_RE.source, "g"),
-    (_full, _num: string, _answer: string, hint?: string) => clozeBlank(hint),
-  );
+  return replaceClozes(text, (d) => clozeBlank(d.hint));
 }
 
 // --- Review-item generation ---

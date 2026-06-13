@@ -61,7 +61,7 @@ describe("note → card generation", () => {
       ctx,
       deckId: deck.id,
       type: "cloze",
-      content: { text: "{{c1::a}} and {{c2::b}}" },
+      content: { text: "{{1::a}} and {{2::b}}" },
     });
 
     const cards = await cardsForNote(ctx, note.id);
@@ -77,7 +77,7 @@ describe("updateNote reconciliation", () => {
       ctx,
       deckId: deck.id,
       type: "cloze",
-      content: { text: "{{c1::a}} and {{c2::b}}" },
+      content: { text: "{{1::a}} and {{2::b}}" },
     });
 
     const c1 = (await cardsForNote(ctx, note.id)).find(
@@ -87,7 +87,7 @@ describe("updateNote reconciliation", () => {
 
     // Add a third cluster; c1 and c2 keep their identities.
     await notes.updateNote(ctx, note.id, {
-      content: { text: "{{c1::a}} and {{c2::b}} and {{c3::c}}" },
+      content: { text: "{{1::a}} and {{2::b}} and {{3::c}}" },
     });
 
     const after = await cardsForNote(ctx, note.id);
@@ -110,12 +110,12 @@ describe("updateNote reconciliation", () => {
       ctx,
       deckId: deck.id,
       type: "cloze",
-      content: { text: "{{c1::a}} and {{c2::b}}" },
+      content: { text: "{{1::a}} and {{2::b}}" },
     });
     expect(await cardsForNote(ctx, note.id)).toHaveLength(2);
 
     await notes.updateNote(ctx, note.id, {
-      content: { text: "{{c1::a}} only" },
+      content: { text: "{{1::a}} only" },
     });
 
     const after = await cardsForNote(ctx, note.id);
