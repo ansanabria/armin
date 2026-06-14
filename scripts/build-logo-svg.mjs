@@ -55,6 +55,27 @@ ${bg}  <g transform="translate(${tx.toFixed(3)} ${ty.toFixed(3)}) scale(${scale.
 `;
 }
 
+function buildAppIconSvg() {
+  const size = 1024;
+  const fill = "#100f0f";
+  const paper = "#FFFCF0";
+  const padding = size * 0.14;
+  const avail = size - padding * 2;
+  const scale = avail / glyphHeight;
+  const tx = (size - glyphWidth * scale) / 2 - bb.x1 * scale;
+  const ty = (size - glyphHeight * scale) / 2 - bb.y1 * scale;
+  const d = glyph.toPathData(2);
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" role="img" aria-label="Armin">
+  <rect width="${size}" height="${size}" fill="${paper}" />
+  <g transform="translate(${tx.toFixed(3)} ${ty.toFixed(3)}) scale(${scale.toFixed(6)})">
+    <path d="${d}" fill="${fill}" />
+  </g>
+</svg>
+`;
+}
+
 function buildWordmarkSvg({ fill }) {
   const height = 160;
   const paddingX = 8;
@@ -78,10 +99,7 @@ const brandSvg = buildMarkSvg({
   size: 512,
   fill: "#100f0f",
 });
-const iconSvg = buildMarkSvg({
-  size: 1024,
-  fill: "#100f0f",
-});
+const iconSvg = buildAppIconSvg();
 
 fs.writeFileSync(path.join(root, "assets/brand/armin-a.svg"), brandSvg);
 fs.writeFileSync(

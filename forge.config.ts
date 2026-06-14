@@ -13,6 +13,24 @@ const config: ForgeConfig = {
     asar: true,
     icon: path.resolve(__dirname, "assets/icons/icon"),
     extraResource: ["./assets/icons"],
+    ignore: (file) => {
+      if (!file) return false;
+      if (file === "/node_modules" || file === "/node_modules/@libsql") {
+        return false;
+      }
+      if (file === "/node_modules/@neon-rs") {
+        return false;
+      }
+
+      return ![
+        "/.vite",
+        "/node_modules/libsql",
+        "/node_modules/@neon-rs/load",
+        "/node_modules/detect-libc",
+        "/node_modules/@libsql/linux-x64-gnu",
+        "/node_modules/@libsql/linux-x64-musl",
+      ].some((prefix) => file.startsWith(prefix));
+    },
   },
   rebuildConfig: {},
   makers: [

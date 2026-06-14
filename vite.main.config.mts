@@ -4,8 +4,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   build: {
     rollupOptions: {
-      // Native (N-API) module: load from node_modules at runtime, don't bundle.
-      external: ["@libsql/client"],
+      external: ["libsql"],
     },
   },
 });
