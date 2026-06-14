@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { MakerSquirrel } from "@electron-forge/maker-squirrel";
@@ -39,7 +40,7 @@ const config: ForgeConfig = {
     new MakerZIP({}, ["darwin"]),
     new MakerAppImage({
       options: {
-        bin: "Armin",
+        bin: "armin-launch",
         icon: path.resolve(__dirname, "assets/icons/icon.svg"),
         categories: ["Education", "Office"],
         genericName: "Flashcard app",
@@ -103,6 +104,26 @@ const config: ForgeConfig = {
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),
   ],
+  hooks: {
+    // AppImages mount via FUSE (nosuid), so Electron's setuid sandbox helper
+    // can never be privileged and the app aborts on launch unless started with
+    // --no-sandbox. The AppImage maker makes AppRun a symlink to the binary, so
+    // we drop a launcher script next to it and point the maker's `bin` at it.
+    postPackage: async (_config, { outputPaths }) => {
+      const launcher = [
+        "#!/bin/sh",
+        'HERE="$(dirname "$(readlink -f "$0")")"',
+        'exec "$HERE/Armin" --no-sandbox "$@"',
+        "",
+      ].join("\n");
+      for (const outputPath of outputPaths) {
+        if (!fs.existsSync(path.join(outputPath, "Armin"))) continue;
+        fs.writeFileSync(path.join(outputPath, "armin-launch"), launcher, {
+          mode: 0o755,
+        });
+      }
+    },
+  },
 };
 
 export default config;
