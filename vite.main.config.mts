@@ -4,7 +4,15 @@ import { defineConfig } from "vite";
 export default defineConfig({
   build: {
     rollupOptions: {
-      external: ["libsql"],
+      // libsql ships native binaries; ws optional peer deps break when bundled.
+      external: [
+        "libsql",
+        "@libsql/client",
+        "@libsql/isomorphic-ws",
+        "ws",
+        "bufferutil",
+        "utf-8-validate",
+      ],
     },
   },
 });

@@ -1,11 +1,10 @@
 import { app, BrowserWindow, Menu } from "electron";
 import path from "node:path";
-import { loadDevToolsExtensions, registerDevToolsShortcuts } from "../devtools";
+import { registerDevToolsShortcuts } from "../devtools";
 import { attachWindowIcon, getAppIcon } from "../icon";
 
 let profilePickerWindow: BrowserWindow | null = null;
 const profileWindows = new Map<string, BrowserWindow>();
-let devToolsExtensionsLoaded = false;
 
 export function getProfileIdForWebContents(webContentsId: number) {
   for (const [profileId, win] of profileWindows) {
@@ -187,10 +186,6 @@ export async function openMainWindow(profileId: string, profileName?: string) {
   loadMain(win);
 
   if (!app.isPackaged) {
-    if (!devToolsExtensionsLoaded) {
-      await loadDevToolsExtensions();
-      devToolsExtensionsLoaded = true;
-    }
     registerDevToolsShortcuts(win);
     if (isFirstMainWindow) {
       win.webContents.openDevTools({ mode: "right" });

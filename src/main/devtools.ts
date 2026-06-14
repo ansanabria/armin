@@ -1,87 +1,17 @@
-import { app, session, type BrowserWindow, type Input } from "electron";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-
-const DEVTOOLS_EXTENSIONS = [
-  {
-    id: "fmkadmapgofadopljbjfkapdkoienihi",
-    name: "React Developer Tools",
-    installUrl:
-      "https://chrome.google.com/webstore/detail/react-developer-tools/fmkadmapgofadopljbjfkapdkoienihi",
-  },
-  {
-    id: "bdkgmiklpdmaojlpflclinlofgjfpabf",
-    name: "Impeccable",
-    installUrl:
-      "https://chrome.google.com/webstore/detail/impeccable/bdkgmiklpdmaojlpflclinlofgjfpabf",
-  },
-] as const;
-
-function chromeExtensionsDirs(): string[] {
-  const home = os.homedir();
-
-  if (process.platform === "darwin") {
-    return [
-      path.join(
-        home,
-        "Library/Application Support/Google/Chrome/Default/Extensions",
-      ),
-    ];
-  }
-
-  if (process.platform === "win32") {
-    const localAppData = process.env.LOCALAPPDATA;
-    if (!localAppData) {
-      return [];
-    }
-    return [
-      path.join(
-        localAppData,
-        "Google",
-        "Chrome",
-        "User Data",
-        "Default",
-        "Extensions",
-      ),
-    ];
-  }
-
-  return [
-    path.join(home, ".config/google-chrome/Default/Extensions"),
-    path.join(home, ".config/google-chrome-beta/Default/Extensions"),
-    path.join(home, ".config/google-chrome-canary/Default/Extensions"),
-    path.join(home, ".config/chromium/Default/Extensions"),
-  ];
-}
-
-function findChromeExtensionPath(extensionId: string): string | undefined {
-  for (const base of chromeExtensionsDirs()) {
-    const extensionRoot = path.join(base, extensionId);
-    if (!fs.existsSync(extensionRoot)) {
-      continue;
-    }
-
-    const versions = fs
-      .readdirSync(extensionRoot, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort((a, b) =>
-        b.localeCompare(a, undefined, { numeric: true, sensitivity: "base" }),
-      );
-
-    const latest = versions[0];
-    if (!latest) {
-      continue;
-    }
-
-    return path.join(extensionRoot, latest);
-  }
-
-  return undefined;
-}
+import {
+  app,
+  session,
+  type BrowserWindow,
+  type Event,
+  type Extension,
+  type Input,
+} from "electron";
+import { REACT_DEVELOPER_TOOLS } from "electron-devtools-installer";
+import { downloadChromeExtension } from "electron-devtools-installer/dist/downloadChromeExtension";
 
 const DEVTOOLS_DOCK_MODE = "right" as const;
+
+let devToolsExtensionsLoaded = false;
 
 function isDevToolsToggleShortcut(input: Input): boolean {
   if (input.type !== "keyDown") {
@@ -126,26 +56,94 @@ export function registerDevToolsShortcuts(window: BrowserWindow): void {
   });
 }
 
-export async function loadDevToolsExtensions(): Promise<void> {
-  if (app.isPackaged) {
+/** MV3 DevTools extensions need their service worker started explicitly in Electron. */
+async function startExtensionServiceWorker(extension: Extension): Promise<void> {
+  const manifest = extension.manifest as {
+    manifest_version?: number;
+    background?: { service_worker?: string };
+  };
+
+  if (
+    manifest.manifest_version !== 3 ||
+    !manifest.background?.service_worker
+  ) {
     return;
   }
 
-  for (const { id, name, installUrl } of DEVTOOLS_EXTENSIONS) {
-    const extensionPath = findChromeExtensionPath(id);
-    if (!extensionPath) {
-      console.warn(
-        `${name} not found. Install it in Chrome (${installUrl}), then restart the app.`,
-      );
-      continue;
-    }
+  await session.defaultSession.serviceWorkers.startWorkerForScope(
+    extension.url,
+  );
+}
 
+async function installDevToolsExtension(
+  chromeStoreId: string,
+  loadExtensionOptions: { allowFileAccess: boolean },
+): Promise<Extension> {
+  const extensions = session.defaultSession.extensions;
+  const installed = extensions
+    .getAllExtensions()
+    .find((extension) => extension.id === chromeStoreId);
+  if (installed) {
+    return installed;
+  }
+
+  const extensionFolder = await downloadChromeExtension(chromeStoreId);
+  return extensions.loadExtension(extensionFolder, loadExtensionOptions);
+}
+
+function waitForExtensionReady(extensionId: string): Promise<Extension> {
+  const existing = session.defaultSession.extensions.getExtension(extensionId);
+  if (existing) {
+    return Promise.resolve(existing);
+  }
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timed out waiting for extension ${extensionId}`));
+    }, 10_000);
+
+    const onReady = (_event: Event, extension: Extension) => {
+      if (extension.id !== extensionId) {
+        return;
+      }
+      cleanup();
+      resolve(extension);
+    };
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      session.defaultSession.extensions.off("extension-ready", onReady);
+    };
+
+    session.defaultSession.extensions.on("extension-ready", onReady);
+  });
+}
+
+export async function loadDevToolsExtensions(): Promise<void> {
+  if (app.isPackaged || devToolsExtensionsLoaded) {
+    return;
+  }
+
+  devToolsExtensionsLoaded = true;
+
+  try {
+    const extensionId = REACT_DEVELOPER_TOOLS.id;
+    const readyPromise = waitForExtensionReady(extensionId);
+    const extension = await installDevToolsExtension(REACT_DEVELOPER_TOOLS.id, {
+      allowFileAccess: true,
+    });
+    const readyExtension = await readyPromise.catch(() => extension);
     try {
-      const extension =
-        await session.defaultSession.extensions.loadExtension(extensionPath);
-      console.log(`Loaded DevTools extension: ${extension.name}`);
+      await startExtensionServiceWorker(readyExtension);
     } catch (err) {
-      console.error(`Failed to load ${name}:`, err);
+      console.warn(
+        "React DevTools service worker did not start; reload the window if the Components tab is missing.",
+        err,
+      );
     }
+    console.log(`Loaded DevTools extension: ${readyExtension.name}`);
+  } catch (err) {
+    console.error("Failed to load React Developer Tools:", err);
   }
 }
