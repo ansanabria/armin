@@ -28,6 +28,12 @@ const bb = glyph.getBoundingBox();
 const glyphWidth = bb.x2 - bb.x1;
 const glyphHeight = bb.y2 - bb.y1;
 
+const WORDMARK_TEXT = "Armin";
+const wordmark = font.getPath(WORDMARK_TEXT, 0, 0, GLYPH_SIZE);
+const wordmarkBb = wordmark.getBoundingBox();
+const wordmarkWidth = wordmarkBb.x2 - wordmarkBb.x1;
+const wordmarkHeight = wordmarkBb.y2 - wordmarkBb.y1;
+
 function buildMarkSvg({ size, fill, background }) {
   const padding = size * 0.14;
   const avail = size - padding * 2;
@@ -49,6 +55,25 @@ ${bg}  <g transform="translate(${tx.toFixed(3)} ${ty.toFixed(3)}) scale(${scale.
 `;
 }
 
+function buildWordmarkSvg({ fill }) {
+  const height = 160;
+  const paddingX = 8;
+  const paddingY = 6;
+  const scale = (height - paddingY * 2) / wordmarkHeight;
+  const width = Math.ceil(wordmarkWidth * scale + paddingX * 2);
+  const tx = paddingX - wordmarkBb.x1 * scale;
+  const ty = paddingY - wordmarkBb.y1 * scale;
+  const d = wordmark.toPathData(2);
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Armin">
+  <g transform="translate(${tx.toFixed(3)} ${ty.toFixed(3)}) scale(${scale.toFixed(6)})">
+    <path d="${d}" fill="${fill}" />
+  </g>
+</svg>
+`;
+}
+
 const brandSvg = buildMarkSvg({
   size: 512,
   fill: "#100f0f",
@@ -60,7 +85,12 @@ const iconSvg = buildMarkSvg({
 });
 
 fs.writeFileSync(path.join(root, "assets/brand/armin-a.svg"), brandSvg);
+fs.writeFileSync(
+  path.join(root, "assets/brand/armin-wordmark.svg"),
+  buildWordmarkSvg({ fill: "#100f0f" }),
+);
 fs.writeFileSync(path.join(root, "assets/icons/icon.svg"), iconSvg);
 
 console.log("wrote assets/brand/armin-a.svg");
+console.log("wrote assets/brand/armin-wordmark.svg");
 console.log("wrote assets/icons/icon.svg");
