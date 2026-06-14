@@ -24,6 +24,12 @@ import { createClient, type Client } from "@libsql/client";
 import { unzipSync } from "fflate";
 import { decompress as zstdDecompress } from "fzstd";
 import { schema } from "../../db";
+import {
+  generateReviewItems,
+  serializeContent,
+  type CardContent,
+  type CardType,
+} from "../card-types";
 import type { ServiceContext } from "../context";
 import { newCardFields, type FsrsFields } from "../scheduler";
 import { ankiHtmlToMarkdown } from "./html";
@@ -34,19 +40,19 @@ const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd];
 
 // --- types shared with the renderer ------------------------------------------
 
-/** A single card ready to be written to Armin. */
-type ParsedCard = {
-  front: string;
-  back: string;
+/** A single authored note ready to be written to Armin. */
+type ParsedNote = {
+  type: CardType;
+  content: CardContent;
   tags: string[];
   /** Original Anki deck name (may be hierarchical, e.g. "Parent::Child"). */
   deckName: string;
-  /** Best-effort FSRS scheduling carried over from Anki, when available. */
-  schedule: FsrsFields | null;
+  /** Best-effort FSRS scheduling carried over from Anki by generated subKey. */
+  schedules: Map<string, FsrsFields>;
 };
 
 type ParsedPackage = {
-  cards: ParsedCard[];
+  notes: ParsedNote[];
   decks: { name: string; cardCount: number }[];
   imageCount: number;
   hasScheduling: boolean;
@@ -58,7 +64,7 @@ export type AnkiAnalysis = {
   importId: string;
   suggestedName: string;
   totalCards: number;
-  /** Cards left out because they aren't basic front/back (e.g. cloze). */
+  /** Cards left out because they could not be mapped to an Armin card type. */
   skippedCount: number;
   decks: { name: string; cardCount: number }[];
   imageCount: number;
@@ -398,15 +404,6 @@ type CardRow = {
   data: string;
 };
 
-/**
- * True if a note is a card type Armin can't import yet. For now we only accept
- * basic front/back cards, so cloze notes (and anything that reads as cloze) are
- * left out — support for other types is planned for later.
- */
-function isUnsupportedNote(note: Note, noteType: NoteType): boolean {
-  return noteType.isCloze || hasClozeMarkers(note.fields.join(" "));
-}
-
 /** Render a basic Anki card row into Armin front/back Markdown. */
 function renderBasicCard(
   card: CardRow,
@@ -436,6 +433,265 @@ function renderBasicCard(
   if (!front) front = "—";
   if (!back) back = "—";
   return { front, back };
+}
+
+function isTypeAnswerTemplate(template: string): boolean {
+  return /\{\{\s*type\s*:[^}]+\}\}/i.test(template);
+}
+
+function typeAnswerField(template: string): string | null {
+  const match = template.match(/\{\{\s*type\s*:\s*([^}]+?)\s*\}\}/i);
+  return match?.[1]?.trim() || null;
+}
+
+function withoutTypeAnswer(template: string): string {
+  return template.replace(/\{\{\s*type\s*:[^}]+\}\}/gi, "");
+}
+
+function convertAnkiClozes(text: string): string {
+  return text.replace(
+    /\{\{c(\d+)::([\s\S]*?)\}\}/g,
+    (_whole, n: string, body: string) => `{{${n}::${body}}}`,
+  );
+}
+
+function parsedCardCount(note: ParsedNote): number {
+  return generateReviewItems(note.type, note.content).length;
+}
+
+function sameCard(
+  a: { front: string; back: string },
+  b: { front: string; back: string },
+) {
+  return a.front.trim() === b.front.trim() && a.back.trim() === b.back.trim();
+}
+
+function buildBasicLikeNote(
+  rows: CardRow[],
+  note: Note,
+  noteType: NoteType,
+  deckNames: Map<number, string>,
+  crt: number,
+  resolveMedia: (name: string) => string | undefined,
+): ParsedNote | null {
+  const fieldMap = buildFieldMap(noteType, note.fields);
+  const frontField = fieldMap.Front ?? note.fields[0];
+  const backField = fieldMap.Back ?? note.fields[1];
+  if (rows.length >= 2 && frontField && backField) {
+    const toMd = (html: string) => ankiHtmlToMarkdown(html, { resolveMedia });
+    const schedules = new Map<string, FsrsFields>();
+    const sortedRows = [...rows].sort((a, b) => a.ord - b.ord);
+    const fwd = mapSchedule(sortedRows[0], crt);
+    const rev = mapSchedule(sortedRows[1], crt);
+    if (fwd) schedules.set("fwd", fwd);
+    if (rev) schedules.set("rev", rev);
+    return {
+      type: "basic_reversed",
+      content: { front: toMd(frontField), back: toMd(backField) },
+      tags: note.tags,
+      deckName: deckNames.get(sortedRows[0].did) ?? "Imported",
+      schedules,
+    };
+  }
+
+  const rendered = rows
+    .map((card) => ({
+      card,
+      rendered: renderBasicCard(card, note, noteType, resolveMedia),
+    }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        card: CardRow;
+        rendered: { front: string; back: string };
+      } => entry.rendered !== null,
+    );
+  if (rendered.length === 0) return null;
+
+  const first = rendered[0];
+  const deckName = deckNames.get(first.card.did) ?? "Imported";
+
+  if (rendered.length === 2) {
+    const [a, b] = rendered;
+    if (
+      sameCard(
+        { front: a.rendered.front, back: a.rendered.back },
+        {
+          front: b.rendered.back,
+          back: b.rendered.front,
+        },
+      )
+    ) {
+      const schedules = new Map<string, FsrsFields>();
+      const fwd = mapSchedule(a.card, crt);
+      const rev = mapSchedule(b.card, crt);
+      if (fwd) schedules.set("fwd", fwd);
+      if (rev) schedules.set("rev", rev);
+      return {
+        type: "basic_reversed",
+        content: { front: a.rendered.front, back: a.rendered.back },
+        tags: note.tags,
+        deckName,
+        schedules,
+      };
+    }
+  }
+
+  const schedule = mapSchedule(first.card, crt);
+  return {
+    type: "basic",
+    content: { front: first.rendered.front, back: first.rendered.back },
+    tags: note.tags,
+    deckName,
+    schedules: schedule ? new Map([["", schedule]]) : new Map(),
+  };
+}
+
+function buildClozeNote(
+  rows: CardRow[],
+  note: Note,
+  noteType: NoteType,
+  deckNames: Map<number, string>,
+  crt: number,
+  resolveMedia: (name: string) => string | undefined,
+): ParsedNote | null {
+  const fieldMap = buildFieldMap(noteType, note.fields);
+  const textField = noteType.fieldNames.find((name) =>
+    hasClozeMarkers(fieldMap[name] ?? ""),
+  );
+  const rawText = textField
+    ? fieldMap[textField]
+    : note.fields.find(hasClozeMarkers);
+  if (!rawText) return null;
+
+  const toMd = (html: string) => ankiHtmlToMarkdown(html, { resolveMedia });
+  const text = convertAnkiClozes(toMd(rawText));
+  const schedules = new Map<string, FsrsFields>();
+  for (const row of rows) {
+    const schedule = mapSchedule(row, crt);
+    if (schedule) schedules.set(`c${row.ord + 1}`, schedule);
+  }
+
+  return {
+    type: "cloze",
+    content: { text },
+    tags: note.tags,
+    deckName: deckNames.get(rows[0]?.did) ?? "Imported",
+    schedules,
+  };
+}
+
+function buildTypeAnswerNote(
+  rows: CardRow[],
+  note: Note,
+  noteType: NoteType,
+  deckNames: Map<number, string>,
+  crt: number,
+  resolveMedia: (name: string) => string | undefined,
+): ParsedNote | null {
+  const template = noteType.templates?.find((t) =>
+    isTypeAnswerTemplate(t.qfmt),
+  );
+  if (!template) return null;
+  const answerField = typeAnswerField(template.qfmt);
+  if (!answerField) return null;
+
+  const fieldMap = buildFieldMap(noteType, note.fields);
+  const toMd = (html: string) => ankiHtmlToMarkdown(html, { resolveMedia });
+  const prompt = toMd(
+    renderTemplate(withoutTypeAnswer(template.qfmt), fieldMap),
+  ).trim();
+  const answer = toMd(fieldMap[answerField] ?? "").trim();
+  if (!prompt || !answer) return null;
+
+  const first = rows[0];
+  const schedule = first ? mapSchedule(first, crt) : null;
+  return {
+    type: "type_answer",
+    content: { prompt, answer, acceptedAnswers: [] },
+    tags: note.tags,
+    deckName: deckNames.get(first?.did) ?? "Imported",
+    schedules: schedule ? new Map([["", schedule]]) : new Map(),
+  };
+}
+
+function fieldByName(
+  note: Note,
+  noteType: NoteType,
+  names: string[],
+): string | null {
+  const lowerNames = names.map((name) => name.toLocaleLowerCase());
+  for (let i = 0; i < noteType.fieldNames.length; i++) {
+    if (lowerNames.includes(noteType.fieldNames[i].toLocaleLowerCase())) {
+      return note.fields[i] ?? null;
+    }
+  }
+  return null;
+}
+
+function buildDiagramNote(
+  rows: CardRow[],
+  note: Note,
+  noteType: NoteType,
+  deckNames: Map<number, string>,
+  crt: number,
+  resolveMedia: (name: string) => string | undefined,
+): ParsedNote | null {
+  const imageHtml = fieldByName(note, noteType, [
+    "image",
+    "picture",
+    "diagram",
+  ]);
+  const regionsJson = fieldByName(note, noteType, ["regions", "region"]);
+  if (!imageHtml || !regionsJson) return null;
+
+  let regions: unknown;
+  try {
+    regions = JSON.parse(regionsJson);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(regions) || regions.length === 0) return null;
+
+  const image = ankiHtmlToMarkdown(imageHtml, { resolveMedia }).match(
+    /!\[[^\]]*\]\(([^)]+)\)/,
+  )?.[1];
+  if (!image) return null;
+
+  const schedules = new Map<string, FsrsFields>();
+  rows.forEach((row, index) => {
+    const region = regions[index] as { id?: unknown } | undefined;
+    const id = typeof region?.id === "string" ? region.id : `r${index + 1}`;
+    const schedule = mapSchedule(row, crt);
+    if (schedule) schedules.set(id, schedule);
+  });
+
+  return {
+    type: "diagram",
+    content: { image, regions } as CardContent,
+    tags: note.tags,
+    deckName: deckNames.get(rows[0]?.did) ?? "Imported",
+    schedules,
+  };
+}
+
+function buildParsedNote(
+  rows: CardRow[],
+  note: Note,
+  noteType: NoteType,
+  deckNames: Map<number, string>,
+  crt: number,
+  resolveMedia: (name: string) => string | undefined,
+): ParsedNote | null {
+  if (noteType.isCloze || hasClozeMarkers(note.fields.join(" "))) {
+    return buildClozeNote(rows, note, noteType, deckNames, crt, resolveMedia);
+  }
+  return (
+    buildDiagramNote(rows, note, noteType, deckNames, crt, resolveMedia) ??
+    buildTypeAnswerNote(rows, note, noteType, deckNames, crt, resolveMedia) ??
+    buildBasicLikeNote(rows, note, noteType, deckNames, crt, resolveMedia)
+  );
 }
 
 // --- scheduling mapping ------------------------------------------------------
@@ -533,25 +789,15 @@ export async function analyzeAnkiPackage(
       "SELECT nid, did, ord, type, due, ivl, factor, reps, lapses, data FROM cards ORDER BY id",
     );
 
-    const cards: ParsedCard[] = [];
+    const notes: ParsedNote[] = [];
     const deckCounts = new Map<string, number>();
     let skippedUnsupported = 0;
     let droppedAudio = false;
     let hasScheduling = false;
     let approximatedLayouts = false;
+    const cardsByNoteId = new Map<number, CardRow[]>();
 
     for (const raw of cardRows.rows as unknown as CardRow[]) {
-      const note = notesById.get(Number(raw.nid));
-      if (!note) continue;
-      const noteType = noteTypes.get(note.mid) ?? fallbackNoteType(note);
-
-      // For now Armin only imports basic front/back cards; skip everything else.
-      if (isUnsupportedNote(note, noteType)) {
-        skippedUnsupported++;
-        continue;
-      }
-      if (noteType.templates === null) approximatedLayouts = true;
-
       const card: CardRow = {
         nid: Number(raw.nid),
         did: Number(raw.did),
@@ -564,33 +810,44 @@ export async function analyzeAnkiPackage(
         lapses: Number(raw.lapses),
         data: typeof raw.data === "string" ? raw.data : "{}",
       };
-
-      const rendered = renderBasicCard(card, note, noteType, resolveMedia);
-      if (!rendered) {
-        skippedUnsupported++;
-        continue;
-      }
-      if (/\[sound:/.test(note.fields.join(" "))) droppedAudio = true;
-
-      const deckName = deckNames.get(card.did) ?? "Imported";
-      deckCounts.set(deckName, (deckCounts.get(deckName) ?? 0) + 1);
-
-      const schedule = mapSchedule(card, crt);
-      if (schedule) hasScheduling = true;
-
-      cards.push({
-        front: rendered.front,
-        back: rendered.back,
-        tags: note.tags,
-        deckName,
-        schedule,
-      });
+      const list = cardsByNoteId.get(card.nid) ?? [];
+      list.push(card);
+      cardsByNoteId.set(card.nid, list);
     }
 
-    if (cards.length === 0) {
+    for (const [nid, rows] of cardsByNoteId) {
+      const note = notesById.get(nid);
+      if (!note) continue;
+      const noteType = noteTypes.get(note.mid) ?? fallbackNoteType(note);
+      if (noteType.templates === null) approximatedLayouts = true;
+
+      if (/\[sound:/.test(note.fields.join(" "))) droppedAudio = true;
+      const parsed = buildParsedNote(
+        rows,
+        note,
+        noteType,
+        deckNames,
+        crt,
+        resolveMedia,
+      );
+      if (!parsed) {
+        skippedUnsupported += rows.length;
+        continue;
+      }
+
+      const cardCount = parsedCardCount(parsed);
+      deckCounts.set(
+        parsed.deckName,
+        (deckCounts.get(parsed.deckName) ?? 0) + cardCount,
+      );
+      if (parsed.schedules.size > 0) hasScheduling = true;
+      notes.push(parsed);
+    }
+
+    if (notes.length === 0) {
       throw new Error(
         skippedUnsupported > 0
-          ? "This package has no basic front/back cards. Armin imports those (with tags) for now — other card types like cloze are coming later."
+          ? "This package has no supported cards. Armin imports basic, reversed, cloze, type-answer, and diagram notes."
           : "No cards were found in this Anki package.",
       );
     }
@@ -602,7 +859,7 @@ export async function analyzeAnkiPackage(
     const warnings: string[] = [];
     if (skippedUnsupported > 0)
       warnings.push(
-        `${plural(skippedUnsupported, "card")} skipped — Armin imports basic front/back cards for now (other types like cloze are coming later).`,
+        `${plural(skippedUnsupported, "card")} skipped — Armin could not map them to a supported card type.`,
       );
     if (approximatedLayouts)
       warnings.push(
@@ -620,7 +877,7 @@ export async function analyzeAnkiPackage(
       );
 
     const pkg: ParsedPackage = {
-      cards,
+      notes,
       decks,
       imageCount,
       hasScheduling,
@@ -631,7 +888,7 @@ export async function analyzeAnkiPackage(
     return {
       importId,
       suggestedName: suggestedDeckName(decks, fileName),
-      totalCards: cards.length,
+      totalCards: notes.reduce((sum, note) => sum + parsedCardCount(note), 0),
       skippedCount: skippedUnsupported,
       decks,
       imageCount,
@@ -693,30 +950,33 @@ export async function commitAnkiImport(
   const { pkg } = cached;
 
   // Group cards into the decks we'll create.
-  const groups = new Map<string, ParsedCard[]>();
+  const groups = new Map<string, ParsedNote[]>();
   if (input.deckStrategy === "separate") {
-    for (const card of pkg.cards) {
-      const title = leafDeckName(card.deckName);
+    for (const note of pkg.notes) {
+      const title = leafDeckName(note.deckName);
       const list = groups.get(title) ?? [];
-      list.push(card);
+      list.push(note);
       groups.set(title, list);
     }
   } else {
-    groups.set(input.deckName.trim() || "Imported deck", pkg.cards);
+    groups.set(input.deckName.trim() || "Imported deck", pkg.notes);
   }
 
   let firstDeckId: string | null = null;
   let cardCount = 0;
 
-  for (const [deckTitle, deckCards] of groups) {
+  for (const [deckTitle, deckNotes] of groups) {
     const deckId = await writeDeck(
       ctx,
       deckTitle,
-      deckCards,
+      deckNotes,
       input.keepScheduling,
     );
     firstDeckId ??= deckId;
-    cardCount += deckCards.length;
+    cardCount += deckNotes.reduce(
+      (sum, note) => sum + parsedCardCount(note),
+      0,
+    );
   }
 
   parseCache.delete(input.importId);
@@ -728,7 +988,7 @@ const CARD_CHUNK = 200;
 async function writeDeck(
   ctx: ServiceContext,
   name: string,
-  parsedCards: ParsedCard[],
+  parsedNotes: ParsedNote[],
   keepScheduling: boolean,
 ): Promise<string> {
   const { decks, cards, notes, noteTags } = schema;
@@ -738,33 +998,46 @@ async function writeDeck(
     const deckId = deck!.id;
 
     // Resolve the tag set once for the whole deck (case-insensitive, deduped).
-    const tagIdByLower = await resolveTags(tx, parsedCards);
+    const tagIdByLower = await resolveTags(tx, parsedNotes);
 
-    // Each imported card is a basic note that generates one review item.
     const noteTagRows: { noteId: string; tagId: string }[] = [];
-    const noteValues: { id: string; deckId: string; type: string; content: string }[] = [];
-    const cardValues = parsedCards.map((card) => {
+    const noteValues: {
+      id: string;
+      deckId: string;
+      type: string;
+      content: string;
+    }[] = [];
+    const cardValues = [];
+
+    for (const parsedNote of parsedNotes) {
       const noteId = randomUUID();
       noteValues.push({
         id: noteId,
         deckId,
-        type: "basic",
-        content: JSON.stringify({ front: card.front, back: card.back }),
+        type: parsedNote.type,
+        content: serializeContent(parsedNote.content),
       });
-      for (const tag of card.tags) {
+      for (const tag of parsedNote.tags) {
         const tagId = tagIdByLower.get(tag.toLocaleLowerCase());
         if (tagId) noteTagRows.push({ noteId, tagId });
       }
-      return {
-        id: randomUUID(),
-        noteId,
-        deckId,
-        subKey: "",
-        front: card.front,
-        back: card.back,
-        ...(keepScheduling && card.schedule ? card.schedule : newCardFields()),
-      };
-    });
+      for (const item of generateReviewItems(
+        parsedNote.type,
+        parsedNote.content,
+      )) {
+        cardValues.push({
+          id: randomUUID(),
+          noteId,
+          deckId,
+          subKey: item.subKey,
+          front: item.front,
+          back: item.back,
+          ...(keepScheduling && parsedNote.schedules.get(item.subKey)
+            ? parsedNote.schedules.get(item.subKey)!
+            : newCardFields()),
+        });
+      }
+    }
 
     for (let i = 0; i < noteValues.length; i += CARD_CHUNK) {
       await tx
@@ -795,13 +1068,13 @@ type TxLike = Parameters<Parameters<ServiceContext["db"]["transaction"]>[0]>[0];
 /** Ensure every tag used in the deck exists; return a lower-name → id map. */
 async function resolveTags(
   tx: TxLike,
-  parsedCards: ParsedCard[],
+  parsedNotes: ParsedNote[],
 ): Promise<Map<string, string>> {
   const { tags } = schema;
   const byLower = new Map<string, string>();
   const wanted = new Map<string, string>(); // lower → display
-  for (const card of parsedCards) {
-    for (const tag of card.tags) {
+  for (const note of parsedNotes) {
+    for (const tag of note.tags) {
       const lower = tag.toLocaleLowerCase();
       if (!wanted.has(lower)) wanted.set(lower, tag);
     }

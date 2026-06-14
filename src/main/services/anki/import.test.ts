@@ -29,6 +29,32 @@ const MODELS = {
     flds: [{ name: "Text" }, { name: "Extra" }],
     tmpls: [{ qfmt: "{{cloze:Text}}", afmt: "{{cloze:Text}}<br>{{Extra}}" }],
   },
+  "3": {
+    id: 3,
+    name: "Basic (and reversed card)",
+    type: 0,
+    flds: [{ name: "Front" }, { name: "Back" }],
+    tmpls: [
+      { qfmt: "{{Front}}", afmt: "{{FrontSide}}<hr>{{Back}}" },
+      { qfmt: "{{Back}}", afmt: "{{FrontSide}}<hr>{{Front}}" },
+    ],
+  },
+  "4": {
+    id: 4,
+    name: "Basic (type in the answer)",
+    type: 0,
+    flds: [{ name: "Front" }, { name: "Back" }],
+    tmpls: [
+      { qfmt: "{{Front}}<br>{{type:Back}}", afmt: "{{FrontSide}}<hr>{{Back}}" },
+    ],
+  },
+  "5": {
+    id: 5,
+    name: "Diagram",
+    type: 0,
+    flds: [{ name: "Image" }, { name: "Regions" }],
+    tmpls: [{ qfmt: "{{Image}}", afmt: "{{Image}}<hr>{{Regions}}" }],
+  },
 };
 
 const DECKS = {
@@ -54,20 +80,37 @@ type CardRowTuple = [
   string,
 ]; // id, nid, did, ord, type, due, ivl, factor, reps, lapses, data
 
-// A basic card with review scheduling, a basic image card, a basic Science
-// card, and a two-deletion cloze note (which Armin skips for now).
+// A basic card with review scheduling, a two-deletion cloze note, a basic image
+// card, a basic Science card, a reversed note, a type-answer note, and a
+// diagram note.
 const DEFAULT_NOTES: NoteRow[] = [
   [10, 1, "capital europe", `France${US}Paris`],
   [11, 2, "", `The sky is {{c1::blue}} and grass is {{c2::green}}${US}A fact`],
   [12, 1, "", `<img src="flag.png">${US}A flag`],
   [13, 1, "", `H2O${US}Water`],
+  [14, 3, "", `Germany${US}Berlin`],
+  [15, 4, "", `Largest planet${US}Jupiter`],
+  [
+    16,
+    5,
+    "",
+    `<img src="flag.png">${US}${JSON.stringify([
+      { id: "r1", x: 0, y: 0, w: 10, h: 10, label: "Top" },
+      { id: "r2", x: 10, y: 10, w: 10, h: 10, label: "Bottom" },
+    ])}`,
+  ],
 ];
 const DEFAULT_CARDS: CardRowTuple[] = [
   [1000, 10, 100, 0, 2, 5, 10, 2500, 3, 1, "{}"], // review card (scheduling)
-  [1001, 11, 200, 0, 0, 0, 0, 0, 0, 0, "{}"], // cloze c1 → skipped
-  [1002, 11, 200, 1, 0, 0, 0, 0, 0, 0, "{}"], // cloze c2 → skipped
+  [1001, 11, 200, 0, 0, 0, 0, 0, 0, 0, "{}"], // cloze c1
+  [1002, 11, 200, 1, 0, 0, 0, 0, 0, 0, "{}"], // cloze c2
   [1003, 12, 100, 0, 0, 0, 0, 0, 0, 0, "{}"], // image card
   [1004, 13, 200, 0, 0, 0, 0, 0, 0, 0, "{}"], // basic Science card
+  [1005, 14, 100, 0, 0, 0, 0, 0, 0, 0, "{}"], // reversed forward
+  [1006, 14, 100, 1, 0, 0, 0, 0, 0, 0, "{}"], // reversed reverse
+  [1007, 15, 200, 0, 0, 0, 0, 0, 0, 0, "{}"], // type answer
+  [1008, 16, 100, 0, 0, 0, 0, 0, 0, 0, "{}"], // diagram region 1
+  [1009, 16, 100, 1, 0, 0, 0, 0, 0, 0, "{}"], // diagram region 2
 ];
 
 /** Build a minimal legacy-format `.apkg` (collection.anki21 + JSON media). */
@@ -135,27 +178,26 @@ afterEach(() => {
 });
 
 describe("Anki package import", () => {
-  it("analyzes basic cards, skips cloze, and reports media/scheduling", async () => {
+  it("analyzes supported card types and reports media/scheduling", async () => {
     const apkg = await buildApkg();
     const analysis = await analyzeAnkiPackage(apkg, "Geo.apkg");
 
-    // 3 basic cards import; the 2 cloze cards are skipped.
-    expect(analysis.totalCards).toBe(3);
-    expect(analysis.skippedCount).toBe(2);
+    expect(analysis.totalCards).toBe(10);
+    expect(analysis.skippedCount).toBe(0);
     expect(analysis.imageCount).toBe(1);
     expect(analysis.hasScheduling).toBe(true);
     expect(analysis.decks.map((d) => d.name).sort()).toEqual([
       "Geography",
       "Science",
     ]);
-    expect(analysis.warnings.some((w) => /skipped/i.test(w))).toBe(true);
+    expect(analysis.warnings.some((w) => /skipped/i.test(w))).toBe(false);
     expect(analysis.warnings.some((w) => /image/i.test(w))).toBe(true);
     expect(analysis.warnings.some((w) => /imported as fill/i.test(w))).toBe(
       false,
     );
   });
 
-  it("commits basic cards into a single deck with scheduling preserved", async () => {
+  it("commits supported card types into a single deck with scheduling preserved", async () => {
     const ctx = await makeContext("p1");
     const apkg = await buildApkg();
     const analysis = await analyzeAnkiPackage(apkg, "Geo.apkg");
@@ -167,15 +209,16 @@ describe("Anki package import", () => {
       deckStrategy: "single",
     });
     expect(result.deckCount).toBe(1);
-    expect(result.cardCount).toBe(3);
+    expect(result.cardCount).toBe(10);
 
     const rows = await ctx.db.select().from(schema.cards).all();
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(10);
 
     // The review card kept its FSRS state (state 2 = Review, reps 3).
     expect(rows.some((c) => c.state === 2 && c.reps === 3)).toBe(true);
-    // No cloze card leaked through.
-    expect(rows.some((c) => c.front.includes("[...]"))).toBe(false);
+    expect(rows.some((c) => c.subKey === "c1" && c.front.includes("[…]"))).toBe(
+      true,
+    );
     // The image was inlined as a data URL.
     expect(rows.some((c) => c.back.includes("data:image/png;base64"))).toBe(
       true,
@@ -183,6 +226,17 @@ describe("Anki package import", () => {
 
     const tags = await ctx.db.select().from(schema.tags).all();
     expect(tags.map((t) => t.name).sort()).toEqual(["capital", "europe"]);
+
+    const notes = await ctx.db.select().from(schema.notes).all();
+    expect(notes.map((n) => n.type).sort()).toEqual([
+      "basic",
+      "basic",
+      "basic",
+      "basic_reversed",
+      "cloze",
+      "diagram",
+      "type_answer",
+    ]);
   });
 
   it("keeps Anki decks separate when asked", async () => {
@@ -206,13 +260,13 @@ describe("Anki package import", () => {
     expect(cards.every((c) => c.state === 0 && c.reps === 0)).toBe(true);
   });
 
-  it("rejects a package that has only unsupported (cloze) cards", async () => {
+  it("rejects a package that has no cards", async () => {
     const apkg = await buildApkg(
       [[20, 2, "", `Only {{c1::cloze}} here${US}extra`]],
-      [[2000, 20, 200, 0, 0, 0, 0, 0, 0, 0, "{}"]],
+      [],
     );
-    await expect(analyzeAnkiPackage(apkg, "Cloze.apkg")).rejects.toThrow(
-      /basic front\/back/i,
+    await expect(analyzeAnkiPackage(apkg, "Empty.apkg")).rejects.toThrow(
+      /no cards/i,
     );
   });
 
