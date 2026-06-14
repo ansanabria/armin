@@ -75,7 +75,7 @@ available tools, and configuration for Codex, Claude Code, Cursor, and OpenCode.
 
 ## Card-writing skill
 
-The MCP server lets agents create cards, but it doesn't tell them *how* to structure
+The MCP server lets agents create cards, but it doesn't tell them _how_ to structure
 the content — how to chunk a topic, what belongs in a single card, or how cards
 should depend on each other. The `writing-study-cards` skill provides those
 guidelines, distilled from Andy Matuschak's

@@ -7,7 +7,7 @@ description: Guidelines for structuring spaced-repetition flashcards and prerequ
 
 Use this before creating cards in Armin so the deck actually produces understanding, not a pile of trivia.
 
-A card (the app calls it a "prompt") is a recurring task you give a future learner. **Prompt design is task design.** Most of the work is *not* the wording of the question — it's deciding what counts as "knowing" the material, breaking that into discrete pieces, and wiring those pieces into a prerequisite graph.
+A card (the app calls it a "prompt") is a recurring task you give a future learner. **Prompt design is task design.** Most of the work is _not_ the wording of the question — it's deciding what counts as "knowing" the material, breaking that into discrete pieces, and wiring those pieces into a prerequisite graph.
 
 ## The five properties every card must satisfy
 
@@ -17,7 +17,7 @@ Each card you create should be:
 2. **Precise** — unambiguous about what it's asking. Vague questions get vague answers.
 3. **Consistent** — the same question produces the same answer every review. Inconsistent answers cause interference and erode memory. (The one deliberate exception: creative prompts — see reference.)
 4. **Tractable** — almost always answerable correctly. If it's not, break it down further or add a cue.
-5. **Effortful** — the answer must be genuinely *retrieved*, not trivially inferred from the wording. A cue should narrow the search, never give the answer away.
+5. **Effortful** — the answer must be genuinely _retrieved_, not trivially inferred from the wording. A cue should narrow the search, never give the answer away.
 
 If a card is hard to keep focused/consistent/tractable, its scope is almost always too broad. Split it.
 
@@ -37,7 +37,7 @@ Copy this checklist and work through it:
 
 ### 1. Define what it means to "know" it
 
-Before writing anything, list what a person who *knows* this topic can do. For a recipe that might be: knows how to make and store it, knows what stock is and why it matters, knows variations and when to use them. This list is your map; every card traces part of it.
+Before writing anything, list what a person who _knows_ this topic can do. For a recipe that might be: knows how to make and store it, knows what stock is and why it matters, knows variations and when to use them. This list is your map; every card traces part of it.
 
 ### 2–3. Classify, then decompose
 
@@ -53,13 +53,13 @@ The detailed playbook for each knowledge type — facts, explanation pairs, clos
 
 Armin card types and when to reach for each:
 
-| Type | Use for |
-| --- | --- |
-| `basic` | Most cards: a focused question with one answer (facts, explanations, single procedure steps, concept lenses, salience prompts). |
-| `basic_reversed` | Term ↔ definition pairs where recall is useful both directions (name → meaning *and* meaning → name). |
-| `cloze` | Closed lists and fill-in-the-blank. One deletion = one review; reuse a number to blank several together. Syntax: `{{1::answer}}`, add a cue with `{{1::answer::hint}}`. |
-| `type_answer` | Short, exact answers (a term, a number, a ratio) where typing forces precise recall. |
-| `diagram` | Spatial/visual knowledge — labeling parts, structures, or relationships better seen than described. |
+| Type             | Use for                                                                                                                                                                 |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `basic`          | Most cards: a focused question with one answer (facts, explanations, single procedure steps, concept lenses, salience prompts).                                         |
+| `basic_reversed` | Term ↔ definition pairs where recall is useful both directions (name → meaning _and_ meaning → name).                                                                   |
+| `cloze`          | Closed lists and fill-in-the-blank. One deletion = one review; reuse a number to blank several together. Syntax: `{{1::answer}}`, add a cue with `{{1::answer::hint}}`. |
+| `type_answer`    | Short, exact answers (a term, a number, a ratio) where typing forces precise recall.                                                                                    |
+| `diagram`        | Spatial/visual knowledge — labeling parts, structures, or relationships better seen than described.                                                                     |
 
 Default to `basic`. Don't cram multiple facts into one card to save types — make more cards instead.
 
@@ -69,8 +69,8 @@ This is Armin's core idea: a card stays **locked** until its prerequisites are l
 
 Rules for prerequisite edges:
 
-- **Make A a prerequisite of B only if you genuinely cannot understand or answer B without already knowing A.** "Related" is not enough — the test is *necessity*, not *relevance*.
-- **Foundations point to dependents.** Terms, definitions, and simple facts are prerequisites of explanation, conceptual, integrative, and application cards built on them. The reverse explanation ("*why* do we use bones?") depends on the plain fact ("bones are used").
+- **Make A a prerequisite of B only if you genuinely cannot understand or answer B without already knowing A.** "Related" is not enough — the test is _necessity_, not _relevance_.
+- **Foundations point to dependents.** Terms, definitions, and simple facts are prerequisites of explanation, conceptual, integrative, and application cards built on them. The reverse explanation ("_why_ do we use bones?") depends on the plain fact ("bones are used").
 - **Order from foundations to dependents** across the whole deck.
 - **Keep the graph shallow and meaningful.** A handful of real dependencies beats a dense web. Over-linking locks cards that didn't need to be locked.
 - **No cycles.** If two cards each seem to need the other, they're probably one chunk, or the dependency only runs one way.
@@ -78,8 +78,8 @@ Rules for prerequisite edges:
 
 ## Litmus tests (run before finalizing)
 
-- **False positives** — could the learner answer correctly *without* knowing the target? Watch for pattern-matching on long/unusual wording (cloze deletions copied from text are prone to this) and cues that give the answer away ("rhymes with parrots").
-- **False negatives** — could someone who *knows* the material still miss it because the question admits other correct answers? Add just enough context to exclude alternatives without inviting pattern matching. Prefer expressing general knowledge generally over pinning it to one source.
+- **False positives** — could the learner answer correctly _without_ knowing the target? Watch for pattern-matching on long/unusual wording (cloze deletions copied from text are prone to this) and cues that give the answer away ("rhymes with parrots").
+- **False negatives** — could someone who _knows_ the material still miss it because the question admits other correct answers? Add just enough context to exclude alternatives without inviting pattern matching. Prefer expressing general knowledge generally over pinning it to one source.
 - **Avoid binary (yes/no, this/that) questions** — they need little effort and produce shallow understanding. Rephrase as open-ended, often by connecting to an example or implication.
 
 Full litmus-test discussion and examples are in [reference.md](reference.md).
