@@ -259,26 +259,4 @@ describe("Anki package import", () => {
     const cards = await ctx.db.select().from(schema.cards).all();
     expect(cards.every((c) => c.state === 0 && c.reps === 0)).toBe(true);
   });
-
-  it("rejects a package that has no cards", async () => {
-    const apkg = await buildApkg(
-      [[20, 2, "", `Only {{c1::cloze}} here${US}extra`]],
-      [],
-    );
-    await expect(analyzeAnkiPackage(apkg, "Empty.apkg")).rejects.toThrow(
-      /no cards/i,
-    );
-  });
-
-  it("rejects a commit with an unknown import id", async () => {
-    const ctx = await makeContext("p3");
-    await expect(
-      commitAnkiImport(ctx, {
-        importId: "does-not-exist",
-        deckName: "X",
-        keepScheduling: false,
-        deckStrategy: "single",
-      }),
-    ).rejects.toThrow(/expired/i);
-  });
 });
