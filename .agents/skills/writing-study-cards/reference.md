@@ -97,7 +97,7 @@ The third card alone fails the consistency property; it needs the instance cards
 
 ## Salience and behavioral prompts
 
-Some cards exist not to *know* a fact but to keep an idea **top of mind** until it connects to real life (extending the "Baader-Meinhof" effect on purpose). Phrase them around the situation where the idea should fire:
+Some cards exist not to _know_ a fact but to keep an idea **top of mind** until it connects to real life (extending the "Baader-Meinhof" effect on purpose). Phrase them around the situation where the idea should fire:
 
 ```
 Q. What should you do with the carcass of a roast chicken?
@@ -111,7 +111,7 @@ Context-laden, situation-anchored phrasing helps knowledge transfer from theory 
 
 ## Creative prompts (the consistency exception)
 
-When a concept applies to many instances, a card can ask for a *new* answer each time:
+When a concept applies to many instances, a card can ask for a _new_ answer each time:
 
 ```
 Q. Name a vegetable purée soup to try with chicken stock (one you haven't named before).
