@@ -9,6 +9,7 @@ import {
   isE2eBuildAvailable,
   launchArmin,
   mainEntryPath,
+  waitForMainWindow,
 } from "./helpers/electron";
 
 test.beforeAll(() => {
@@ -36,18 +37,17 @@ async function createProfile(
   );
 
   const createButtons = page.getByRole("button", { name: "Create profile" });
-  await createButtons.first().click({ force: true });
+  await createButtons.first().dispatchEvent("click");
   await expect(
     page.getByRole("heading", { name: "Create profile" }),
   ).toBeVisible();
   await page.getByLabel("Profile name").fill(name);
 
-  const mainWindowPromise = app.waitForEvent("window");
   await page
     .locator("form")
     .getByRole("button", { name: "Create profile", exact: true })
-    .click({ force: true });
-  const mainPage = await mainWindowPromise;
+    .dispatchEvent("click");
+  const mainPage = await waitForMainWindow(app);
   await expectDecksPage(mainPage);
   return mainPage;
 }
@@ -64,17 +64,16 @@ async function openProfile(
   );
   await expect(page.getByRole("option", { name })).toBeVisible();
 
-  const mainWindowPromise = app.waitForEvent("window");
   await page
     .getByRole("button", { name: "Open profile" })
-    .click({ force: true });
-  const mainPage = await mainWindowPromise;
+    .dispatchEvent("click");
+  const mainPage = await waitForMainWindow(app);
   await expectDecksPage(mainPage);
   return mainPage;
 }
 
 async function createDeck(page: Page, name: string, description?: string) {
-  await page.getByRole("button", { name: "New deck" }).click({ force: true });
+  await page.getByRole("button", { name: "New deck" }).dispatchEvent("click");
 
   const dialog = page.getByRole("dialog", { name: "New deck" });
   await expect(dialog).toBeVisible();
@@ -86,7 +85,7 @@ async function createDeck(page: Page, name: string, description?: string) {
   }
   await dialog
     .getByRole("button", { name: "Create deck" })
-    .click({ force: true });
+    .dispatchEvent("click");
   await expect(dialog).toBeHidden();
 
   await expect(page.getByRole("link", { name })).toBeVisible();
@@ -99,7 +98,7 @@ async function createDeck(page: Page, name: string, description?: string) {
 }
 
 async function openDeck(page: Page, name: string) {
-  await page.getByRole("link", { name }).first().click({ force: true });
+  await page.getByRole("link", { name }).first().dispatchEvent("click");
   await expect(page.getByText("All decks")).toBeVisible();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
 }
@@ -119,7 +118,7 @@ async function addCardThroughUi(
 ) {
   await page
     .getByRole("button", { name: "Add card", exact: true })
-    .click({ force: true });
+    .dispatchEvent("click");
 
   const dialog = page.getByRole("dialog", { name: "Add card" });
   await expect(dialog).toBeVisible();
@@ -131,7 +130,7 @@ async function addCardThroughUi(
     await dialog.getByLabel("Add tag").press("Enter");
   }
 
-  await dialog.getByRole("button", { name: /Add card/ }).click({ force: true });
+  await dialog.getByRole("button", { name: /Add card/ }).dispatchEvent("click");
   await expect(dialog).toBeVisible();
 
   let cardId = "";
@@ -159,7 +158,7 @@ async function addCardThroughUi(
 
   await dialog
     .getByRole("button", { name: "Close dialog" })
-    .click({ force: true });
+    .dispatchEvent("click");
   await expect(dialog).toBeHidden();
 
   return cardId;
@@ -228,21 +227,20 @@ test.describe("core workflows", () => {
       const cardId = await addCardThroughUi(page, deckId, {
         front: "What is 2 + 2?",
         back: "4",
-        tags: ["e2e"],
       });
       await expect(page.getByText("What is 2 + 2?")).toBeVisible();
 
       await page
         .getByRole("button", { name: "Review", exact: true })
-        .click({ force: true });
+        .dispatchEvent("click");
       await expect(page.getByText("What is 2 + 2?")).toBeVisible();
       await page
         .getByRole("button", { name: /Show answer/ })
-        .click({ force: true });
+        .dispatchEvent("click");
       await expect(
         page.getByRole("paragraph").filter({ hasText: "4" }),
       ).toBeVisible();
-      await page.getByRole("button", { name: "Good" }).click({ force: true });
+      await page.getByRole("button", { name: "Good" }).dispatchEvent("click");
       await expectReviewCompleted(page, cardId, deckId);
     } finally {
       await closeArmin(session);

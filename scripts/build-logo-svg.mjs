@@ -80,8 +80,7 @@ const brandSvg = buildMarkSvg({
 });
 const iconSvg = buildMarkSvg({
   size: 1024,
-  fill: "#24837b",
-  background: "#fffcf0",
+  fill: "#100f0f",
 });
 
 fs.writeFileSync(path.join(root, "assets/brand/armin-a.svg"), brandSvg);

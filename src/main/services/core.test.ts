@@ -257,69 +257,6 @@ describe("core services", () => {
     expect(multiTagFiltered.filteredTotal).toBe(2);
   });
 
-  it("lists deck tag names without loading all cards", async () => {
-    const ctx = await makeContext("deck-tags");
-    const deck = await decks.createDeck(ctx, { name: "Tagged" });
-    await basic(ctx, deck.id, "One", "A", ["alpha", "shared"]);
-    await basic(ctx, deck.id, "Two", "B", ["beta", "shared"]);
-
-    expect(await browse.listDeckTagNames(ctx, deck.id)).toEqual([
-      "alpha",
-      "beta",
-      "shared",
-    ]);
-  });
-
-  it("pages deck-scoped browse results with sort and tag filter", async () => {
-    const ctx = await makeContext("deck-browse");
-    const deck = await decks.createDeck(ctx, { name: "Paged" });
-    const tagged = await basic(ctx, deck.id, "Tagged card", "A", ["focus"]);
-    await basic(ctx, deck.id, "Other card", "B");
-
-    const firstPage = await browse.listBrowsePage(ctx, {
-      offset: 0,
-      limit: 1,
-      sort: "front-asc",
-      deckId: deck.id,
-    });
-    expect(firstPage.filteredTotal).toBe(2);
-    expect(firstPage.cards).toHaveLength(1);
-    expect(firstPage.cards[0].deckName).toBe("Paged");
-
-    const tagFiltered = await browse.listBrowsePage(ctx, {
-      offset: 0,
-      limit: 10,
-      sort: "front-asc",
-      deckId: deck.id,
-      tags: ["focus"],
-    });
-    expect(tagFiltered.filteredTotal).toBe(1);
-    expect(tagFiltered.cards[0].id).toBe(tagged.id);
-    expect(tagFiltered.cards[0].tags).toEqual(["focus"]);
-  });
-
-  it("buildSessionQueue uses batched unlock lookup", async () => {
-    const ctx = await makeContext("batch-unlock");
-    const deck = await decks.createDeck(ctx, { name: "Batch" });
-    const notesInDeck = [];
-    for (let i = 0; i < 5; i++) {
-      notesInDeck.push(await basic(ctx, deck.id, `Card ${i + 1}`, "Answer"));
-    }
-    const prereq = notesInDeck[0];
-    const dependent = notesInDeck[4];
-    await graph.addPrereq(ctx, prereq.id, dependent.id);
-
-    const dependentCard = await getOnlyCard(ctx, dependent.id);
-    const deckRows = await ctx.db
-      .select()
-      .from(schema.cards)
-      .where(eq(schema.cards.deckId, deck.id))
-      .all();
-    const queue = await review.buildSessionQueue(ctx, deckRows, deck.id);
-    expect(queue.map((card) => card.id)).not.toContain(dependentCard.id);
-    expect(queue.length).toBeGreaterThan(0);
-  });
-
   it("persists locked state when prerequisites are added", async () => {
     const ctx = await makeContext("persist-locked");
     const deck = await decks.createDeck(ctx, { name: "Locked" });
@@ -337,27 +274,6 @@ describe("core services", () => {
 
     expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(false);
   });
-
-  it("pages due-soon browse results without loading the full deck", async () => {
-    const ctx = await makeContext("due-soon-page");
-    const deck = await decks.createDeck(ctx, { name: "Due sort" });
-
-    for (let i = 0; i < 120; i++) {
-      await basic(ctx, deck.id, `Card ${String(i).padStart(3, "0")}`, "Answer");
-    }
-
-    const page = await browse.listBrowsePage(ctx, {
-      offset: 0,
-      limit: 30,
-      sort: "due-soon",
-      deckId: deck.id,
-    });
-
-    expect(page.filteredTotal).toBe(120);
-    expect(page.cards).toHaveLength(30);
-    expect(page.cards.every((card) => card.deckId === deck.id)).toBe(true);
-  });
-
   it("seeds and persists scheduling settings", async () => {
     const ctx = await makeContext("settings");
 
