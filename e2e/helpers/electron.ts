@@ -32,7 +32,8 @@ export async function launchArmin(
     );
   }
 
-  const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env;
+  const env = { ...process.env };
+  delete env.ELECTRON_RUN_AS_NODE;
 
   const app = await electron.launch({
     // The electron package's default export is the binary path at runtime,
