@@ -36,15 +36,20 @@ npm run test:e2e:build
 npm run test:e2e
 ```
 
+## Versioning
+
+Alpha releases use semver with a single `-alpha` prerelease suffix, for example
+`0.2.0-alpha`. Bump the semver (`MAJOR.MINOR.PATCH`) for each alpha; do not
+append a numeric suffix after `alpha` (not `0.2.0-alpha.1`).
+
 ## Publish
 
-1. Update `package.json` to the release version, for example
-   `0.1.0-alpha.1`.
+1. Update `package.json` to the release version, for example `0.2.0-alpha`.
 2. Commit the release changes.
 3. Create and push a matching tag:
 
 ```bash
-git tag v0.1.0-alpha.1
+git tag v0.2.0-alpha
 git push origin master --tags
 ```
 
