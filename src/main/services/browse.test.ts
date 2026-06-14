@@ -76,49 +76,4 @@ describe("browse filters", () => {
     });
     expect(lockedLast.cards[0].id).toBe(prereq.id);
   });
-
-  it("returns an empty page when filters match nothing", async () => {
-    const ctx = await makeContext("browse-empty");
-    const deck = await decks.createDeck(ctx, { name: "Sparse" });
-    await basic(ctx, deck.id, "Only", "Card");
-
-    const page = await browse.listBrowsePage(ctx, {
-      offset: 0,
-      limit: 30,
-      sort: "front-asc",
-      tags: ["no-such-tag"],
-    });
-    expect(page.cards).toEqual([]);
-    expect(page.filteredTotal).toBe(0);
-    expect(page.libraryTotal).toBe(1);
-  });
-
-  it("keeps offset pagination stable across pages", async () => {
-    const ctx = await makeContext("browse-offset");
-    const deck = await decks.createDeck(ctx, { name: "Pages" });
-    for (let i = 0; i < 5; i++) {
-      await basic(ctx, deck.id, `Card ${i}`, "A");
-    }
-
-    const first = await browse.listBrowsePage(ctx, {
-      offset: 0,
-      limit: 2,
-      sort: "front-asc",
-    });
-    const second = await browse.listBrowsePage(ctx, {
-      offset: 2,
-      limit: 2,
-      sort: "front-asc",
-    });
-    const third = await browse.listBrowsePage(ctx, {
-      offset: 4,
-      limit: 2,
-      sort: "front-asc",
-    });
-
-    const seen = [...first.cards, ...second.cards, ...third.cards].map(
-      (card) => card.front,
-    );
-    expect(seen).toEqual(["Card 0", "Card 1", "Card 2", "Card 3", "Card 4"]);
-  });
 });

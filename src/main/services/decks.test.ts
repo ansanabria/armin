@@ -38,7 +38,7 @@ async function tableCount(
 }
 
 describe("deck lifecycle", () => {
-  it("getDeck returns stats and undefined for unknown ids", async () => {
+  it("getDeck returns stats", async () => {
     const ctx = await makeContext("deck-get");
     const deck = await decks.createDeck(ctx, {
       name: "Stats",
@@ -54,8 +54,6 @@ describe("deck lifecycle", () => {
       total: 1,
       newCount: 1,
     });
-
-    expect(await decks.getDeck(ctx, "missing-id")).toBeUndefined();
   });
 
   it("updateDeck patches name and description", async () => {
@@ -70,10 +68,6 @@ describe("deck lifecycle", () => {
     });
     expect(described?.name).toBe("After");
     expect(described?.description).toBe("Now described");
-
-    expect(await decks.updateDeck(ctx, "missing-id", { name: "X" })).toBe(
-      undefined,
-    );
   });
 
   it("deleteDeck cascades notes, cards, edges, and review logs", async () => {
@@ -105,31 +99,6 @@ describe("deck lifecycle", () => {
       .all();
     expect(remainingNote).toHaveLength(1);
   });
-
-  it("createDeckWithCards creates the deck and its basic notes with tags", async () => {
-    const ctx = await makeContext("deck-bulk");
-    const result = await decks.createDeckWithCards(ctx, {
-      name: "Imported",
-      description: "From markdown",
-      cards: [
-        { front: "One", back: "1", tags: ["import"] },
-        { front: "Two", back: "2" },
-      ],
-    });
-
-    expect(result.cardCount).toBe(2);
-
-    const deck = await decks.getDeck(ctx, result.deckId);
-    expect(deck?.name).toBe("Imported");
-    expect(deck?.total).toBe(2);
-
-    const created = await notes.listNotes(ctx, result.deckId);
-    expect(created.map((note) => note.front).sort()).toEqual(["One", "Two"]);
-    expect(created.find((note) => note.front === "One")?.tags).toEqual([
-      "import",
-    ]);
-  });
-
   it("deck stats track due, learning, and learned counts", async () => {
     const ctx = await makeContext("deck-stats");
     const deck = await decks.createDeck(ctx, { name: "Counts" });

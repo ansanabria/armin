@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
 import { DiagramEditor } from "@/components/diagram-editor";
 import { cn } from "@/lib/utils";
@@ -165,7 +165,6 @@ export function CardFormDialog({
       await onSubmit({ type, content: built, tags });
       if (mode === "create") {
         resetFields();
-        setTags([]);
         setCreateSession((session) => session + 1);
       }
     } finally {
@@ -379,19 +378,17 @@ function ClozeField({
 
   return (
     <Field
-      label="Text"
       hint={
         <>
-          Select text and press <Kbd>Ctrl/⌘</Kbd>
+          Select text, then <Kbd>Ctrl/⌘</Kbd>
           <Kbd>Shift</Kbd>
-          <Kbd>C</Kbd> to wrap it as {"{{1::…}}"} (the number is added for you).
-          Each number is one review; reuse a number to blank several together,
-          or add a hint with {"{{1::answer::hint}}"}.
+          <Kbd>C</Kbd> or Make cloze. Reuse a number to blank together;{" "}
+          {"{{1::answer::hint}}"} for hints.
         </>
       }
     >
       <div className="space-y-2">
-        <Textarea
+        <AutoGrowTextarea
           ref={ref}
           autoFocus
           aria-label="Cloze text"
@@ -399,7 +396,8 @@ function ClozeField({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder="The {{1::mitochondria}} is the powerhouse of the {{2::cell}}."
-          className="min-h-[120px]"
+          minHeight={120}
+          maxHeight={300}
         />
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -506,16 +504,20 @@ function Field({
   hint,
   children,
 }: {
-  label: string;
+  label?: string;
   hint?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="block">
-      <span className="mb-1.5 flex items-baseline gap-2">
-        <span className="text-sm font-medium text-ink">{label}</span>
-        {hint && <span className="text-xs text-muted">{hint}</span>}
-      </span>
+      {(label || hint) && (
+        <span className="mb-1.5 flex items-baseline gap-2">
+          {label && (
+            <span className="text-sm font-medium text-ink">{label}</span>
+          )}
+          {hint && <span className="text-xs text-muted">{hint}</span>}
+        </span>
+      )}
       {children}
     </div>
   );

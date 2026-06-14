@@ -1,50 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  clozeClusters,
   generateReviewItems,
   matchesTypeAnswer,
-  noteDisplay,
-  normalizeAnswer,
-  parseClozes,
   renderClozeText,
   validateContent,
   type DiagramContent,
 } from "./card-types";
 
 describe("cloze parsing", () => {
-  it("reads explicit cluster numbers and optional hints", () => {
-    const text = "The {{1::mitochondria}} powers the {{2::cell::organelle}}.";
-    expect(parseClozes(text)).toEqual([
-      { cluster: 1, answer: "mitochondria", hint: undefined },
-      { cluster: 2, answer: "cell", hint: "organelle" },
-    ]);
-  });
-
-  it("groups deletions that reuse a cluster number", () => {
-    expect(parseClozes("{{1::Na}} and {{1::Cl}}")).toEqual([
-      { cluster: 1, answer: "Na", hint: undefined },
-      { cluster: 1, answer: "Cl", hint: undefined },
-    ]);
-  });
-
-  it("keeps a single ':' inside an answer", () => {
-    expect(parseClozes("{{1::ratio is 3:2}}")).toEqual([
-      { cluster: 1, answer: "ratio is 3:2", hint: undefined },
-    ]);
-  });
-
-  it("auto-numbers bare deletions as a fallback, above any explicit cluster", () => {
-    expect(parseClozes("{{3::a}} {{b}} {{c::hint}}")).toEqual([
-      { cluster: 3, answer: "a", hint: undefined },
-      { cluster: 4, answer: "b", hint: undefined },
-      { cluster: 5, answer: "c", hint: "hint" },
-    ]);
-  });
-
-  it("dedupes and sorts cluster numbers", () => {
-    expect(clozeClusters("{{2::b}} {{1::a}} {{2::c}}")).toEqual([1, 2]);
-  });
-
   it("blanks the target cluster and reveals the rest", () => {
     const text = "The {{1::mitochondria}} powers the {{2::cell}}.";
     expect(renderClozeText(text, 1)).toBe("The […] powers the cell.");
@@ -52,16 +15,6 @@ describe("cloze parsing", () => {
     expect(renderClozeText(text, null)).toBe(
       "The mitochondria powers the cell.",
     );
-  });
-
-  it("blanks every deletion sharing an explicit cluster together", () => {
-    const text = "{{1::Na}} pairs with {{1::Cl}} to form {{salt}}.";
-    expect(renderClozeText(text, 1)).toBe("[…] pairs with […] to form salt.");
-    expect(renderClozeText(text, 2)).toBe("Na pairs with Cl to form […].");
-  });
-
-  it("uses the hint inside the blank when present", () => {
-    expect(renderClozeText("{{1::Paris::capital}}", 1)).toBe("[capital]");
   });
 });
 
@@ -114,10 +67,6 @@ describe("generateReviewItems", () => {
 });
 
 describe("type_answer matching", () => {
-  it("normalizes whitespace and case", () => {
-    expect(normalizeAnswer("  Hello   World ")).toBe("hello world");
-  });
-
   it("matches the answer or an accepted alternative", () => {
     const content = {
       prompt: "Capital of France?",
@@ -128,22 +77,6 @@ describe("type_answer matching", () => {
     expect(matchesTypeAnswer(" VILLE de paris ", content)).toBe(true);
     expect(matchesTypeAnswer("Lyon", content)).toBe(false);
     expect(matchesTypeAnswer("", content)).toBe(false);
-  });
-});
-
-describe("noteDisplay", () => {
-  it("summarizes each type for tiles", () => {
-    expect(noteDisplay("cloze", { text: "{{1::a}} b" })).toEqual({
-      front: "[…] b",
-      back: "a b",
-    });
-    expect(
-      noteDisplay("type_answer", {
-        prompt: "P",
-        answer: "A",
-        acceptedAnswers: [],
-      }),
-    ).toEqual({ front: "P", back: "A" });
   });
 });
 

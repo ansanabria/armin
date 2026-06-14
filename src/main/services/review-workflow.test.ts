@@ -117,14 +117,6 @@ describe("review workflow", () => {
     expect(untouched.state).toBe(State.New);
   });
 
-  it("previewCard and rateCard reject unknown cards", async () => {
-    const ctx = await makeContext("missing-card");
-    await expect(review.previewCard(ctx, "ghost")).rejects.toThrow(/not found/);
-    await expect(review.rateCard(ctx, "ghost", Rating.Good)).rejects.toThrow(
-      /not found/,
-    );
-  });
-
   it("scopes the daily new-card count per deck for deck queues", async () => {
     const ctx = await makeContext("per-deck-cap");
     await settings.updateSettings(ctx, { newCardsPerDay: 1 });

@@ -1,12 +1,10 @@
 import {
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type ComponentType,
   type ReactNode,
-  type TextareaHTMLAttributes,
 } from "react";
 import {
   ArrowLeft,
@@ -22,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -506,46 +504,6 @@ function errorMessage(err: unknown, fallback: string): string {
     return err.message.replace(/^Error invoking remote method '[^']*':\s*/, "");
   }
   return fallback;
-}
-
-/**
- * Textarea that grows with its content instead of being manually resizable.
- * Starts at `minHeight`, expands as text is added, and only shows a scrollbar
- * once it reaches `maxHeight`.
- */
-function AutoGrowTextarea({
-  value,
-  minHeight,
-  maxHeight,
-  className,
-  ...props
-}: TextareaHTMLAttributes<HTMLTextAreaElement> & {
-  minHeight: number;
-  maxHeight: number;
-}) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const style = getComputedStyle(el);
-    const border =
-      parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
-    el.style.height = "auto";
-    const content = el.scrollHeight + border;
-    el.style.height = `${Math.min(maxHeight, Math.max(minHeight, content))}px`;
-    el.style.overflowY = content > maxHeight ? "auto" : "hidden";
-  }, [value, minHeight, maxHeight]);
-
-  return (
-    <Textarea
-      ref={ref}
-      value={value}
-      className={cn("resize-none", className)}
-      style={{ minHeight, maxHeight }}
-      {...props}
-    />
-  );
 }
 
 function FileDrop({

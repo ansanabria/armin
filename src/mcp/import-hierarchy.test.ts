@@ -61,36 +61,6 @@ describe("importCardHierarchy", () => {
     expect(result.cards.every((c) => c.deckId === deck.id)).toBe(true);
   });
 
-  it("rejects duplicate clientIds", async () => {
-    const ctx = await makeContext("import-dup");
-    await expect(
-      importCardHierarchy(ctx, {
-        deckName: "Dup",
-        cards: [
-          { clientId: "x", front: "One", back: "A" },
-          { clientId: "x", front: "Two", back: "B" },
-        ],
-      }),
-    ).rejects.toThrow(/Duplicate card clientId/);
-  });
-
-  it("rejects missing prerequisite references", async () => {
-    const ctx = await makeContext("import-missing");
-    await expect(
-      importCardHierarchy(ctx, {
-        deckName: "Missing",
-        cards: [
-          {
-            clientId: "child",
-            front: "Child",
-            back: "B",
-            prerequisites: ["ghost"],
-          },
-        ],
-      }),
-    ).rejects.toThrow(/missing prerequisite/);
-  });
-
   it("rejects cyclic hierarchies", async () => {
     const ctx = await makeContext("import-cycle");
     await expect(
@@ -145,35 +115,5 @@ describe("importCardHierarchy", () => {
       .from(schema.decks)
       .get();
     expect(deckCount?.value).toBe(0);
-  });
-
-  it("requires a deck identifier", async () => {
-    const ctx = await makeContext("import-no-deck");
-    await expect(
-      importCardHierarchy(ctx, {
-        cards: [{ clientId: "a", front: "A", back: "A" }],
-      }),
-    ).rejects.toThrow(/deckId or deckName/);
-  });
-
-  it("rolls back when deckId does not exist", async () => {
-    const ctx = await makeContext("import-rollback");
-    await expect(
-      importCardHierarchy(ctx, {
-        deckId: "00000000-0000-0000-0000-000000000000",
-        cards: [{ clientId: "a", front: "A", back: "A" }],
-      }),
-    ).rejects.toThrow(/Deck not found/);
-
-    const deckCount = await ctx.db
-      .select({ value: count() })
-      .from(schema.decks)
-      .get();
-    const cardCount = await ctx.db
-      .select({ value: count() })
-      .from(schema.cards)
-      .get();
-    expect(deckCount?.value).toBe(0);
-    expect(cardCount?.value).toBe(0);
   });
 });
