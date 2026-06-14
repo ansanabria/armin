@@ -7,7 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { createClient } from "@libsql/client";
+import Database from "better-sqlite3";
 import {
   setDbRootForTests,
   initDb,
@@ -35,52 +35,60 @@ async function main() {
   setDbRootForTests(null);
 
   const dbPath = path.join(dataDir, "profiles", profileId, "armin.db");
-  const client = createClient({ url: `file:${dbPath}` });
-  await client.execute("PRAGMA foreign_keys = ON;");
+  const client = new Database(dbPath);
+  client.pragma("foreign_keys = ON");
   const now = Date.now();
 
-  await client.execute({
-    sql: `INSERT INTO decks (id, name, description, created_at, updated_at)
+  client
+    .prepare(
+      `INSERT INTO decks (id, name, description, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?)`,
-    args: [deckId, `Verify (${count} cards)`, null, now, now],
-  });
+    )
+    .run(deckId, `Verify (${count} cards)`, null, now, now);
 
   const tagId = randomUUID();
-  await client.execute({
-    sql: `INSERT INTO tags (id, name, created_at) VALUES (?, ?, ?)`,
-    args: [tagId, "large", now],
-  });
+  client
+    .prepare(`INSERT INTO tags (id, name, created_at) VALUES (?, ?, ?)`)
+    .run(tagId, "large", now);
 
-  for (let start = 1; start <= count; start += 100) {
-    const end = Math.min(start + 99, count);
-    const stmts = [];
-    for (let i = start; i <= end; i++) {
-      const noteId = randomUUID();
-      const id = randomUUID();
-      const front = `Front ${i}`;
-      const back = `Back ${i}`;
-      stmts.push({
-        sql: `INSERT INTO notes (
+  const insertNote = client.prepare(
+    `INSERT INTO notes (
           id, deck_id, type, content, pos_x, pos_y, locked, created_at, updated_at
         ) VALUES (?, ?, 'basic', ?, NULL, NULL, 0, ?, ?)`,
-        args: [noteId, deckId, JSON.stringify({ front, back }), now, now + i],
-      });
-      stmts.push({
-        sql: `INSERT INTO cards (
+  );
+  const insertCard = client.prepare(
+    `INSERT INTO cards (
           id, note_id, deck_id, sub_key, front, back, due, stability, difficulty,
           elapsed_days, scheduled_days, learning_steps, reps, lapses, state,
           created_at, updated_at
         ) VALUES (?, ?, ?, '', ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?, ?)`,
-        args: [id, noteId, deckId, front, back, now + i, now, now + i],
-      });
+  );
+  const insertNoteTag = client.prepare(
+    `INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)`,
+  );
+  const seedBatch = client.transaction((from: number, to: number) => {
+    for (let i = from; i <= to; i++) {
+      const noteId = randomUUID();
+      const id = randomUUID();
+      const front = `Front ${i}`;
+      const back = `Back ${i}`;
+      insertNote.run(
+        noteId,
+        deckId,
+        JSON.stringify({ front, back }),
+        now,
+        now + i,
+      );
+      insertCard.run(id, noteId, deckId, front, back, now + i, now, now + i);
       if (i % 10 === 0) {
-        stmts.push({
-          sql: `INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)`,
-          args: [noteId, tagId],
-        });
+        insertNoteTag.run(noteId, tagId);
       }
     }
-    await client.batch(stmts);
+  });
+
+  for (let start = 1; start <= count; start += 100) {
+    const end = Math.min(start + 99, count);
+    seedBatch(start, end);
   }
   client.close();
 

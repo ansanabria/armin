@@ -20,9 +20,10 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createClient, type Client } from "@libsql/client";
+import Database from "better-sqlite3";
 import { unzipSync } from "fflate";
 import { decompress as zstdDecompress } from "fzstd";
+import { openSqliteDatabase } from "../../db/better-sqlite";
 import { schema } from "../../db";
 import {
   generateReviewItems,
@@ -230,12 +231,21 @@ function chooseCollection(entries: Record<string, Uint8Array>): {
   throw new Error("No Anki collection found in this package.");
 }
 
-async function openTempDb(
-  bytes: Uint8Array,
-): Promise<{ client: Client; cleanup: () => void }> {
+/** Read all rows of a query as plain objects (mirrors libSQL's `.rows`). */
+function queryRows(
+  client: Database.Database,
+  sql: string,
+): Record<string, unknown>[] {
+  return client.prepare(sql).all() as Record<string, unknown>[];
+}
+
+function openTempDb(bytes: Uint8Array): {
+  client: Database.Database;
+  cleanup: () => void;
+} {
   const tmpPath = path.join(os.tmpdir(), `armin-anki-${randomUUID()}.db`);
   fs.writeFileSync(tmpPath, Buffer.from(bytes));
-  const client = createClient({ url: `file:${tmpPath}` });
+  const client = openSqliteDatabase(tmpPath, { readonly: true });
   return {
     client,
     cleanup: () => {
@@ -255,10 +265,7 @@ type ColMeta = {
   deckNames: Map<number, string>;
 };
 
-async function readColMeta(
-  client: Client,
-  schema18: boolean,
-): Promise<ColMeta> {
+function readColMeta(client: Database.Database, schema18: boolean): ColMeta {
   const noteTypes = new Map<number, NoteType>();
   const deckNames = new Map<number, string>();
   let crt = Math.floor(Date.now() / 1000);
@@ -266,10 +273,8 @@ async function readColMeta(
   // Legacy: everything lives in the single `col` row as JSON.
   let usedJson = false;
   try {
-    const col = await client.execute(
-      "SELECT crt, models, decks FROM col LIMIT 1",
-    );
-    const row = col.rows[0] as Record<string, unknown> | undefined;
+    const col = queryRows(client, "SELECT crt, models, decks FROM col LIMIT 1");
+    const row = col[0] as Record<string, unknown> | undefined;
     if (row) {
       crt = Number(row.crt) || crt;
       const models = parseJsonObject(row.models);
@@ -305,22 +310,22 @@ async function readColMeta(
   // New format: read field names from the `fields` table (templates are stored
   // as protobuf and are skipped — we fall back to field-based extraction).
   if (!usedJson || schema18) {
-    await readSchema18Meta(client, noteTypes, deckNames);
+    readSchema18Meta(client, noteTypes, deckNames);
   }
 
   return { crt, noteTypes, deckNames };
 }
 
-async function readSchema18Meta(
-  client: Client,
+function readSchema18Meta(
+  client: Database.Database,
   noteTypes: Map<number, NoteType>,
   deckNames: Map<number, string>,
-): Promise<void> {
+): void {
   try {
-    const nts = await client.execute("SELECT id, name FROM notetypes");
+    const nts = queryRows(client, "SELECT id, name FROM notetypes");
     const fieldsByNt = new Map<number, { ord: number; name: string }[]>();
-    const fields = await client.execute("SELECT ntid, ord, name FROM fields");
-    for (const r of fields.rows as unknown as {
+    const fields = queryRows(client, "SELECT ntid, ord, name FROM fields");
+    for (const r of fields as unknown as {
       ntid: number;
       ord: number;
       name: string;
@@ -329,7 +334,7 @@ async function readSchema18Meta(
       list.push({ ord: Number(r.ord), name: r.name });
       fieldsByNt.set(Number(r.ntid), list);
     }
-    for (const r of nts.rows as unknown as { id: number; name: string }[]) {
+    for (const r of nts as unknown as { id: number; name: string }[]) {
       const id = Number(r.id);
       if (noteTypes.has(id)) continue;
       const fieldNames = (fieldsByNt.get(id) ?? [])
@@ -349,8 +354,8 @@ async function readSchema18Meta(
 
   if (deckNames.size === 0) {
     try {
-      const decks = await client.execute("SELECT id, name FROM decks");
-      for (const r of decks.rows as unknown as { id: number; name: string }[]) {
+      const decks = queryRows(client, "SELECT id, name FROM decks");
+      for (const r of decks as unknown as { id: number; name: string }[]) {
         // Schema 18 stores hierarchy with \x1f; normalise to Anki's "::".
         deckNames.set(Number(r.id), String(r.name).split("\x1f").join("::"));
       }
@@ -763,16 +768,14 @@ export async function analyzeAnkiPackage(
     mediaByName.get(name) ?? mediaByName.get(decodeURIComponent(name));
 
   const { bytes: dbBytes, schema18 } = chooseCollection(entries);
-  const { client, cleanup } = await openTempDb(dbBytes);
+  const { client, cleanup } = openTempDb(dbBytes);
 
   try {
-    const { crt, noteTypes, deckNames } = await readColMeta(client, schema18);
+    const { crt, noteTypes, deckNames } = readColMeta(client, schema18);
 
-    const noteRows = await client.execute(
-      "SELECT id, mid, tags, flds FROM notes",
-    );
+    const noteRows = queryRows(client, "SELECT id, mid, tags, flds FROM notes");
     const notesById = new Map<number, Note>();
-    for (const r of noteRows.rows as unknown as {
+    for (const r of noteRows as unknown as {
       id: number;
       mid: number;
       tags: string;
@@ -785,7 +788,8 @@ export async function analyzeAnkiPackage(
       });
     }
 
-    const cardRows = await client.execute(
+    const cardRows = queryRows(
+      client,
       "SELECT nid, did, ord, type, due, ivl, factor, reps, lapses, data FROM cards ORDER BY id",
     );
 
@@ -797,7 +801,7 @@ export async function analyzeAnkiPackage(
     let approximatedLayouts = false;
     const cardsByNoteId = new Map<number, CardRow[]>();
 
-    for (const raw of cardRows.rows as unknown as CardRow[]) {
+    for (const raw of cardRows as unknown as CardRow[]) {
       const card: CardRow = {
         nid: Number(raw.nid),
         did: Number(raw.did),
@@ -993,12 +997,12 @@ async function writeDeck(
 ): Promise<string> {
   const { decks, cards, notes, noteTags } = schema;
 
-  return ctx.db.transaction(async (tx) => {
-    const deck = await tx.insert(decks).values({ name }).returning().get();
+  return ctx.db.transaction((tx) => {
+    const deck = tx.insert(decks).values({ name }).returning().get();
     const deckId = deck!.id;
 
     // Resolve the tag set once for the whole deck (case-insensitive, deduped).
-    const tagIdByLower = await resolveTags(tx, parsedNotes);
+    const tagIdByLower = resolveTags(tx, parsedNotes);
 
     const noteTagRows: { noteId: string; tagId: string }[] = [];
     const noteValues: {
@@ -1040,20 +1044,17 @@ async function writeDeck(
     }
 
     for (let i = 0; i < noteValues.length; i += CARD_CHUNK) {
-      await tx
-        .insert(notes)
+      tx.insert(notes)
         .values(noteValues.slice(i, i + CARD_CHUNK))
         .run();
     }
     for (let i = 0; i < cardValues.length; i += CARD_CHUNK) {
-      await tx
-        .insert(cards)
+      tx.insert(cards)
         .values(cardValues.slice(i, i + CARD_CHUNK))
         .run();
     }
     for (let i = 0; i < noteTagRows.length; i += CARD_CHUNK) {
-      await tx
-        .insert(noteTags)
+      tx.insert(noteTags)
         .values(noteTagRows.slice(i, i + CARD_CHUNK))
         .onConflictDoNothing()
         .run();
@@ -1066,10 +1067,10 @@ async function writeDeck(
 type TxLike = Parameters<Parameters<ServiceContext["db"]["transaction"]>[0]>[0];
 
 /** Ensure every tag used in the deck exists; return a lower-name → id map. */
-async function resolveTags(
+function resolveTags(
   tx: TxLike,
   parsedNotes: ParsedNote[],
-): Promise<Map<string, string>> {
+): Map<string, string> {
   const { tags } = schema;
   const byLower = new Map<string, string>();
   const wanted = new Map<string, string>(); // lower → display
@@ -1081,16 +1082,12 @@ async function resolveTags(
   }
   if (wanted.size === 0) return byLower;
 
-  const existing = await tx.select().from(tags).all();
+  const existing = tx.select().from(tags).all();
   for (const row of existing) byLower.set(row.name.toLocaleLowerCase(), row.id);
 
   for (const [lower, display] of wanted) {
     if (byLower.has(lower)) continue;
-    const created = await tx
-      .insert(tags)
-      .values({ name: display })
-      .returning()
-      .get();
+    const created = tx.insert(tags).values({ name: display }).returning().get();
     byLower.set(lower, created!.id);
   }
   return byLower;

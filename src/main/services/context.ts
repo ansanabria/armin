@@ -1,7 +1,7 @@
-import type { LibSQLDatabase } from "drizzle-orm/libsql";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import type * as schema from "../db/schema";
 
 export type ServiceContext = {
   profileId: string;
-  db: LibSQLDatabase<typeof schema>;
+  db: BetterSQLite3Database<typeof schema>;
 };

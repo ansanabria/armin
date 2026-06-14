@@ -1,10 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 import { describe, expect, it } from "vitest";
-import {
-  CARD_NODE_HEIGHT,
-  CARD_NODE_WIDTH,
-  layoutGraph,
-} from "./graph-layout";
+import { CARD_NODE_HEIGHT, CARD_NODE_WIDTH, layoutGraph } from "./graph-layout";
 
 type Data = Record<string, unknown>;
 

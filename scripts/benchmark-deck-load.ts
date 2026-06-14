@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { randomUUID } from "node:crypto";
-import { createClient } from "@libsql/client";
+import Database from "better-sqlite3";
 import {
   setDbRootForTests,
   initDb,
@@ -42,100 +42,108 @@ if (seedMode) {
 
 const dbPath = path.join(dataDir!, "profiles", profileId, "armin.db");
 
-async function seedDeck(
-  client: ReturnType<typeof createClient>,
+function seedDeck(
+  client: Database.Database,
   targetDeckId: string,
   count: number,
 ) {
   const now = Date.now();
-  await client.execute({
-    sql: `INSERT OR IGNORE INTO decks (id, name, description, created_at, updated_at)
+  client
+    .prepare(
+      `INSERT OR IGNORE INTO decks (id, name, description, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?)`,
-    args: [
+    )
+    .run(
       targetDeckId,
       `Benchmark (${count} cards)`,
       "Auto-generated for load benchmarks.",
       now,
       now,
-    ],
-  });
+    );
 
   const tagId = randomUUID();
-  await client.execute({
-    sql: `INSERT INTO tags (id, name, created_at) VALUES (?, ?, ?)
+  client
+    .prepare(
+      `INSERT INTO tags (id, name, created_at) VALUES (?, ?, ?)
           ON CONFLICT(name) DO NOTHING`,
-    args: [tagId, "benchmark", now],
-  });
-  const tagRow = await client.execute({
-    sql: `SELECT id FROM tags WHERE name = ?`,
-    args: ["benchmark"],
-  });
-  const resolvedTagId = tagRow.rows[0].id as string;
+    )
+    .run(tagId, "benchmark", now);
+  const tagRow = client
+    .prepare(`SELECT id FROM tags WHERE name = ?`)
+    .get("benchmark") as { id: string };
+  const resolvedTagId = tagRow.id;
 
-  const batchSize = 100;
-  for (let start = 1; start <= count; start += batchSize) {
-    const end = Math.min(start + batchSize - 1, count);
-    const statements = [];
-    for (let i = start; i <= end; i++) {
-      const noteId = randomUUID();
-      const cardId = randomUUID();
-      const front = `Card ${i}: benchmark front with **markdown** and \`code\``;
-      const back = `Card ${i}: benchmark back answer line two line three`;
-      statements.push({
-        sql: `INSERT INTO notes (
+  const insertNote = client.prepare(
+    `INSERT INTO notes (
           id, deck_id, type, content, pos_x, pos_y, locked, created_at, updated_at
         ) VALUES (?, ?, 'basic', ?, NULL, NULL, 0, ?, ?)`,
-        args: [
-          noteId,
-          targetDeckId,
-          JSON.stringify({ front, back }),
-          now,
-          now,
-        ],
-      });
-      statements.push({
-        sql: `INSERT INTO cards (
+  );
+  const insertCard = client.prepare(
+    `INSERT INTO cards (
           id, note_id, deck_id, sub_key, front, back,
           due, stability, difficulty, elapsed_days, scheduled_days,
           learning_steps, reps, lapses, state, last_review,
           created_at, updated_at
         ) VALUES (?, ?, ?, '', ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, NULL, ?, ?)`,
-        args: [cardId, noteId, targetDeckId, front, back, now + i, now, now + i],
-      });
-      statements.push({
-        sql: `INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)`,
-        args: [noteId, resolvedTagId],
-      });
+  );
+  const insertNoteTag = client.prepare(
+    `INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)`,
+  );
+  const seedBatch = client.transaction((from: number, to: number) => {
+    for (let i = from; i <= to; i++) {
+      const noteId = randomUUID();
+      const cardId = randomUUID();
+      const front = `Card ${i}: benchmark front with **markdown** and \`code\``;
+      const back = `Card ${i}: benchmark back answer line two line three`;
+      insertNote.run(
+        noteId,
+        targetDeckId,
+        JSON.stringify({ front, back }),
+        now,
+        now,
+      );
+      insertCard.run(
+        cardId,
+        noteId,
+        targetDeckId,
+        front,
+        back,
+        now + i,
+        now,
+        now + i,
+      );
+      insertNoteTag.run(noteId, resolvedTagId);
     }
-    await client.batch(statements);
+  });
+
+  const batchSize = 100;
+  for (let start = 1; start <= count; start += batchSize) {
+    const end = Math.min(start + batchSize - 1, count);
+    seedBatch(start, end);
   }
 }
 
-async function runRawSqlBenchmarks(
-  client: ReturnType<typeof createClient>,
-  targetDeckId: string,
-) {
+function runRawSqlBenchmarks(client: Database.Database, targetDeckId: string) {
   const timings: Record<string, number> = {};
 
   let t0 = performance.now();
-  await client.execute({
-    sql: `SELECT * FROM cards WHERE deck_id = ? ORDER BY created_at`,
-    args: [targetDeckId],
-  });
+  client
+    .prepare(`SELECT * FROM cards WHERE deck_id = ? ORDER BY created_at`)
+    .all(targetDeckId);
   timings.fullListSqlMs = performance.now() - t0;
 
   t0 = performance.now();
-  await client.execute({
-    sql: `SELECT * FROM cards WHERE deck_id = ? ORDER BY created_at LIMIT ? OFFSET 0`,
-    args: [targetDeckId, pageSize],
-  });
+  client
+    .prepare(
+      `SELECT * FROM cards WHERE deck_id = ? ORDER BY created_at LIMIT ? OFFSET 0`,
+    )
+    .all(targetDeckId, pageSize);
   timings.firstPageSqlMs = performance.now() - t0;
 
   t0 = performance.now();
-  await client.execute({
-    sql: `SELECT COUNT(*) AS n FROM cards WHERE deck_id = ?`,
-    args: [targetDeckId],
-  });
+  client
+    .prepare(`SELECT COUNT(*) AS n FROM cards WHERE deck_id = ?`)
+    .get(targetDeckId);
   timings.countSqlMs = performance.now() - t0;
 
   return timings;
@@ -193,10 +201,10 @@ async function main() {
     closeDb();
     setDbRootForTests(null);
 
-    const client = createClient({ url: `file:${dbPath}` });
-    await client.execute("PRAGMA foreign_keys = ON;");
+    const client = new Database(dbPath);
+    client.pragma("foreign_keys = ON");
     console.log(`Seeding ${cardCount} cards into ${deckId}…`);
-    await seedDeck(client, deckId!, cardCount);
+    seedDeck(client, deckId!, cardCount);
     client.close();
   }
 
@@ -210,21 +218,20 @@ async function main() {
     process.exit(1);
   }
 
-  const client = createClient({ url: `file:${dbPath}` });
-  await client.execute("PRAGMA foreign_keys = ON;");
+  const client = new Database(dbPath);
+  client.pragma("foreign_keys = ON");
 
-  const countRow = await client.execute({
-    sql: `SELECT COUNT(*) AS n FROM cards WHERE deck_id = ?`,
-    args: [deckId],
-  });
-  const deckSize = Number(countRow.rows[0].n);
+  const countRow = client
+    .prepare(`SELECT COUNT(*) AS n FROM cards WHERE deck_id = ?`)
+    .get(deckId) as { n: number };
+  const deckSize = Number(countRow.n);
 
   console.log(`Benchmark deck: ${deckId}`);
   console.log(`  cards: ${deckSize}`);
   console.log(`  page size: ${pageSize}`);
   console.log("");
 
-  const sqlTimings = await runRawSqlBenchmarks(client, deckId);
+  const sqlTimings = runRawSqlBenchmarks(client, deckId);
   client.close();
 
   const serviceTimings = await runServiceBenchmarks(deckId);

@@ -40,10 +40,7 @@ describe("review FSRS integration", () => {
     return ctx;
   }
 
-  function basic(
-    ctx: Awaited<ReturnType<typeof makeContext>>,
-    deckId: string,
-  ) {
+  function basic(ctx: Awaited<ReturnType<typeof makeContext>>, deckId: string) {
     return notes.createNote({
       ctx,
       deckId,

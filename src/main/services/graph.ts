@@ -166,16 +166,14 @@ export async function persistLockedForNoteIds(
   const computed = await computeLockedByNoteIds(ctx, uniqueIds);
   const now = new Date();
 
-  await ctx.db.transaction(async (tx) => {
+  await ctx.db.transaction((tx) => {
     for (const id of uniqueIds) {
       const locked = computed.get(id) ?? false;
-      await tx
-        .update(notes)
+      tx.update(notes)
         .set({ locked, updatedAt: now })
         .where(eq(notes.id, id))
         .run();
-      await tx
-        .update(cards)
+      tx.update(cards)
         .set({ locked, updatedAt: now })
         .where(eq(cards.noteId, id))
         .run();
@@ -504,10 +502,9 @@ export async function saveLayout(
   const ownedIds = new Set(owned.map((n) => n.id));
   const toWrite = placements.filter((p) => ownedIds.has(p.noteId));
   if (toWrite.length === 0) return;
-  await ctx.db.transaction(async (tx) => {
+  await ctx.db.transaction((tx) => {
     for (const p of toWrite) {
-      await tx
-        .update(notes)
+      tx.update(notes)
         .set({ posX: p.x, posY: p.y })
         .where(eq(notes.id, p.noteId))
         .run();

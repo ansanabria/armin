@@ -122,85 +122,81 @@ export async function importCardHierarchy(
     ...resolveTypedContent(card),
   }));
 
-  return ctx.db
-    .transaction(async (tx) => {
-      let deck: Deck | undefined;
-      if (input.deckId) {
-        deck = await tx
-          .select()
-          .from(schema.decks)
-          .where(eq(schema.decks.id, input.deckId))
-          .get();
-        if (!deck) {
-          throw new Error(`Deck not found: ${input.deckId}`);
-        }
-      } else {
-        deck = await tx
-          .insert(schema.decks)
-          .values({
-            name: input.deckName!.trim(),
-            description: input.deckDescription ?? null,
-          })
-          .returning()
-          .get();
+  const result = ctx.db.transaction((tx) => {
+    let deck: Deck | undefined;
+    if (input.deckId) {
+      deck = tx
+        .select()
+        .from(schema.decks)
+        .where(eq(schema.decks.id, input.deckId))
+        .get();
+      if (!deck) {
+        throw new Error(`Deck not found: ${input.deckId}`);
       }
+    } else {
+      deck = tx
+        .insert(schema.decks)
+        .values({
+          name: input.deckName!.trim(),
+          description: input.deckDescription ?? null,
+        })
+        .returning()
+        .get();
+    }
 
-      const notesByClientId = new Map<string, Note>();
-      const createdNotes: Array<Note & { clientId: string }> = [];
+    const notesByClientId = new Map<string, Note>();
+    const createdNotes: Array<Note & { clientId: string }> = [];
 
-      for (const { card, type, content } of resolved) {
-        const note = await tx
-          .insert(schema.notes)
+    for (const { card, type, content } of resolved) {
+      const note = tx
+        .insert(schema.notes)
+        .values({
+          deckId: deck.id,
+          type,
+          content: serializeContent(content),
+          locked: false,
+        })
+        .returning()
+        .get();
+
+      for (const item of generateReviewItems(type, content)) {
+        tx.insert(schema.cards)
           .values({
+            noteId: note!.id,
             deckId: deck.id,
-            type,
-            content: serializeContent(content),
-            locked: false,
+            subKey: item.subKey,
+            front: item.front,
+            back: item.back,
+            ...newCardFields(),
           })
-          .returning()
-          .get();
-
-        for (const item of generateReviewItems(type, content)) {
-          await tx
-            .insert(schema.cards)
-            .values({
-              noteId: note!.id,
-              deckId: deck.id,
-              subKey: item.subKey,
-              front: item.front,
-              back: item.back,
-              ...newCardFields(),
-            })
-            .run();
-        }
-
-        notesByClientId.set(card.clientId, note!);
-        createdNotes.push({ ...note!, clientId: card.clientId });
+          .run();
       }
 
-      const edges: ImportedHierarchy["edges"] = [];
-      for (const card of input.cards) {
-        const dependent = notesByClientId.get(card.clientId)!;
-        for (const prereqClientId of card.prerequisites ?? []) {
-          const prereq = notesByClientId.get(prereqClientId)!;
-          await tx
-            .insert(schema.notePrereqs)
-            .values({ prereqId: prereq.id, dependentId: dependent.id })
-            .onConflictDoNothing()
-            .run();
-          edges.push({
-            prereqClientId,
-            dependentClientId: card.clientId,
-          });
-        }
-      }
+      notesByClientId.set(card.clientId, note!);
+      createdNotes.push({ ...note!, clientId: card.clientId });
+    }
 
-      return { deck, cards: createdNotes, edges };
-    })
-    .then(async (result) => {
-      await refreshLockedForDeck(ctx, result.deck.id);
-      return result;
-    });
+    const edges: ImportedHierarchy["edges"] = [];
+    for (const card of input.cards) {
+      const dependent = notesByClientId.get(card.clientId)!;
+      for (const prereqClientId of card.prerequisites ?? []) {
+        const prereq = notesByClientId.get(prereqClientId)!;
+        tx.insert(schema.notePrereqs)
+          .values({ prereqId: prereq.id, dependentId: dependent.id })
+          .onConflictDoNothing()
+          .run();
+        edges.push({
+          prereqClientId,
+          dependentClientId: card.clientId,
+        });
+      }
+    }
+
+    return { deck, cards: createdNotes, edges };
+  });
+
+  await refreshLockedForDeck(ctx, result.deck.id);
+  return result;
 }
 
 export async function readDeckGraph(ctx: ServiceContext, deckId: string) {

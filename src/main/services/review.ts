@@ -224,24 +224,19 @@ export async function rateCard(
 ): Promise<ReviewQueueItem> {
   const now = new Date();
   const scheduler = await buildScheduler(ctx);
-  const updated = await ctx.db.transaction(async (tx) => {
-    const card = await tx
-      .select()
-      .from(cards)
-      .where(eq(cards.id, cardId))
-      .get();
+  const updated = await ctx.db.transaction((tx) => {
+    const card = tx.select().from(cards).where(eq(cards.id, cardId)).get();
     if (!card) throw new Error(`Card ${cardId} not found`);
     const { card: next, log } = scheduler.next(toFsrsCard(card), now, rating);
 
-    const updated = await tx
+    const updated = tx
       .update(cards)
       .set({ ...fromFsrsCard(next), updatedAt: now })
       .where(eq(cards.id, cardId))
       .returning()
       .get();
 
-    await tx
-      .insert(reviewLogs)
+    tx.insert(reviewLogs)
       .values({
         cardId,
         rating: log.rating,
