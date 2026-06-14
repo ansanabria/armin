@@ -24,6 +24,7 @@ const config: ForgeConfig = {
 
       return ![
         "/.vite",
+        "/drizzle",
         "/node_modules/libsql",
         "/node_modules/@neon-rs/load",
         "/node_modules/detect-libc",
