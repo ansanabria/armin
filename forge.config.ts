@@ -14,27 +14,29 @@ const config: ForgeConfig = {
     asar: true,
     icon: path.resolve(__dirname, "assets/icons/icon"),
     extraResource: ["./assets/icons"],
+    // Deny-by-default packaging: ship the bundled output, migrations, and only
+    // the native runtime dependency (better-sqlite3 + its two pure-JS deps).
+    // The AutoUnpackNatives plugin extracts the compiled .node from the asar.
     ignore: (file) => {
       if (!file) return false;
-      if (file === "/node_modules" || file === "/node_modules/@libsql") {
-        return false;
-      }
-      if (file === "/node_modules/@neon-rs") {
-        return false;
-      }
+      if (file === "/node_modules") return false;
 
-      return ![
+      const keep = [
         "/.vite",
         "/drizzle",
-        "/node_modules/libsql",
-        "/node_modules/@neon-rs/load",
-        "/node_modules/detect-libc",
-        "/node_modules/@libsql/linux-x64-gnu",
-        "/node_modules/@libsql/linux-x64-musl",
-      ].some((prefix) => file.startsWith(prefix));
+        "/node_modules/better-sqlite3",
+        "/node_modules/bindings",
+        "/node_modules/file-uri-to-path",
+      ];
+      return !keep.some(
+        (prefix) => file === prefix || file.startsWith(`${prefix}/`),
+      );
     },
   },
-  rebuildConfig: {},
+  rebuildConfig: {
+    force: true,
+    onlyModules: ["better-sqlite3"],
+  },
   makers: [
     new MakerSquirrel({}),
     new MakerZIP({}, ["darwin"]),
@@ -66,11 +68,12 @@ const config: ForgeConfig = {
   plugins: [
     new AutoUnpackNativesPlugin({}),
     new VitePlugin({
-      // `build` can specify multiple entry builds, which can be Main process, Preload scripts, Worker process, etc.
-      // If you are familiar with Vite configuration, it will look really familiar.
+      // `build` can specify multiple entry builds, which can be Main process,
+      // Preload scripts, Worker process, etc.
       build: [
         {
-          // `entry` is just an alias for `build.lib.entry` in the corresponding file of `config`.
+          // `entry` is just an alias for `build.lib.entry` in the
+          // corresponding file of `config`.
           entry: "src/main/main.ts",
           config: "vite.main.config.mts",
           target: "main",

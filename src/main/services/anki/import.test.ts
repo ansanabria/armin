@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createClient } from "@libsql/client";
+import Database from "better-sqlite3";
 import { zipSync } from "fflate";
 import { closeDb, getDb, initDb, schema, setDbRootForTests } from "../../db";
 import { runMigrations } from "../../db/migrate";
@@ -119,32 +119,31 @@ async function buildApkg(
   cards: CardRowTuple[] = DEFAULT_CARDS,
 ): Promise<Uint8Array> {
   const dbPath = path.join(os.tmpdir(), `armin-anki-src-${randomUUID()}.db`);
-  const client = createClient({ url: `file:${dbPath}` });
-  await client.execute(
+  const client = new Database(dbPath);
+  client.exec(
     "CREATE TABLE col (id INTEGER PRIMARY KEY, crt INTEGER, models TEXT, decks TEXT)",
   );
-  await client.execute(
+  client.exec(
     "CREATE TABLE notes (id INTEGER PRIMARY KEY, mid INTEGER, tags TEXT, flds TEXT)",
   );
-  await client.execute(
+  client.exec(
     "CREATE TABLE cards (id INTEGER PRIMARY KEY, nid INTEGER, did INTEGER, ord INTEGER, type INTEGER, due INTEGER, ivl INTEGER, factor INTEGER, reps INTEGER, lapses INTEGER, data TEXT)",
   );
-  await client.execute({
-    sql: "INSERT INTO col (id, crt, models, decks) VALUES (1, ?, ?, ?)",
-    args: [1600000000, JSON.stringify(MODELS), JSON.stringify(DECKS)],
-  });
+  client
+    .prepare("INSERT INTO col (id, crt, models, decks) VALUES (1, ?, ?, ?)")
+    .run(1600000000, JSON.stringify(MODELS), JSON.stringify(DECKS));
 
+  const insertNote = client.prepare(
+    "INSERT INTO notes (id, mid, tags, flds) VALUES (?, ?, ?, ?)",
+  );
   for (const [id, mid, tags, flds] of notes) {
-    await client.execute({
-      sql: "INSERT INTO notes (id, mid, tags, flds) VALUES (?, ?, ?, ?)",
-      args: [id, mid, tags, flds],
-    });
+    insertNote.run(id, mid, tags, flds);
   }
+  const insertCard = client.prepare(
+    "INSERT INTO cards (id, nid, did, ord, type, due, ivl, factor, reps, lapses, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  );
   for (const c of cards) {
-    await client.execute({
-      sql: "INSERT INTO cards (id, nid, did, ord, type, due, ivl, factor, reps, lapses, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      args: c,
-    });
+    insertCard.run(...c);
   }
   client.close();
 

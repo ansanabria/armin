@@ -100,29 +100,24 @@ export async function getTagsForNotes(
 
 type TagWriteDb = Pick<ServiceContext["db"], "delete" | "insert" | "select">;
 
-async function replaceNoteTags(
-  db: TagWriteDb,
-  noteId: string,
-  inputTags: string[],
-) {
+function replaceNoteTags(db: TagWriteDb, noteId: string, inputTags: string[]) {
   const nextTags = normalizeTags(inputTags);
 
-  await db.delete(noteTags).where(eq(noteTags.noteId, noteId)).run();
+  db.delete(noteTags).where(eq(noteTags.noteId, noteId)).run();
 
   for (const name of nextTags) {
     const lowerName = name.toLocaleLowerCase();
-    let tag = await db
+    let tag = db
       .select()
       .from(tags)
       .where(sql`lower(${tags.name}) = ${lowerName}`)
       .get();
 
     if (!tag) {
-      tag = await db.insert(tags).values({ name }).returning().get();
+      tag = db.insert(tags).values({ name }).returning().get();
     }
 
-    await db
-      .insert(noteTags)
+    db.insert(noteTags)
       .values({ noteId, tagId: tag.id })
       .onConflictDoNothing()
       .run();
@@ -210,14 +205,14 @@ type ReconcileDb = Pick<
  * whose `subKey` still exists (preserving FSRS state), insert new ones, and
  * delete the ones the new content no longer produces.
  */
-async function reconcileCards(
+function reconcileCards(
   db: ReconcileDb,
   note: Pick<Note, "id" | "deckId" | "locked">,
   type: CardType,
   content: CardContent,
-): Promise<void> {
+): void {
   const items = generateReviewItems(type, content);
-  const existing = await db
+  const existing = db
     .select()
     .from(cards)
     .where(eq(cards.noteId, note.id))
@@ -228,8 +223,7 @@ async function reconcileCards(
 
   const removed = existing.filter((card) => !nextSubKeys.has(card.subKey));
   if (removed.length > 0) {
-    await db
-      .delete(cards)
+    db.delete(cards)
       .where(
         inArray(
           cards.id,
@@ -242,8 +236,7 @@ async function reconcileCards(
   for (const item of items) {
     const found = existingBySubKey.get(item.subKey);
     if (found) {
-      await db
-        .update(cards)
+      db.update(cards)
         .set({
           front: item.front,
           back: item.back,
@@ -253,8 +246,7 @@ async function reconcileCards(
         .where(eq(cards.id, found.id))
         .run();
     } else {
-      await db
-        .insert(cards)
+      db.insert(cards)
         .values({
           noteId: note.id,
           deckId: note.deckId,
@@ -320,8 +312,8 @@ export async function createNote(input: {
   const { ctx } = input;
   const content = validateContent(input.type, input.content);
 
-  const note = await ctx.db.transaction(async (tx) => {
-    const created = await tx
+  const note = await ctx.db.transaction((tx) => {
+    const created = tx
       .insert(notes)
       .values({
         deckId: input.deckId,
@@ -332,8 +324,8 @@ export async function createNote(input: {
       .returning()
       .get();
 
-    await reconcileCards(tx, created!, input.type, content);
-    await replaceNoteTags(tx, created!.id, input.tags ?? []);
+    reconcileCards(tx, created!, input.type, content);
+    replaceNoteTags(tx, created!.id, input.tags ?? []);
     return created!;
   });
 
@@ -345,8 +337,8 @@ export async function updateNote(
   id: string,
   patch: { type?: CardType; content?: unknown; tags?: string[] },
 ): Promise<NoteWithMeta | undefined> {
-  const note = await ctx.db.transaction(async (tx) => {
-    const current = await tx.select().from(notes).where(eq(notes.id, id)).get();
+  const note = await ctx.db.transaction((tx) => {
+    const current = tx.select().from(notes).where(eq(notes.id, id)).get();
     if (!current) return undefined;
 
     const nextType = patch.type ?? (current.type as CardType);
@@ -362,7 +354,7 @@ export async function updateNote(
 
     let updated = current;
     if (contentChanged) {
-      updated = await tx
+      updated = tx
         .update(notes)
         .set({
           type: nextType,
@@ -372,11 +364,11 @@ export async function updateNote(
         .where(eq(notes.id, id))
         .returning()
         .get();
-      await reconcileCards(tx, updated!, nextType, content);
+      reconcileCards(tx, updated!, nextType, content);
     }
 
     if (patch.tags) {
-      await replaceNoteTags(tx, id, patch.tags);
+      replaceNoteTags(tx, id, patch.tags);
     }
 
     return updated!;
@@ -394,9 +386,9 @@ export async function deleteNote(
 
   // cards.note_id has no DB-level FK on migrated databases, so remove the
   // generated review items explicitly (review_logs cascade off cards).
-  await ctx.db.transaction(async (tx) => {
-    await tx.delete(cards).where(eq(cards.noteId, id)).run();
-    await tx.delete(notes).where(eq(notes.id, id)).run();
+  await ctx.db.transaction((tx) => {
+    tx.delete(cards).where(eq(cards.noteId, id)).run();
+    tx.delete(notes).where(eq(notes.id, id)).run();
   });
 
   // The deleted note may have been the lock holding dependents back.

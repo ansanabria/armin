@@ -189,7 +189,10 @@ export function parseClozes(text: string): ClozeDeletion[] {
     raws.push(parseClozeBody(match[1]));
   }
   const maxExplicit = raws.reduce(
-    (max, r) => (r.explicitCluster != null && r.explicitCluster > max ? r.explicitCluster : max),
+    (max, r) =>
+      r.explicitCluster != null && r.explicitCluster > max
+        ? r.explicitCluster
+        : max,
     0,
   );
   let nextAuto = maxExplicit + 1;
@@ -217,7 +220,9 @@ function replaceClozes(
 ): string {
   const deletions = parseClozes(text);
   let i = 0;
-  return text.replace(new RegExp(CLOZE_RE.source, "g"), () => fn(deletions[i++]));
+  return text.replace(new RegExp(CLOZE_RE.source, "g"), () =>
+    fn(deletions[i++]),
+  );
 }
 
 /**

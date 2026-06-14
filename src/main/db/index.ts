@@ -1,13 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
 import { app } from "electron";
-import { createClient, type Client } from "@libsql/client";
-import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
+import Database from "better-sqlite3";
+import {
+  drizzle,
+  type BetterSQLite3Database,
+} from "drizzle-orm/better-sqlite3";
+import { openSqliteDatabase } from "./better-sqlite";
 import * as schema from "./schema";
 
 type DbHandle = {
-  client: Client;
-  db: LibSQLDatabase<typeof schema>;
+  client: Database.Database;
+  db: BetterSQLite3Database<typeof schema>;
 };
 
 const handles = new Map<string, DbHandle>();
@@ -37,18 +41,16 @@ export function setDbRootForTests(root: string | null) {
   testDbRoot = root;
 }
 
-/** Open a profile's SQLite database via libSQL (WAL + FK enforcement). */
+/** Open a profile's SQLite database via better-sqlite3 (WAL + FK enforcement). */
 export async function initDb(profileId: string) {
   const existing = handles.get(profileId);
   if (existing) return existing.db;
 
   const dir = profileDbDir(profileId);
   fs.mkdirSync(dir, { recursive: true });
-  const client = createClient({
-    url: `file:${path.join(dir, "armin.db")}`,
-  });
-  await client.execute("PRAGMA journal_mode = WAL;");
-  await client.execute("PRAGMA foreign_keys = ON;");
+  const client = openSqliteDatabase(path.join(dir, "armin.db"));
+  client.pragma("journal_mode = WAL");
+  client.pragma("foreign_keys = ON");
 
   const db = drizzle(client, { schema });
   handles.set(profileId, { client, db });

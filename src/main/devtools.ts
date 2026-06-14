@@ -57,16 +57,15 @@ export function registerDevToolsShortcuts(window: BrowserWindow): void {
 }
 
 /** MV3 DevTools extensions need their service worker started explicitly in Electron. */
-async function startExtensionServiceWorker(extension: Extension): Promise<void> {
+async function startExtensionServiceWorker(
+  extension: Extension,
+): Promise<void> {
   const manifest = extension.manifest as {
     manifest_version?: number;
     background?: { service_worker?: string };
   };
 
-  if (
-    manifest.manifest_version !== 3 ||
-    !manifest.background?.service_worker
-  ) {
+  if (manifest.manifest_version !== 3 || !manifest.background?.service_worker) {
     return;
   }
 

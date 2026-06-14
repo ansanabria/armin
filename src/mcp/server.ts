@@ -88,7 +88,7 @@ server.registerTool(
         .record(z.string(), z.any())
         .optional()
         .describe(
-          "Type-specific content object. Defaults to { front, back } for basic. Cloze uses { text } with numbered deletions written {{N::answer}} (e.g. \"The {{1::mitochondria}} is the powerhouse of the {{2::cell}}.\"); each distinct number is one review, reuse a number to blank several together, and add a hint with {{N::answer::hint}}.",
+          'Type-specific content object. Defaults to { front, back } for basic. Cloze uses { text } with numbered deletions written {{N::answer}} (e.g. "The {{1::mitochondria}} is the powerhouse of the {{2::cell}}."); each distinct number is one review, reuse a number to blank several together, and add a hint with {{N::answer::hint}}.',
         ),
     }),
   },
@@ -159,10 +159,7 @@ server.registerTool(
                 .string()
                 .optional()
                 .describe("Card front (basic types)."),
-              back: z
-                .string()
-                .optional()
-                .describe("Card back (basic types)."),
+              back: z.string().optional().describe("Card back (basic types)."),
               type: z
                 .string()
                 .optional()
@@ -173,7 +170,7 @@ server.registerTool(
                 .record(z.string(), z.any())
                 .optional()
                 .describe(
-                  "Type-specific content object. Defaults to { front, back } for basic. Cloze uses { text } with numbered deletions written {{N::answer}} (e.g. \"The {{1::mitochondria}} is the powerhouse of the {{2::cell}}.\"); each distinct number is one review, reuse a number to blank several together, and add a hint with {{N::answer::hint}}.",
+                  'Type-specific content object. Defaults to { front, back } for basic. Cloze uses { text } with numbered deletions written {{N::answer}} (e.g. "The {{1::mitochondria}} is the powerhouse of the {{2::cell}}."); each distinct number is one review, reuse a number to blank several together, and add a hint with {{N::answer::hint}}.',
                 ),
               prerequisites: z
                 .array(idSchema)

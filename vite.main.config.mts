@@ -4,15 +4,8 @@ import { defineConfig } from "vite";
 export default defineConfig({
   build: {
     rollupOptions: {
-      // libsql ships native binaries; ws optional peer deps break when bundled.
-      external: [
-        "libsql",
-        "@libsql/client",
-        "@libsql/isomorphic-ws",
-        "ws",
-        "bufferutil",
-        "utf-8-validate",
-      ],
+      // better-sqlite3 loads a native .node addon that can't be bundled.
+      external: ["better-sqlite3", "bindings"],
     },
   },
 });

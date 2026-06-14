@@ -16,10 +16,7 @@ type Placed<T extends Record<string, unknown>> = {
 };
 
 /** Group node ids into connected components, treating edges as undirected. */
-function connectedComponents(
-  nodeIds: string[],
-  edges: Edge[],
-): string[][] {
+function connectedComponents(nodeIds: string[], edges: Edge[]): string[][] {
   const parent = new Map<string, string>();
   for (const id of nodeIds) parent.set(id, id);
 
@@ -128,7 +125,8 @@ export function layoutGraph<T extends Record<string, unknown>>(
   // Pack components into rows, wrapping once a row exceeds a target width that
   // keeps the overall arrangement roughly square.
   const totalArea = laidOut.reduce(
-    (sum, c) => sum + (c.width + COMPONENT_GAP_X) * (c.height + COMPONENT_GAP_Y),
+    (sum, c) =>
+      sum + (c.width + COMPONENT_GAP_X) * (c.height + COMPONENT_GAP_Y),
     0,
   );
   const widestComponent = laidOut.reduce((m, c) => Math.max(m, c.width), 0);

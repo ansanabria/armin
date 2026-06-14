@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { app } from "electron";
-import { migrate } from "drizzle-orm/libsql/migrator";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { getDb } from "./index";
 
 function hasMigrations(folder: string) {
