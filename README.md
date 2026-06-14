@@ -73,6 +73,37 @@ Armin includes a local stdio MCP server so coding agents can create decks, cards
 and prerequisite graphs. See [docs/mcp-server.md](docs/mcp-server.md) for setup,
 available tools, and configuration for Codex, Claude Code, Cursor, and OpenCode.
 
+## Card-writing skill
+
+The MCP server lets agents create cards, but it doesn't tell them *how* to structure
+the content — how to chunk a topic, what belongs in a single card, or how cards
+should depend on each other. The `writing-study-cards` skill provides those
+guidelines, distilled from Andy Matuschak's
+[How to write good prompts](https://andymatuschak.org/prompts/). Install it so your
+agent applies them automatically whenever it generates cards.
+
+The skill lives in [`.agents/skills/writing-study-cards`](.agents/skills/writing-study-cards)
+and installs with the [`skills` CLI](https://www.skills.sh/docs):
+
+```bash
+# Install into the current project (auto-detects your agent)
+npx skills add ansanabria/armin --skill writing-study-cards
+
+# Or install globally so it's available across all projects
+npx skills add ansanabria/armin --skill writing-study-cards --global
+```
+
+You can target a specific agent (for example Cursor, Claude Code, or Codex) with
+`-a`, and preview what's available without installing using `--list`:
+
+```bash
+npx skills add ansanabria/armin --list
+npx skills add ansanabria/armin --skill writing-study-cards -a cursor
+```
+
+The `skills` CLI discovers skills under `.agents/skills/`, so it picks up
+`writing-study-cards` directly from this repository.
+
 ## Development notes
 
 Early development. Expect lots of bugs and strange behavior. I built this for myself in a Linux machine and it is supposed to work for macOS and Windows, but I haven't tested those builds myself, so be aware.

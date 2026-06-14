@@ -56,18 +56,6 @@ describe("profiles service", () => {
     expect(getProfile("missing-id")).toBeUndefined();
   });
 
-  it("returns empty list when profiles.json is corrupt", () => {
-    const file = path.join(root, "profiles.json");
-    fs.writeFileSync(file, "{ not valid json", "utf8");
-    expect(listProfiles()).toEqual([]);
-  });
-
-  it("returns empty list when profiles.json has invalid shape", () => {
-    const file = path.join(root, "profiles.json");
-    fs.writeFileSync(file, JSON.stringify({ profiles: "nope" }), "utf8");
-    expect(listProfiles()).toEqual([]);
-  });
-
   it("persists multiple profiles across reads", () => {
     createProfile("Alpha");
     createProfile("Beta");

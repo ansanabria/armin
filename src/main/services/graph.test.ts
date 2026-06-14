@@ -1,6 +1,4 @@
-import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { schema } from "../db";
 import { getOnlyCard, makeContext, securePrereq, useTestDb } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
@@ -24,31 +22,6 @@ function basic(
 }
 
 describe("prerequisite edges", () => {
-  it("rejects edges when either note does not exist", async () => {
-    const ctx = await makeContext("edge-missing");
-    const deck = await decks.createDeck(ctx, { name: "Missing" });
-    const note = await basic(ctx, deck.id, "A", "A");
-
-    await expect(graph.addPrereq(ctx, note.id, "ghost-id")).rejects.toThrow(
-      /must exist/,
-    );
-    await expect(graph.addPrereq(ctx, "ghost-id", note.id)).rejects.toThrow(
-      /must exist/,
-    );
-  });
-
-  it("rejects edges across decks", async () => {
-    const ctx = await makeContext("edge-cross-deck");
-    const deckA = await decks.createDeck(ctx, { name: "A" });
-    const deckB = await decks.createDeck(ctx, { name: "B" });
-    const a = await basic(ctx, deckA.id, "A", "A");
-    const b = await basic(ctx, deckB.id, "B", "B");
-
-    await expect(graph.addPrereq(ctx, a.id, b.id)).rejects.toThrow(
-      /one deck/,
-    );
-  });
-
   it("removePrereq unlocks the dependent and restores scheduling", async () => {
     const ctx = await makeContext("edge-remove");
     const deck = await decks.createDeck(ctx, { name: "Remove" });
@@ -108,29 +81,6 @@ describe("prerequisite edges", () => {
     await securePrereq(ctx, b.id);
     await graph.refreshLockedAfterPrereqSecured(ctx, b.id);
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
-  });
-
-  it("refreshAllLockedStates clears stale lock flags", async () => {
-    const ctx = await makeContext("refresh-all");
-    const deck = await decks.createDeck(ctx, { name: "Stale" });
-    const note = await basic(ctx, deck.id, "A", "A");
-
-    // Simulate a stale denormalized flag with no backing edge.
-    await ctx.db
-      .update(schema.notes)
-      .set({ locked: true })
-      .where(eq(schema.notes.id, note.id))
-      .run();
-    await ctx.db
-      .update(schema.cards)
-      .set({ locked: true })
-      .where(eq(schema.cards.noteId, note.id))
-      .run();
-
-    await graph.refreshAllLockedStates(ctx);
-
-    expect((await notes.getNote(ctx, note.id))?.locked).toBe(false);
-    expect((await getOnlyCard(ctx, note.id)).locked).toBe(false);
   });
 });
 

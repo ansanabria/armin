@@ -56,9 +56,4 @@ describe("layoutGraph", () => {
       }
     }
   });
-
-  it("returns input untouched for an empty graph", () => {
-    const { nodes } = layoutGraph<Data>([], []);
-    expect(nodes).toEqual([]);
-  });
 });

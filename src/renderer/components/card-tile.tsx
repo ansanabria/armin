@@ -243,16 +243,18 @@ export const CardTile = memo(function CardTile({
 
             <div
               className={cn(
-                "flex items-center gap-2",
-                deckName ? "mt-2" : "justify-between",
+                "flex items-center justify-between gap-2",
+                deckName && "mt-2",
               )}
             >
-              <StateBadge
-                state={card.state}
-                locked={card.locked}
-                className="min-w-0 shrink-0"
-              />
-              <CardTypeBadge type={card.type} />
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <StateBadge
+                  state={card.state}
+                  locked={card.locked}
+                  className="min-w-0 shrink-0"
+                />
+                <CardTypeBadge type={card.type} />
+              </div>
               {!deckName && (
                 <CardActionsMenu
                   onOpen={onOpen}
