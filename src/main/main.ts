@@ -1,6 +1,7 @@
 import { app, BrowserWindow, session } from "electron";
 import started from "electron-squirrel-startup";
 import { closeDb } from "./db";
+import { loadDevToolsExtensions } from "./devtools";
 import { applyLinuxDesktopEntry } from "./icon";
 import { registerIpc } from "./ipc";
 import { openProfilePicker } from "./windows";
@@ -21,6 +22,7 @@ app.on("ready", async () => {
   applyLinuxDesktopEntry();
   session.defaultSession.setSpellCheckerEnabled(false);
   registerIpc();
+  await loadDevToolsExtensions();
   openProfilePicker();
 });
 
