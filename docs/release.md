@@ -1,6 +1,13 @@
 # Release checklist
 
-Armin Alpha releases are published as GitHub prereleases from version tags.
+Armin releases are published from tags on `master`. The `development` branch is
+for saving WIP and may receive direct commits or feature branch merges without
+running CI. When `development` is releasable, open a PR into `master`; CI runs on
+that PR, and `master` should remain known-good and release-capable.
+
+Fast dogfood releases are always alpha tags and publish only the Ubuntu/Linux
+artifact. Official releases can be beta prereleases or stable releases; both run
+CI and publish Linux, Windows, and macOS artifacts.
 
 ## Alpha 1 distribution
 
@@ -25,7 +32,7 @@ packages.
 
 ## Local checks
 
-Run these before creating a release tag:
+Run these before opening a release PR or creating a release tag:
 
 ```bash
 npm run icons
@@ -38,23 +45,82 @@ npm run test:e2e
 
 ## Versioning
 
-Alpha releases use semver with a single `-alpha` prerelease suffix, for example
-`0.2.0-alpha`. Bump the semver (`MAJOR.MINOR.PATCH`) for each alpha; do not
-append a numeric suffix after `alpha` (not `0.2.0-alpha.1`).
+Use semver with at most one prerelease suffix:
 
-## Publish
+- Dogfood alpha: `0.2.0-alpha`, tagged as `v0.2.0-alpha`.
+- Official beta: `0.2.0-beta`, tagged as `v0.2.0-beta`.
+- Official stable: `0.2.0`, tagged as `v0.2.0`.
 
-1. Update `package.json` to the release version, for example `0.2.0-alpha`.
-2. Commit the release changes.
-3. Create and push a matching tag:
+Bump the semver (`MAJOR.MINOR.PATCH`) for each release. Do not append numeric
+prerelease suffixes such as `0.2.0-alpha.1` or `0.2.0-beta.1`.
+
+Include the `package.json` version bump in the PR from `development` to `master`
+when possible, so the merged commit and release tag are traceable together.
+
+## Promote development to master
+
+1. Commit WIP directly to `development`, or merge feature branches into
+   `development`.
+2. When `development` is releasable, update `package.json` to the target version.
+3. Open a PR from `development` into `master`.
+4. Wait for CI to pass.
+5. Merge the PR. `master` is now ready to tag.
+
+## Publish a fast prerelease
+
+Fast prereleases are for local dogfooding. They are always alpha versions,
+publish only the Ubuntu/Linux AppImage, and are marked as GitHub prereleases.
+
+1. Promote `development` to `master` with an alpha version, for example
+   `0.2.0-alpha`.
+2. Create and push a matching tag from `master`:
 
 ```bash
 git tag v0.2.0-alpha
-git push origin master --tags
+git push origin master v0.2.0-alpha
 ```
 
-The `Release` GitHub Actions workflow builds each platform on its native runner
-and publishes all artifacts to the GitHub prerelease for the tag.
+Tags ending in `-alpha` skip the full release CI job and publish only the Linux
+AppImage to a GitHub prerelease.
+
+## Publish an official beta release
+
+Official beta releases are prereleases with the full platform artifact set.
+
+1. Promote `development` to `master` with a beta version, for example
+   `0.3.0-beta`.
+2. Create and push a matching tag from `master`:
+
+```bash
+git tag v0.3.0-beta
+git push origin master v0.3.0-beta
+```
+
+Tags ending in `-beta` run CI, build each platform on its native runner, and
+publish all artifacts to a GitHub prerelease.
+
+## Publish a full release
+
+Official stable releases publish the full platform artifact set as normal GitHub
+releases.
+
+1. Promote `development` to `master` with a stable version, for example `0.3.0`.
+2. Create and push a matching tag from `master`:
+
+```bash
+git tag v0.3.0
+git push origin master v0.3.0
+```
+
+Plain version tags run CI, build each platform on its native runner, and publish
+all artifacts to a normal GitHub release.
+
+## Manual fallback
+
+The `Release` GitHub Actions workflow can still be run manually from `master`.
+Use `release_mode=fast` for an Ubuntu-only prerelease, or `release_mode=full` for
+the full platform release path. Manual runs publish the tag derived from the
+current `package.json` version.
 
 ## Smoke test artifacts
 
