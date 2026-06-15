@@ -24,9 +24,9 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          # Pin Windows to VS 2022 until node-gyp supports the VS 2026 image
-          # currently rolling out behind windows-latest.
-          - windows-2022
+          # @electron/rebuild is overridden to v4 so native rebuilds use a
+          # node-gyp version that recognizes the VS 2026 windows-latest image.
+          - windows-latest
           - macos-latest
     steps:
       - name: Checkout
