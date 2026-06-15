@@ -5,29 +5,81 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      release_mode:
+        description: "Release mode"
+        required: true
+        type: choice
+        default: fast
+        options:
+          - fast
+          - full
 
 permissions:
   contents: write
 
 jobs:
+  prepare:
+    name: Prepare release
+    runs-on: ubuntu-latest
+    outputs:
+      oses: ${{ steps.release.outputs.oses }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+      release_mode: ${{ steps.release.outputs.release_mode }}
+    steps:
+      - name: Select release mode
+        id: release
+        shell: bash
+        run: |
+          release_mode="${{ inputs.release_mode }}"
+          prerelease=false
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${GITHUB_REF_NAME}"
+            if [[ "${tag}" == *-alpha ]]; then
+              release_mode="fast"
+              prerelease=true
+            elif [[ "${tag}" == *-beta ]]; then
+              release_mode="full"
+              prerelease=true
+            else
+              release_mode="full"
+              prerelease=false
+            fi
+          elif [ "${release_mode}" = "fast" ]; then
+            prerelease=true
+          fi
+
+          echo "release_mode=${release_mode}" >> "$GITHUB_OUTPUT"
+
+          if [ "${release_mode}" = "full" ]; then
+            echo 'oses=["ubuntu-latest","windows-latest","macos-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'oses=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "prerelease=${prerelease}" >> "$GITHUB_OUTPUT"
+
   verify:
     name: Verify
+    needs: prepare
+    if: ${{ needs.prepare.outputs.release_mode == 'full' }}
     uses: ./.github/workflows/ci.yml
 
   publish:
     name: Publish (${{ matrix.os }})
-    needs: verify
+    needs:
+      - prepare
+      - verify
+    if: ${{ always() && needs.prepare.result == 'success' && (needs.verify.result == 'success' || needs.verify.result == 'skipped') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # Each matrix job publishes to the same GitHub release, so serialize them
+      # to avoid races when the release is created or refreshed.
       max-parallel: 1
       matrix:
-        os:
-          - ubuntu-latest
-          # @electron/rebuild is overridden to v4 so native rebuilds use a
-          # node-gyp version that recognizes the VS 2026 windows-latest image.
-          - windows-latest
-          - macos-latest
+        os: ${{ fromJSON(needs.prepare.outputs.oses) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -56,6 +108,7 @@ jobs:
         run: npm run publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
 
       # electron-forge publish can exit 0 without uploading anything (e.g.
       # the yauzl@2 silent failure on Node 24.16+, electron/forge#4277), so
