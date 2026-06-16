@@ -2,9 +2,11 @@ import { app, BrowserWindow, Menu } from "electron";
 import path from "node:path";
 import { registerDevToolsShortcuts } from "../devtools";
 import { attachWindowIcon, getAppIcon } from "../icon";
+import { clearMcpSession, writeMcpSession } from "../../shared/mcp-session";
 
 let profilePickerWindow: BrowserWindow | null = null;
 const profileWindows = new Map<string, BrowserWindow>();
+const profileNames = new Map<string, string>();
 
 export function getProfileIdForWebContents(webContentsId: number) {
   for (const [profileId, win] of profileWindows) {
@@ -34,6 +36,43 @@ function hasOpenMainWindows() {
     if (!win.isDestroyed()) return true;
   }
   return false;
+}
+
+export function getOpenProfilesForMcp() {
+  return [...profileWindows]
+    .filter(([, win]) => !win.isDestroyed())
+    .map(([id]) => ({ id, name: profileNames.get(id) }));
+}
+
+export function getActiveProfileIdForMcp() {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (focused && !focused.isDestroyed()) {
+    for (const [profileId, win] of profileWindows) {
+      if (win === focused) return profileId;
+    }
+  }
+  if (profileWindows.size !== 1) return null;
+  return profileWindows.keys().next().value ?? null;
+}
+
+function publishMcpSession(activeProfileId: string | null) {
+  const openProfiles = getOpenProfilesForMcp();
+  if (openProfiles.length === 0) {
+    clearMcpSession(app.getPath("userData"));
+    return;
+  }
+
+  writeMcpSession(app.getPath("userData"), openProfiles, activeProfileId);
+}
+
+function publishAnyOpenProfileForMcp() {
+  for (const [profileId, win] of profileWindows) {
+    if (!win.isDestroyed()) {
+      publishMcpSession(profileId);
+      return;
+    }
+  }
+  clearMcpSession(app.getPath("userData"));
 }
 
 function shellOptions() {
@@ -168,6 +207,8 @@ export async function openMainWindow(profileId: string, profileName?: string) {
   attachWindowIcon(win);
 
   profileWindows.set(profileId, win);
+  if (profileName) profileNames.set(profileId, profileName);
+  publishMcpSession(profileId);
 
   win.once("ready-to-show", () => {
     try {
@@ -179,7 +220,10 @@ export async function openMainWindow(profileId: string, profileName?: string) {
 
   win.on("closed", () => {
     profileWindows.delete(profileId);
+    profileNames.delete(profileId);
+    publishAnyOpenProfileForMcp();
   });
+  win.on("focus", () => publishMcpSession(profileId));
 
   Menu.setApplicationMenu(null);
   wireMainWindowEvents(win);

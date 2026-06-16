@@ -1,8 +1,8 @@
 # MCP server
 
-Armin includes a local stdio MCP server for coding agents. Agents can create
-decks, create cards, connect prerequisite relationships, and import a whole
-prerequisite graph in one tool call.
+Armin hosts a local MCP server while the desktop app is open. Coding agents can
+connect to it over HTTP, then create decks, create cards, connect prerequisite
+relationships, and import a whole prerequisite graph in one tool call.
 
 The main workflow tool is `import_card_hierarchy`. Give each proposed card a
 temporary `clientId`, then reference those IDs in `prerequisites`. Armin creates
@@ -18,8 +18,25 @@ Available tools:
 - `get_deck_graph`
 - `list_cards`
 - `get_card`
+- `list_open_profiles`
+- `select_profile`
 
-## Run locally
+## Embedded server
+
+Open Armin and select the profile you want the agent to write to. Armin starts
+the MCP server automatically at:
+
+```text
+http://127.0.0.1:47321/mcp
+```
+
+If multiple profiles are open, the MCP server exposes `list_open_profiles` and
+`select_profile`; the agent should ask you which profile to use before it creates
+or reads cards.
+
+## Development stdio server
+
+The packaged app does not need this. It exists for tests and development.
 
 Install dependencies first:
 
@@ -27,23 +44,20 @@ Install dependencies first:
 npm install
 ```
 
-The MCP server runs outside Electron, so it needs `ARMIN_DATA_DIR` to know where
-to store the SQLite database:
+Open Armin and select the profile you want the development stdio server to write
 
 ```bash
-ARMIN_DATA_DIR="$PWD/.armin-data" npm run mcp
+npm run mcp
 ```
 
-MCP writes to one Armin profile. Set `ARMIN_PROFILE_ID` to choose it; when omitted,
-the server uses a profile named `mcp`.
+`ARMIN_DATA_DIR` and `ARMIN_PROFILE_ID` are still supported as advanced overrides
+for tests or unusual setups, but normal agent configuration should not need them.
+
+For example:
 
 ```bash
 ARMIN_DATA_DIR="$PWD/.armin-data" ARMIN_PROFILE_ID="default" npm run mcp
 ```
-
-Use the same `ARMIN_DATA_DIR` when you want the desktop app and MCP server to
-share a development database. For a packaged app, point `ARMIN_DATA_DIR` at the
-same app data directory you want Armin to use.
 
 ## Example agent request
 
@@ -55,89 +69,59 @@ for JavaScript values, TypeScript types, interfaces, generics, and conditional
 types. Build the prerequisite graph from foundations to advanced concepts.
 ```
 
-## Codex
+## Agent setup
 
-Codex reads MCP servers from `~/.codex/config.toml` or from a trusted project
-config at `.codex/config.toml`.
+Use the in-app MCP settings panel when possible. It shows the local MCP URL and
+copies the right config for each agent.
 
-```toml
-[mcp_servers.armin]
-command = "npm"
-args = ["--prefix", "/absolute/path/to/armin", "run", "mcp", "--"]
-startup_timeout_sec = 20
-tool_timeout_sec = 60
+The simplest setup for each supported coding agent is:
 
-[mcp_servers.armin.env]
-ARMIN_DATA_DIR = "/absolute/path/to/armin/.armin-data"
-ARMIN_PROFILE_ID = "default"
-```
+- Cursor: add a `.cursor/mcp.json` file.
+- Claude Code: run `claude mcp add`.
+- Codex: run `codex mcp add`.
+- OpenCode: add `mcp.armin` to `opencode.json` or `opencode.jsonc`.
 
-You can also add it from the CLI:
-
-```bash
-codex mcp add armin \
-  --env ARMIN_DATA_DIR=/absolute/path/to/armin/.armin-data \
-  --env ARMIN_PROFILE_ID=default \
-  -- npm --prefix /absolute/path/to/armin run mcp --
-```
-
-In the Codex TUI, run `/mcp` to check that `armin` is connected.
-
-## Claude Code
-
-For project-scoped setup, add this to `.mcp.json` in the project where you want
-Claude Code to use Armin:
-
-```json
-{
-  "mcpServers": {
-    "armin": {
-      "type": "stdio",
-      "command": "npm",
-      "args": ["--prefix", "/absolute/path/to/armin", "run", "mcp", "--"],
-      "env": {
-        "ARMIN_DATA_DIR": "/absolute/path/to/armin/.armin-data",
-        "ARMIN_PROFILE_ID": "default"
-      }
-    }
-  }
-}
-```
-
-Or add it with the Claude Code CLI:
-
-```bash
-claude mcp add --transport stdio --scope project \
-  --env ARMIN_DATA_DIR=/absolute/path/to/armin/.armin-data \
-  --env ARMIN_PROFILE_ID=default \
-  armin -- npm --prefix /absolute/path/to/armin run mcp --
-```
-
-Run `claude mcp list` or use `/mcp` inside Claude Code to verify the server.
+Before using any agent, open Armin and select the profile the agent should write
+to.
 
 ## Cursor
 
-For project-specific setup, create `.cursor/mcp.json` in the project where
-Cursor should use Armin:
+Create `.cursor/mcp.json` in the project where Cursor should use Armin:
 
 ```json
 {
   "mcpServers": {
     "armin": {
-      "type": "stdio",
-      "command": "npm",
-      "args": ["--prefix", "${workspaceFolder}", "run", "mcp", "--"],
-      "env": {
-        "ARMIN_DATA_DIR": "${workspaceFolder}/.armin-data",
-        "ARMIN_PROFILE_ID": "default"
-      }
+      "url": "http://127.0.0.1:47321/mcp"
     }
   }
 }
 ```
 
-If Armin is not the Cursor workspace, replace `${workspaceFolder}` with the
-absolute path to this repository.
+## Claude Code
+
+Run this in the project where Claude Code should use Armin:
+
+```bash
+claude mcp add --scope local --transport http armin http://127.0.0.1:47321/mcp
+```
+
+`--scope local` keeps the setup private to you and active only in the current
+project. Use `--scope user` if you want Armin available in every Claude Code
+project, or `--scope project` if you want Claude Code to write a shared
+`.mcp.json` file.
+
+Run `claude mcp list` or use `/mcp` inside Claude Code to verify the server.
+
+## Codex
+
+Run this once:
+
+```bash
+codex mcp add armin --url http://127.0.0.1:47321/mcp
+```
+
+In the Codex TUI, run `/mcp` to check that `armin` is connected.
 
 ## OpenCode
 
@@ -148,19 +132,8 @@ Add Armin under `mcp` in `opencode.json` or `opencode.jsonc`:
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "armin": {
-      "type": "local",
-      "command": [
-        "npm",
-        "--prefix",
-        "/absolute/path/to/armin",
-        "run",
-        "mcp",
-        "--",
-      ],
-      "environment": {
-        "ARMIN_DATA_DIR": "/absolute/path/to/armin/.armin-data",
-        "ARMIN_PROFILE_ID": "default",
-      },
+      "type": "remote",
+      "url": "http://127.0.0.1:47321/mcp",
       "enabled": true,
       "timeout": 10000,
     },

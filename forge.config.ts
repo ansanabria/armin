@@ -9,6 +9,8 @@ import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-nati
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
 import { MakerAppImage } from "@reforged/maker-appimage";
 
+const prerelease = process.env.RELEASE_PRERELEASE !== "false";
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
@@ -58,7 +60,7 @@ const config: ForgeConfig = {
           owner: "ansanabria",
           name: "armin",
         },
-        prerelease: true,
+        prerelease,
         draft: false,
         force: true,
         generateReleaseNotes: true,

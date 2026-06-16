@@ -1,12 +1,12 @@
 import { app } from "electron";
 import type { McpSetup } from "../../shared/mcp";
+import { getEmbeddedMcpUrl } from "../mcp-http";
 
-/** Paths and profile info agents need to share this Armin instance's data. */
+/** Setup info agents need to launch Armin's stdio MCP server. */
 export function getMcpSetup(profileId: string): McpSetup {
-  const dataDir = process.env.ARMIN_DATA_DIR ?? app.getPath("userData");
+  void profileId;
   return {
-    dataDir,
-    profileId,
+    url: getEmbeddedMcpUrl(),
     isPackaged: app.isPackaged,
     repoPath: app.isPackaged ? null : app.getAppPath(),
   };
