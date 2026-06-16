@@ -10,20 +10,20 @@ A desktop study app where you create decks and cards (like Anki), connect cards 
 their prerequisites, and review them on a schedule that adapts to how well you
 actually remember each one. Reviews are powered by
 [FSRS](https://github.com/open-spaced-repetition/ts-fsrs) (Free Spaced Repetition
-Scheduler), the same algorithm used Anki's FSRS mode.
+Scheduler), the same algorithm used by Anki's FSRS mode.
 
 ## Why it exists
 
-Most flashcard apps treat every card as an independent island. In practice,
+Most flashcard apps treat every card as an independent atom of knowledge, meaning all cards always live in the same level of abstraction. In practice,
 knowledge is a graph: some things are prerequisites for others. Armin makes that
 structure explicit. A card stays **locked** until everything it depends on has been
-learned, so you build foundations before tackling what sits on top of them — and
+learned, so you build foundations before tackling what sits on top of them, and
 new material lands on knowledge you've already secured.
 
 ## Core principles
 
 - **Local-first.** Everything works offline; your data lives on your machine. No account, no server required.
-- **Spaced repetition done right.** FSRS schedules each card based on your recall performance.
+- **Spaced-repetition done right.** FSRS schedules each card based on your recall performance.
 - **Hierarchical knowledge.** Cards form a prerequisite graph. You review the
   prerequisites first, then unlock and learn what builds on them. A visual canvas
   lets you see and edit the graph of connections between cards.
@@ -31,13 +31,16 @@ new material lands on knowledge you've already secured.
   should be keyboard-driven and frictionless.
 - **AI-assisted card creation.** Armin exposes a local MCP server, so you can use
   your own AI agent (Claude Code, Codex, OpenCode, etc.) to generate flashcards from
-  a topic, your notes, or research.
+  a topic, your notes, or research. It also comes with an agent skill that guides agents on which guidelines they should use for creating cards. It is important not only to be able to create the cards, but to make sure the content aligns with what you are actually are trying to learn and it is structured in an effective manner for future studying. 
 - **Open-source.** Fully open, MIT-licensed, and meant to be built on.
 
 ## Installation
 
-Alpha builds are on the [GitHub Releases](https://github.com/ansanabria/armin/releases)
-page. Artifacts are unsigned, so your OS may warn on first launch.
+There are three types of releases for this app: `alpha`, `beta` & official releases.
+Right now, as I'm developing this app for myself mostly & I'm using Ubuntu as my daily driver, the `alpha` releases are only an Ubuntu AppImage.
+`beta` & official releases are available for the three main platforms: Windows, macOS & Linux.
+You can find the `alpha` & `beta` releases in the Tags section.
+The official releases are in the Releases section.
 
 ### Linux
 

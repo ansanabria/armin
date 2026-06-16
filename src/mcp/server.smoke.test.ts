@@ -1,13 +1,25 @@
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createArminMcpServer } from "./app";
 
 let dataDir: string;
 let transport: StdioClientTransport | null = null;
 let client: Client | null = null;
+let httpServer: Server | null = null;
+let httpTransports: WebStandardStreamableHTTPServerTransport[] = [];
 
 // callTool returns a union that includes legacy `toolResult` shapes, so dig
 // the text content out defensively instead of typing the whole union.
@@ -18,6 +30,50 @@ function parseToolText(result: unknown) {
   const text = content?.find((c) => c.type === "text")?.text;
   if (!text) throw new Error("Missing tool text content");
   return JSON.parse(text) as Record<string, unknown>;
+}
+
+function isInitializedNotification(body: unknown) {
+  if (Array.isArray(body)) return body.every(isInitializedNotification);
+  if (!body || typeof body !== "object") return false;
+  const message = body as { id?: unknown; method?: unknown };
+  return (
+    message.id === undefined && message.method === "notifications/initialized"
+  );
+}
+
+function isInitializeRequest(body: unknown) {
+  if (Array.isArray(body)) return body.some(isInitializeRequest);
+  if (!body || typeof body !== "object") return false;
+  return (body as { method?: unknown }).method === "initialize";
+}
+
+async function readBody(req: IncomingMessage) {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return chunks.length === 0 ? undefined : Buffer.concat(chunks);
+}
+
+function parseJsonBody(body: Buffer | undefined) {
+  if (!body) return undefined;
+  return JSON.parse(body.toString("utf8")) as unknown;
+}
+
+async function writeWebResponse(res: ServerResponse, response: Response) {
+  res.writeHead(response.status, Object.fromEntries(response.headers));
+  if (!response.body) {
+    res.end();
+    return;
+  }
+
+  const reader = response.body.getReader();
+  let chunk = await reader.read();
+  while (!chunk.done) {
+    res.write(Buffer.from(chunk.value));
+    chunk = await reader.read();
+  }
+  res.end();
 }
 
 beforeEach(async () => {
@@ -41,6 +97,18 @@ afterEach(async () => {
   await client?.close();
   client = null;
   transport = null;
+  await new Promise<void>((resolve, reject) => {
+    if (!httpServer) {
+      resolve();
+      return;
+    }
+    httpServer.close((error) => (error ? reject(error) : resolve()));
+  });
+  httpServer = null;
+  await Promise.all(
+    httpTransports.map((httpTransport) => httpTransport.close()),
+  );
+  httpTransports = [];
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
@@ -57,7 +125,15 @@ describe("MCP stdio server", () => {
       "import_card_hierarchy",
       "list_cards",
       "list_decks",
+      "list_open_profiles",
+      "select_profile",
     ]);
+
+    const profiles = parseToolText(
+      await client!.callTool({ name: "list_open_profiles", arguments: {} }),
+    );
+    expect(profiles.activeProfileId).toBe("mcp-smoke");
+    expect(profiles.profiles).toEqual([{ id: "mcp-smoke" }]);
 
     const emptyDecks = parseToolText(
       await client!.callTool({ name: "list_decks", arguments: {} }),
@@ -143,5 +219,97 @@ describe("MCP stdio server", () => {
       await client!.callTool({ name: "list_decks", arguments: {} }),
     );
     expect((allDecks.decks as unknown[]).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("supports streamable HTTP transport for the embedded app server", async () => {
+    const sessions = new Map<
+      string,
+      WebStandardStreamableHTTPServerTransport
+    >();
+
+    const createHttpTransport = async () => {
+      const httpTransport = new WebStandardStreamableHTTPServerTransport({
+        sessionIdGenerator: randomUUID,
+        onsessioninitialized: (sessionId) => {
+          sessions.set(sessionId, httpTransport);
+        },
+      });
+      httpTransports.push(httpTransport);
+      await createArminMcpServer(() => ({
+        activeProfileId: "mcp-smoke",
+        openProfiles: [{ id: "mcp-smoke" }],
+      })).connect(httpTransport);
+      return httpTransport;
+    };
+
+    httpServer = createServer((req, res) => {
+      void (async () => {
+        const body = req.method === "POST" ? await readBody(req) : undefined;
+        const parsedBody = parseJsonBody(body);
+        if (isInitializedNotification(parsedBody)) {
+          res.writeHead(202);
+          res.end();
+          return;
+        }
+
+        const sessionId = req.headers["mcp-session-id"];
+        const existingTransport =
+          typeof sessionId === "string" ? sessions.get(sessionId) : undefined;
+        if (!existingTransport && !isInitializeRequest(parsedBody)) {
+          res.writeHead(400, { "Content-Type": "text/plain" });
+          res.end("Missing or invalid MCP session.");
+          return;
+        }
+
+        const httpTransport =
+          existingTransport ?? (await createHttpTransport());
+        const address = httpServer!.address();
+        if (!address || typeof address === "string") {
+          throw new Error("Missing HTTP server address");
+        }
+        const response = await httpTransport.handleRequest(
+          new Request(`http://127.0.0.1:${address.port}${req.url ?? "/"}`, {
+            method: req.method,
+            headers: req.headers as HeadersInit,
+            body,
+          }),
+          { parsedBody },
+        );
+        await writeWebResponse(res, response);
+      })().catch((error: unknown) => {
+        if (!res.headersSent) {
+          res.writeHead(500, { "Content-Type": "text/plain" });
+        }
+        res.end(error instanceof Error ? error.message : String(error));
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      httpServer!.once("error", reject);
+      httpServer!.listen(0, "127.0.0.1", () => {
+        httpServer!.off("error", reject);
+        resolve();
+      });
+    });
+
+    const address = httpServer.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Missing HTTP server address");
+    }
+
+    const httpClient = new Client({
+      name: "armin-http-test",
+      version: "1.0.0",
+    });
+    await httpClient.connect(
+      new StreamableHTTPClientTransport(
+        new URL(`http://127.0.0.1:${address.port}/mcp`),
+      ),
+    );
+    try {
+      const tools = await httpClient.listTools();
+      expect(tools.tools.map((tool) => tool.name)).toContain("list_decks");
+    } finally {
+      await httpClient.close();
+    }
   });
 });

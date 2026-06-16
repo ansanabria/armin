@@ -6,6 +6,7 @@ import {
   drizzle,
   type BetterSQLite3Database,
 } from "drizzle-orm/better-sqlite3";
+import { defaultArminDataDir } from "../../shared/mcp-session";
 import { openSqliteDatabase } from "./better-sqlite";
 import * as schema from "./schema";
 
@@ -22,11 +23,7 @@ function defaultDbRoot() {
     return process.env.ARMIN_DATA_DIR;
   }
 
-  if (!process.versions.electron) {
-    throw new Error(
-      "ARMIN_DATA_DIR must be set when the database is initialized outside Electron.",
-    );
-  }
+  if (!process.versions.electron) return defaultArminDataDir();
 
   return app.getPath("userData");
 }

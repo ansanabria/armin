@@ -23,6 +23,7 @@
     "lint": "eslint --ext .ts,.tsx .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "pretest:mcp": "npm rebuild better-sqlite3",
     "test:mcp": "vitest run --config vitest.mcp.config.ts",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",

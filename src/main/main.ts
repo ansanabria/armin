@@ -4,6 +4,7 @@ import { closeDb } from "./db";
 import { loadDevToolsExtensions } from "./devtools";
 import { applyLinuxDesktopEntry } from "./icon";
 import { registerIpc } from "./ipc";
+import { startEmbeddedMcpServer, stopEmbeddedMcpServer } from "./mcp-http";
 import { openProfilePicker } from "./windows";
 
 if (process.env.ARMIN_DATA_DIR) {
@@ -22,11 +23,13 @@ app.on("ready", async () => {
   applyLinuxDesktopEntry();
   session.defaultSession.setSpellCheckerEnabled(false);
   registerIpc();
+  await startEmbeddedMcpServer();
   await loadDevToolsExtensions();
   openProfilePicker();
 });
 
 app.on("quit", () => {
+  stopEmbeddedMcpServer();
   closeDb();
 });
 
