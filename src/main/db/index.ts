@@ -77,4 +77,12 @@ export function closeDb(profileId?: string) {
   handles.clear();
 }
 
+export function deleteProfileData(profileId: string) {
+  closeDb(profileId);
+  const dir = profileDbDir(profileId);
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 export { schema };

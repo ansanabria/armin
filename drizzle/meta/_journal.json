@@ -50,6 +50,20 @@
       "when": 1781400000000,
       "tag": "0006_cloze_drop_c_prefix",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1781500000000,
+      "tag": "0007_card_archived_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781600000000,
+      "tag": "0008_rename_notes_to_flashcards",
+      "breakpoints": true
     }
   ]
 }

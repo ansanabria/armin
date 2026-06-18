@@ -1,8 +1,8 @@
-import type { CardState } from "@/components/ui/badge";
-import type { UiBrowseCard, UiCard } from "@/types/view-models";
+import type { ReviewState } from "@/components/ui/badge";
+import type { UiBrowseFlashcard, UiFlashcard } from "@/types/view-models";
 
 /** Selectable card states, in learning order. */
-export const STATE_OPTIONS: { value: CardState; label: string }[] = [
+export const STATE_OPTIONS: { value: ReviewState; label: string }[] = [
   { value: 0, label: "New" },
   { value: 1, label: "Learning" },
   { value: 2, label: "Review" },
@@ -10,18 +10,18 @@ export const STATE_OPTIONS: { value: CardState; label: string }[] = [
 ];
 
 /** OR-match: a card passes if it carries at least one of the selected tags. */
-export function matchesTags(card: UiCard, selected: string[]): boolean {
+export function matchesTags(card: UiFlashcard, selected: string[]): boolean {
   if (selected.length === 0) return true;
   const tags = card.tags ?? [];
   return selected.some((t) => tags.includes(t));
 }
 
-export function matchesStates(card: UiCard, selected: CardState[]): boolean {
+export function matchesStates(card: UiFlashcard, selected: ReviewState[]): boolean {
   if (selected.length === 0) return true;
   return selected.includes(card.state);
 }
 
-export function matchesDecks(card: UiBrowseCard, selected: string[]): boolean {
+export function matchesDecks(card: UiBrowseFlashcard, selected: string[]): boolean {
   if (selected.length === 0) return true;
   return selected.includes(card.deckId);
 }

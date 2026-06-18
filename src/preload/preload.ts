@@ -10,6 +10,10 @@ const api = {
     list: () => invoke("profiles:list"),
     create: (name: string) => invoke("profiles:create", { name }),
     open: (id: string, name?: string) => invoke("profiles:open", { id, name }),
+    getDefault: () => invoke("profiles:getDefault"),
+    setDefault: (id: string) => invoke("profiles:setDefault", { id }),
+    clearDefault: () => invoke("profiles:clearDefault"),
+    delete: (id: string) => invoke("profiles:delete", { id }),
     showPicker: () => invoke("profiles:showPicker"),
   },
   decks: {
@@ -19,23 +23,27 @@ const api = {
     update: (input: unknown) => invoke("decks:update", input),
     delete: (id: string) => invoke("decks:delete", { id }),
   },
-  cards: {
-    list: (deckId: string) => invoke("cards:list", { deckId }),
-    listAll: () => invoke("cards:listAll"),
-    browse: (input: unknown) => invoke("cards:browse", input),
-    listTags: () => invoke("cards:listTags"),
-    listDeckTags: (deckId: string) => invoke("cards:listDeckTags", { deckId }),
-    get: (id: string) => invoke("cards:get", { id }),
-    create: (input: unknown) => invoke("cards:create", input),
-    update: (input: unknown) => invoke("cards:update", input),
-    delete: (id: string) => invoke("cards:delete", { id }),
+  flashcards: {
+    list: (deckId: string) => invoke("flashcards:list", { deckId }),
+    listAll: () => invoke("flashcards:listAll"),
+    browse: (input: unknown) => invoke("flashcards:browse", input),
+    listTags: () => invoke("flashcards:listTags"),
+    listDeckTags: (deckId: string) =>
+      invoke("flashcards:listDeckTags", { deckId }),
+    get: (id: string) => invoke("flashcards:get", { id }),
+    create: (input: unknown) => invoke("flashcards:create", input),
+    update: (input: unknown) => invoke("flashcards:update", input),
+    delete: (id: string) => invoke("flashcards:delete", { id }),
+    archive: (id: string, archived: boolean) =>
+      invoke("flashcards:archive", { id, archived }),
   },
   review: {
     queue: (deckId: string) => invoke("review:queue", { deckId }),
     queueAll: () => invoke("review:queueAll"),
-    preview: (cardId: string) => invoke("review:preview", { cardId }),
-    rate: (cardId: string, rating: number) =>
-      invoke("review:rate", { cardId, rating }),
+    preview: (reviewUnitId: string) => invoke("review:preview", { reviewUnitId }),
+    rate: (reviewUnitId: string, rating: number) =>
+      invoke("review:rate", { reviewUnitId, rating }),
+    undo: (reviewUnitId: string) => invoke("review:undo", { reviewUnitId }),
   },
   graph: {
     get: (deckId: string) => invoke("graph:get", { deckId }),
@@ -45,7 +53,7 @@ const api = {
       invoke("graph:removePrereq", { prereqId, dependentId }),
     saveLayout: (
       deckId: string,
-      placements: { noteId: string; x: number; y: number }[],
+      placements: { flashcardId: string; x: number; y: number }[],
     ) => invoke("graph:saveLayout", { deckId, placements }),
   },
   settings: {
@@ -59,8 +67,8 @@ const api = {
     analyzeAnki: (bytes: Uint8Array, fileName: string) =>
       invoke("import:analyzeAnki", { bytes, fileName }),
     commitAnki: (input: unknown) => invoke("import:commitAnki", input),
-    createDeckWithCards: (input: unknown) =>
-      invoke("import:createDeckWithCards", input),
+    createDeckWithFlashcards: (input: unknown) =>
+      invoke("import:createDeckWithFlashcards", input),
   },
   onDataChanged: (cb: () => void) => {
     const listener = () => cb();

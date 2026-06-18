@@ -2,10 +2,10 @@ import { and, count, eq, sql, type SQL } from "drizzle-orm";
 import { schema } from "../db";
 import { BROWSE_PAGE_SIZE, type BrowseSortKey } from "../../shared/browse";
 import type { ServiceContext } from "./context";
-import { hydrateNotes, type BrowseNote } from "./notes";
+import { hydrateFlashcards, type BrowseFlashcard } from "./flashcards";
 import { dueSortPriority } from "./due-sort";
 
-const { cards, notes, noteTags, tags, decks } = schema;
+const { reviewUnits, flashcards, flashcardTags, tags, decks } = schema;
 
 export type BrowseQuery = {
   offset: number;
@@ -17,7 +17,7 @@ export type BrowseQuery = {
 };
 
 export type BrowsePage = {
-  cards: BrowseNote[];
+  flashcards: BrowseFlashcard[];
   filteredTotal: number;
   libraryTotal: number;
 };
@@ -26,13 +26,13 @@ function browseFilters(query: BrowseQuery): SQL | undefined {
   const parts: SQL[] = [];
 
   if (query.deckId) {
-    parts.push(eq(notes.deckId, query.deckId));
+    parts.push(eq(flashcards.deckId, query.deckId));
   }
   if (query.state !== undefined) {
     parts.push(
       sql`exists (
-        select 1 from ${cards} c
-        where c.note_id = ${notes.id} and c.state = ${query.state}
+        select 1 from ${reviewUnits} c
+        where c.flashcard_id = ${flashcards.id} and c.state = ${query.state}
       )`,
     );
   }
@@ -43,9 +43,9 @@ function browseFilters(query: BrowseQuery): SQL | undefined {
     );
     parts.push(
       sql`exists (
-        select 1 from ${noteTags} nt
+        select 1 from ${flashcardTags} nt
         inner join ${tags} t on t.id = nt.tag_id
-        where nt.note_id = ${notes.id} and t.name in (${tagList})
+        where nt.flashcard_id = ${flashcards.id} and t.name in (${tagList})
       )`,
     );
   }
@@ -53,21 +53,21 @@ function browseFilters(query: BrowseQuery): SQL | undefined {
   return parts.length > 0 ? and(...parts) : undefined;
 }
 
-async function countNotes(
+async function countFlashcards(
   ctx: ServiceContext,
   filters: SQL | undefined,
 ): Promise<number> {
-  const base = ctx.db.select({ value: count() }).from(notes);
+  const base = ctx.db.select({ value: count() }).from(flashcards);
   const row = filters ? await base.where(filters).get() : await base.get();
   return row?.value ?? 0;
 }
 
-function sortBrowseNotes(
-  items: BrowseNote[],
+function sortBrowseFlashcards(
+  items: BrowseFlashcard[],
   sort: BrowseSortKey,
   now = new Date(),
-): BrowseNote[] {
-  const byFront = (a: BrowseNote, b: BrowseNote) =>
+): BrowseFlashcard[] {
+  const byFront = (a: BrowseFlashcard, b: BrowseFlashcard) =>
     a.front.localeCompare(b.front);
   const next = [...items];
 
@@ -128,44 +128,46 @@ export async function listBrowsePage(
   const filters = browseFilters(query);
 
   const [filteredTotal, libraryTotal] = await Promise.all([
-    countNotes(ctx, filters),
-    countNotes(ctx, undefined),
+    countFlashcards(ctx, filters),
+    countFlashcards(ctx, undefined),
   ]);
 
   if (filteredTotal === 0) {
-    return { cards: [], filteredTotal, libraryTotal };
+    return { flashcards: [], filteredTotal, libraryTotal };
   }
 
-  // Front/back/state/due are derived from generated cards, so we hydrate the
-  // filtered set and sort in memory. The sort is deterministic per call, which
-  // keeps offset-based pagination stable across page fetches.
+  // Front/back/state/due are derived from generated review units, so we hydrate
+  // the filtered set and sort in memory. The sort is deterministic per call,
+  // which keeps offset-based pagination stable across page fetches.
   const rows = await (filters
     ? ctx.db
-        .select({ note: notes, deckName: decks.name })
-        .from(notes)
-        .innerJoin(decks, eq(notes.deckId, decks.id))
+        .select({ flashcard: flashcards, deckName: decks.name })
+        .from(flashcards)
+        .innerJoin(decks, eq(flashcards.deckId, decks.id))
         .where(filters)
         .all()
     : ctx.db
-        .select({ note: notes, deckName: decks.name })
-        .from(notes)
-        .innerJoin(decks, eq(notes.deckId, decks.id))
+        .select({ flashcard: flashcards, deckName: decks.name })
+        .from(flashcards)
+        .innerJoin(decks, eq(flashcards.deckId, decks.id))
         .all());
 
-  const hydrated = await hydrateNotes(
+  const hydrated = await hydrateFlashcards(
     ctx,
-    rows.map((row) => row.note),
+    rows.map((row) => row.flashcard),
   );
-  const deckNameById = new Map(rows.map((row) => [row.note.id, row.deckName]));
-  const browseNotes: BrowseNote[] = hydrated.map((note) => ({
-    ...note,
-    deckName: deckNameById.get(note.id) ?? "",
+  const deckNameById = new Map(
+    rows.map((row) => [row.flashcard.id, row.deckName]),
+  );
+  const browseFlashcards: BrowseFlashcard[] = hydrated.map((flashcard) => ({
+    ...flashcard,
+    deckName: deckNameById.get(flashcard.id) ?? "",
   }));
 
-  const sorted = sortBrowseNotes(browseNotes, query.sort);
+  const sorted = sortBrowseFlashcards(browseFlashcards, query.sort);
   const page = sorted.slice(offset, offset + limit);
 
-  return { cards: page, filteredTotal, libraryTotal };
+  return { flashcards: page, filteredTotal, libraryTotal };
 }
 
 export async function listAllTagNames(ctx: ServiceContext): Promise<string[]> {
@@ -183,10 +185,10 @@ export async function listDeckTagNames(
 ): Promise<string[]> {
   const rows = await ctx.db
     .selectDistinct({ name: tags.name })
-    .from(noteTags)
-    .innerJoin(tags, eq(noteTags.tagId, tags.id))
-    .innerJoin(notes, eq(noteTags.noteId, notes.id))
-    .where(eq(notes.deckId, deckId))
+    .from(flashcardTags)
+    .innerJoin(tags, eq(flashcardTags.tagId, tags.id))
+    .innerJoin(flashcards, eq(flashcardTags.flashcardId, flashcards.id))
+    .where(eq(flashcards.deckId, deckId))
     .orderBy(tags.name)
     .all();
   return rows.map((row) => row.name);

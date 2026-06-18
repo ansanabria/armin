@@ -5,7 +5,7 @@
  * Shapes mirror the real `window.armin` return types closely enough that
  * wiring the backend later is a source swap, not a rewrite.
  */
-import type { CardState } from "@/components/ui/badge";
+import type { ReviewState } from "@/components/ui/badge";
 import type { Grade } from "@/types/window";
 
 export type UiDeck = {
@@ -19,11 +19,11 @@ export type UiDeck = {
   learned: number; // cards graduated to Review state
 };
 
-export type UiCard = {
+export type UiFlashcard = {
   id: string;
   front: string;
   back: string;
-  state: CardState;
+  state: ReviewState;
   locked: boolean;
   dueLabel: string;
   /** ISO date the card was created — for sorting in Browse. */
@@ -33,12 +33,12 @@ export type UiCard = {
 };
 
 /** A card paired with the deck it belongs to, for cross-deck browsing. */
-export type UiBrowseCard = UiCard & {
+export type UiBrowseFlashcard = UiFlashcard & {
   deckId: string;
   deckName: string;
 };
 
-export type UiReviewCard = {
+export type UiReviewUnit = {
   id: string;
   front: string;
   back: string;
@@ -103,7 +103,7 @@ export const decks: UiDeck[] = [
 ];
 
 /** Cards keyed by deck id for preview navigation between decks. */
-export const deckCardsByDeck: Record<string, UiCard[]> = {
+export const deckCardsByDeck: Record<string, UiFlashcard[]> = {
   js: [
     {
       id: "c1",
@@ -237,7 +237,7 @@ export const deckCardsByDeck: Record<string, UiCard[]> = {
 /** @deprecated Use `getDeckCards(deckId)` — kept for any stale imports. */
 export const deckCards = deckCardsByDeck.js;
 
-export function getDeckCards(deckId: string): UiCard[] {
+export function getDeckCards(deckId: string): UiFlashcard[] {
   return deckCardsByDeck[deckId] ?? [];
 }
 
@@ -251,7 +251,7 @@ export function getDeckTags(deckId: string): string[] {
 }
 
 /** Every card across every deck, paired with its deck — for Browse. */
-export function getAllCards(): UiBrowseCard[] {
+export function getAllCards(): UiBrowseFlashcard[] {
   return decks.flatMap((deck) =>
     getDeckCards(deck.id).map((card) => ({
       ...card,
@@ -266,7 +266,7 @@ export type UiGraphNode = {
   id: string;
   front: string;
   back: string;
-  state: CardState;
+  state: ReviewState;
   locked: boolean;
 };
 
@@ -313,7 +313,7 @@ export function getDeck(deckId: string): UiDeck | undefined {
   return decks.find((d) => d.id === deckId);
 }
 
-export const reviewQueueByDeck: Record<string, UiReviewCard[]> = {
+export const reviewQueueByDeck: Record<string, UiReviewUnit[]> = {
   js: [
     {
       id: "r1",
@@ -350,12 +350,12 @@ export const reviewQueueByDeck: Record<string, UiReviewCard[]> = {
 /** @deprecated Use `getReviewQueue(deckId)` */
 export const reviewQueue = reviewQueueByDeck.js;
 
-export function getReviewQueue(deckId: string): UiReviewCard[] {
+export function getReviewQueue(deckId: string): UiReviewUnit[] {
   return reviewQueueByDeck[deckId] ?? [];
 }
 
 /** Every card due across all decks, tagged with its owning deck name. */
-export function getGlobalReviewQueue(): UiReviewCard[] {
+export function getGlobalReviewQueue(): UiReviewUnit[] {
   return decks
     .filter((d) => d.due > 0)
     .flatMap((d) =>
@@ -379,7 +379,7 @@ export const settings = {
   learningSteps: "1m, 10m",
   relearningSteps: "10m",
   prereqStabilityFloor: 2,
-  newCardsPerDay: 10,
+  newReviewUnitsPerDay: 10,
   theme: "system" as "flexoki-light" | "flexoki-dark" | "system",
 };
 

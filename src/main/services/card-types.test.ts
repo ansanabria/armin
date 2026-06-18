@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  generateReviewItems,
+  generateReviewUnits,
   matchesTypeAnswer,
   renderClozeText,
   validateContent,
   type DiagramContent,
-} from "./card-types";
+} from "./flashcard-types";
 
 describe("cloze parsing", () => {
   it("blanks the target cluster and reveals the rest", () => {
@@ -18,16 +18,16 @@ describe("cloze parsing", () => {
   });
 });
 
-describe("generateReviewItems", () => {
+describe("generateReviewUnits", () => {
   it("makes one item for basic", () => {
-    expect(generateReviewItems("basic", { front: "F", back: "B" })).toEqual([
+    expect(generateReviewUnits("basic", { front: "F", back: "B" })).toEqual([
       { subKey: "", front: "F", back: "B" },
     ]);
   });
 
   it("makes forward and reverse items for basic_reversed", () => {
     expect(
-      generateReviewItems("basic_reversed", { front: "F", back: "B" }),
+      generateReviewUnits("basic_reversed", { front: "F", back: "B" }),
     ).toEqual([
       { subKey: "fwd", front: "F", back: "B" },
       { subKey: "rev", front: "B", back: "F" },
@@ -35,7 +35,7 @@ describe("generateReviewItems", () => {
   });
 
   it("makes one item per cloze cluster", () => {
-    const items = generateReviewItems("cloze", {
+    const items = generateReviewUnits("cloze", {
       text: "{{1::a}} and {{2::b}}",
     });
     expect(items.map((i) => i.subKey)).toEqual(["c1", "c2"]);
@@ -59,7 +59,7 @@ describe("generateReviewItems", () => {
         },
       ],
     };
-    const items = generateReviewItems("diagram", content);
+    const items = generateReviewUnits("diagram", content);
     expect(items.map((i) => i.subKey)).toEqual(["r1", "r2"]);
     expect(items[0].back).toBe("Heart");
     expect(items[1].front).toContain("air");

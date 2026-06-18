@@ -18,7 +18,7 @@ import {
   getDb,
 } from "../src/main/db/index";
 import { runMigrations } from "../src/main/db/migrate";
-import { listNotes } from "../src/main/services/notes";
+import { listFlashcards } from "../src/main/services/flashcards";
 import { listBrowsePage } from "../src/main/services/browse";
 import { getDeck } from "../src/main/services/decks";
 
@@ -74,20 +74,20 @@ function seedDeck(
   const resolvedTagId = tagRow.id;
 
   const insertNote = client.prepare(
-    `INSERT INTO notes (
+    `INSERT INTO flashcards (
           id, deck_id, type, content, pos_x, pos_y, locked, created_at, updated_at
         ) VALUES (?, ?, 'basic', ?, NULL, NULL, 0, ?, ?)`,
   );
   const insertCard = client.prepare(
-    `INSERT INTO cards (
-          id, note_id, deck_id, sub_key, front, back,
+    `INSERT INTO review_units (
+          id, flashcard_id, deck_id, sub_key, front, back,
           due, stability, difficulty, elapsed_days, scheduled_days,
           learning_steps, reps, lapses, state, last_review,
           created_at, updated_at
         ) VALUES (?, ?, ?, '', ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, NULL, ?, ?)`,
   );
   const insertNoteTag = client.prepare(
-    `INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)`,
+    `INSERT INTO flashcard_tags (flashcard_id, tag_id) VALUES (?, ?)`,
   );
   const seedBatch = client.transaction((from: number, to: number) => {
     for (let i = from; i <= to; i++) {
@@ -128,21 +128,21 @@ function runRawSqlBenchmarks(client: Database.Database, targetDeckId: string) {
 
   let t0 = performance.now();
   client
-    .prepare(`SELECT * FROM cards WHERE deck_id = ? ORDER BY created_at`)
+    .prepare(`SELECT * FROM review_units WHERE deck_id = ? ORDER BY created_at`)
     .all(targetDeckId);
   timings.fullListSqlMs = performance.now() - t0;
 
   t0 = performance.now();
   client
     .prepare(
-      `SELECT * FROM cards WHERE deck_id = ? ORDER BY created_at LIMIT ? OFFSET 0`,
+      `SELECT * FROM review_units WHERE deck_id = ? ORDER BY created_at LIMIT ? OFFSET 0`,
     )
     .all(targetDeckId, pageSize);
   timings.firstPageSqlMs = performance.now() - t0;
 
   t0 = performance.now();
   client
-    .prepare(`SELECT COUNT(*) AS n FROM cards WHERE deck_id = ?`)
+    .prepare(`SELECT COUNT(*) AS n FROM review_units WHERE deck_id = ?`)
     .get(targetDeckId);
   timings.countSqlMs = performance.now() - t0;
 
@@ -160,7 +160,7 @@ async function runServiceBenchmarks(targetDeckId: string) {
   const timings: Record<string, number> = {};
 
   let t0 = performance.now();
-  await listNotes(ctx, targetDeckId);
+  await listFlashcards(ctx, targetDeckId);
   timings.listCardsMs = performance.now() - t0;
 
   t0 = performance.now();
@@ -222,7 +222,7 @@ async function main() {
   client.pragma("foreign_keys = ON");
 
   const countRow = client
-    .prepare(`SELECT COUNT(*) AS n FROM cards WHERE deck_id = ?`)
+    .prepare(`SELECT COUNT(*) AS n FROM review_units WHERE deck_id = ?`)
     .get(deckId) as { n: number };
   const deckSize = Number(countRow.n);
 

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, Menu } from "electron";
 import path from "node:path";
-import { registerDevToolsShortcuts } from "../devtools";
+import { registerWindowShortcuts } from "../devtools";
 import { attachWindowIcon, getAppIcon } from "../icon";
 import { clearMcpSession, writeMcpSession } from "../../shared/mcp-session";
 
@@ -31,11 +31,23 @@ export function getProfilePickerWindow() {
   return profilePickerWindow;
 }
 
+function dismissProfilePicker() {
+  if (!profilePickerWindow || profilePickerWindow.isDestroyed()) return;
+  profilePickerWindow.hide();
+  profilePickerWindow.close();
+  profilePickerWindow = null;
+}
+
 function hasOpenMainWindows() {
   for (const win of profileWindows.values()) {
     if (!win.isDestroyed()) return true;
   }
   return false;
+}
+
+export function isProfileOpen(profileId: string): boolean {
+  const win = profileWindows.get(profileId);
+  return win != null && !win.isDestroyed();
 }
 
 export function getOpenProfilesForMcp() {
@@ -173,14 +185,14 @@ export function openProfilePicker() {
   Menu.setApplicationMenu(null);
   loadProfilePicker(profilePickerWindow);
 
-  if (!app.isPackaged) {
-    registerDevToolsShortcuts(profilePickerWindow);
-  }
+  registerWindowShortcuts(profilePickerWindow);
 
   return profilePickerWindow;
 }
 
 export async function openMainWindow(profileId: string, profileName?: string) {
+  dismissProfilePicker();
+
   const existing = profileWindows.get(profileId);
   if (existing && !existing.isDestroyed()) {
     existing.focus();
@@ -229,16 +241,10 @@ export async function openMainWindow(profileId: string, profileName?: string) {
   wireMainWindowEvents(win);
   loadMain(win);
 
-  if (!app.isPackaged) {
-    registerDevToolsShortcuts(win);
-    if (isFirstMainWindow) {
-      win.webContents.openDevTools({ mode: "right" });
-    }
-  }
+  registerWindowShortcuts(win);
 
-  if (profilePickerWindow && !profilePickerWindow.isDestroyed()) {
-    profilePickerWindow.close();
-    profilePickerWindow = null;
+  if (!app.isPackaged && isFirstMainWindow) {
+    win.webContents.openDevTools({ mode: "right" });
   }
 
   return win;

@@ -10,6 +10,7 @@ export type Profile = {
 
 type ProfileStore = {
   profiles: Profile[];
+  defaultProfileId?: string;
 };
 
 const STORE_VERSION = 1;
@@ -30,7 +31,11 @@ function readStore(): ProfileStore {
     if (!Array.isArray(parsed.profiles)) {
       return { profiles: [] };
     }
-    return { profiles: parsed.profiles };
+    const store: ProfileStore = { profiles: parsed.profiles };
+    if (typeof parsed.defaultProfileId === "string") {
+      store.defaultProfileId = parsed.defaultProfileId;
+    }
+    return store;
   } catch {
     return { profiles: [] };
   }
@@ -68,4 +73,38 @@ export function createProfile(name: string): Profile {
 
 export function getProfile(id: string): Profile | undefined {
   return readStore().profiles.find((profile) => profile.id === id);
+}
+
+export function getDefaultProfileId(): string | null {
+  const { defaultProfileId, profiles } = readStore();
+  if (!defaultProfileId) return null;
+  return profiles.some((p) => p.id === defaultProfileId) ? defaultProfileId : null;
+}
+
+export function setDefaultProfile(id: string): void {
+  const store = readStore();
+  if (!store.profiles.some((p) => p.id === id)) {
+    throw new Error("Profile not found.");
+  }
+  store.defaultProfileId = id;
+  writeStore(store);
+}
+
+export function clearDefaultProfile(): void {
+  const store = readStore();
+  delete store.defaultProfileId;
+  writeStore(store);
+}
+
+export function deleteProfile(id: string): void {
+  const store = readStore();
+  const index = store.profiles.findIndex((p) => p.id === id);
+  if (index === -1) {
+    throw new Error("Profile not found.");
+  }
+  store.profiles.splice(index, 1);
+  if (store.defaultProfileId === id) {
+    delete store.defaultProfileId;
+  }
+  writeStore(store);
 }

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getOnlyCard, makeContext, useTestDb } from "../test/db";
+import { getOnlyReviewUnit, makeContext, useTestDb } from "../test/db";
 import * as browse from "./browse";
 import * as decks from "./decks";
 import * as graph from "./graph";
-import * as notes from "./notes";
+import * as notes from "./flashcards";
 import * as review from "./review";
 import { State } from "./scheduler";
 
@@ -16,7 +16,7 @@ function basic(
   back: string,
   tags?: string[],
 ) {
-  return notes.createNote({
+  return notes.createFlashcard({
     ctx,
     deckId,
     type: "basic",
@@ -32,9 +32,9 @@ describe("browse filters", () => {
     const fresh = await basic(ctx, deck.id, "Fresh", "A");
     const studied = await basic(ctx, deck.id, "Studied", "B");
 
-    const studiedCard = await getOnlyCard(ctx, studied.id);
-    await review.rateCard(ctx, studiedCard.id, 3);
-    const ratedState = (await getOnlyCard(ctx, studied.id)).state;
+    const studiedCard = await getOnlyReviewUnit(ctx, studied.id);
+    await review.rateReviewUnit(ctx, studiedCard.id, 3);
+    const ratedState = (await getOnlyReviewUnit(ctx, studied.id)).state;
     expect(ratedState).not.toBe(State.New);
 
     const newOnly = await browse.listBrowsePage(ctx, {
@@ -43,7 +43,7 @@ describe("browse filters", () => {
       sort: "front-asc",
       state: State.New,
     });
-    expect(newOnly.cards.map((card) => card.id)).toEqual([fresh.id]);
+    expect(newOnly.flashcards.map((card) => card.id)).toEqual([fresh.id]);
 
     const ratedOnly = await browse.listBrowsePage(ctx, {
       offset: 0,
@@ -51,7 +51,7 @@ describe("browse filters", () => {
       sort: "front-asc",
       state: ratedState,
     });
-    expect(ratedOnly.cards.map((card) => card.id)).toEqual([studied.id]);
+    expect(ratedOnly.flashcards.map((card) => card.id)).toEqual([studied.id]);
   });
 
   it("sorts locked cards first and last", async () => {
@@ -66,14 +66,14 @@ describe("browse filters", () => {
       limit: 30,
       sort: "locked-first",
     });
-    expect(lockedFirst.cards[0].id).toBe(dependent.id);
-    expect(lockedFirst.cards[0].locked).toBe(true);
+    expect(lockedFirst.flashcards[0].id).toBe(dependent.id);
+    expect(lockedFirst.flashcards[0].locked).toBe(true);
 
     const lockedLast = await browse.listBrowsePage(ctx, {
       offset: 0,
       limit: 30,
       sort: "locked-last",
     });
-    expect(lockedLast.cards[0].id).toBe(prereq.id);
+    expect(lockedLast.flashcards[0].id).toBe(prereq.id);
   });
 });

@@ -26,13 +26,13 @@ import { decompress as zstdDecompress } from "fzstd";
 import { openSqliteDatabase } from "../../db/better-sqlite";
 import { schema } from "../../db";
 import {
-  generateReviewItems,
+  generateReviewUnits,
   serializeContent,
-  type CardContent,
-  type CardType,
-} from "../card-types";
+  type FlashcardContent,
+  type FlashcardType,
+} from "../flashcard-types";
 import type { ServiceContext } from "../context";
-import { newCardFields, type FsrsFields } from "../scheduler";
+import { newReviewUnitFields, type FsrsFields } from "../scheduler";
 import { ankiHtmlToMarkdown } from "./html";
 import { hasClozeMarkers, renderTemplate } from "./template";
 
@@ -43,8 +43,8 @@ const ZSTD_MAGIC = [0x28, 0xb5, 0x2f, 0xfd];
 
 /** A single authored note ready to be written to Armin. */
 type ParsedNote = {
-  type: CardType;
-  content: CardContent;
+  type: FlashcardType;
+  content: FlashcardContent;
   tags: string[];
   /** Original Anki deck name (may be hierarchical, e.g. "Parent::Child"). */
   deckName: string;
@@ -461,7 +461,7 @@ function convertAnkiClozes(text: string): string {
 }
 
 function parsedCardCount(note: ParsedNote): number {
-  return generateReviewItems(note.type, note.content).length;
+  return generateReviewUnits(note.type, note.content).length;
 }
 
 function sameCard(
@@ -674,7 +674,7 @@ function buildDiagramNote(
 
   return {
     type: "diagram",
-    content: { image, regions } as CardContent,
+    content: { image, regions } as FlashcardContent,
     tags: note.tags,
     deckName: deckNames.get(rows[0]?.did) ?? "Imported",
     schedules,
@@ -995,7 +995,7 @@ async function writeDeck(
   parsedNotes: ParsedNote[],
   keepScheduling: boolean,
 ): Promise<string> {
-  const { decks, cards, notes, noteTags } = schema;
+  const { decks, reviewUnits, flashcards, flashcardTags } = schema;
 
   return ctx.db.transaction((tx) => {
     const deck = tx.insert(decks).values({ name }).returning().get();
@@ -1004,7 +1004,7 @@ async function writeDeck(
     // Resolve the tag set once for the whole deck (case-insensitive, deduped).
     const tagIdByLower = resolveTags(tx, parsedNotes);
 
-    const noteTagRows: { noteId: string; tagId: string }[] = [];
+    const noteTagRows: { flashcardId: string; tagId: string }[] = [];
     const noteValues: {
       id: string;
       deckId: string;
@@ -1014,47 +1014,47 @@ async function writeDeck(
     const cardValues = [];
 
     for (const parsedNote of parsedNotes) {
-      const noteId = randomUUID();
+      const flashcardId = randomUUID();
       noteValues.push({
-        id: noteId,
+        id: flashcardId,
         deckId,
         type: parsedNote.type,
         content: serializeContent(parsedNote.content),
       });
       for (const tag of parsedNote.tags) {
         const tagId = tagIdByLower.get(tag.toLocaleLowerCase());
-        if (tagId) noteTagRows.push({ noteId, tagId });
+        if (tagId) noteTagRows.push({ flashcardId, tagId });
       }
-      for (const item of generateReviewItems(
+      for (const item of generateReviewUnits(
         parsedNote.type,
         parsedNote.content,
       )) {
         cardValues.push({
           id: randomUUID(),
-          noteId,
+          flashcardId,
           deckId,
           subKey: item.subKey,
           front: item.front,
           back: item.back,
           ...(keepScheduling && parsedNote.schedules.get(item.subKey)
             ? parsedNote.schedules.get(item.subKey)!
-            : newCardFields()),
+            : newReviewUnitFields()),
         });
       }
     }
 
     for (let i = 0; i < noteValues.length; i += CARD_CHUNK) {
-      tx.insert(notes)
+      tx.insert(flashcards)
         .values(noteValues.slice(i, i + CARD_CHUNK))
         .run();
     }
     for (let i = 0; i < cardValues.length; i += CARD_CHUNK) {
-      tx.insert(cards)
+      tx.insert(reviewUnits)
         .values(cardValues.slice(i, i + CARD_CHUNK))
         .run();
     }
     for (let i = 0; i < noteTagRows.length; i += CARD_CHUNK) {
-      tx.insert(noteTags)
+      tx.insert(flashcardTags)
         .values(noteTagRows.slice(i, i + CARD_CHUNK))
         .onConflictDoNothing()
         .run();

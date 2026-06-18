@@ -1,7 +1,7 @@
-import type { CardType } from "../../main/services/card-types";
+import type { FlashcardType } from "../../main/services/flashcard-types";
 import { cn } from "@/lib/utils";
 
-export const CARD_TYPE_LABELS: Record<CardType, string> = {
+export const CARD_TYPE_LABELS: Record<FlashcardType, string> = {
   basic: "Basic",
   basic_reversed: "Reversed",
   cloze: "Cloze",
@@ -10,11 +10,11 @@ export const CARD_TYPE_LABELS: Record<CardType, string> = {
 };
 
 /** Small chip showing a note's card type. Hidden for plain basic cards. */
-export function CardTypeBadge({
+export function FlashcardTypeBadge({
   type,
   className,
 }: {
-  type: CardType;
+  type: FlashcardType;
   className?: string;
 }) {
   if (type === "basic") return null;

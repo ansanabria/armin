@@ -9,7 +9,7 @@ import {
 import type {
   CardFlowNode,
   CardNodeData,
-} from "@/components/prerequisite-graph/card-node";
+} from "@/components/prerequisite-graph/flashcard-node";
 
 export const EDGE_STROKE = "var(--color-border-strong)";
 

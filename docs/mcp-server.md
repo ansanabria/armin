@@ -1,23 +1,24 @@
 # MCP server
 
 Armin hosts a local MCP server while the desktop app is open. Coding agents can
-connect to it over HTTP, then create decks, create cards, connect prerequisite
-relationships, and import a whole prerequisite graph in one tool call.
+connect to it over HTTP, then create decks, create flashcards, connect
+prerequisite relationships, and import a whole prerequisite graph in one tool
+call.
 
-The main workflow tool is `import_card_hierarchy`. Give each proposed card a
-temporary `clientId`, then reference those IDs in `prerequisites`. Armin creates
-the real card IDs and prerequisite edges atomically.
+The main workflow tool is `import_flashcard_hierarchy`. Give each proposed
+flashcard a temporary `clientId`, then reference those IDs in `prerequisites`.
+Armin creates the real flashcard IDs and prerequisite edges atomically.
 
 Available tools:
 
 - `list_decks`
 - `create_deck`
-- `create_card`
+- `create_flashcard`
 - `add_prerequisite`
-- `import_card_hierarchy`
+- `import_flashcard_hierarchy`
 - `get_deck_graph`
-- `list_cards`
-- `get_card`
+- `list_flashcards`
+- `get_flashcard`
 - `list_open_profiles`
 - `select_profile`
 

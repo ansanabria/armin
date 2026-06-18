@@ -81,7 +81,7 @@ export function ImportDeckDialog({
 
   const description =
     visibleStep === "choose"
-      ? "Bring your cards in from another tool."
+      ? "Bring your flashcards in from another tool."
       : undefined;
 
   const handleExitComplete = () => {
@@ -267,8 +267,8 @@ function AnkiImport({
       <p className="flex items-start gap-2 text-xs text-muted">
         <CircleHelp className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
-          Armin imports <span className="text-ink">basic front/back cards</span>{" "}
-          and their tags. Other card types (like cloze) are skipped for now —
+          Armin imports <span className="text-ink">basic front/back flashcards</span>{" "}
+          and their tags. Other flashcard types (like cloze) are skipped for now —
           support for them is coming later.
         </span>
       </p>
@@ -322,7 +322,7 @@ function AnkiImport({
 
           <PreviewSummary
             lines={[
-              `${plural(analysis.totalCards, "card")} ready to import`,
+              `${plural(analysis.totalCards, "flashcard")} ready to import`,
               multiDeck && strategy === "separate"
                 ? `Across ${plural(analysis.decks.length, "deck")}`
                 : "Into a single deck",
@@ -392,9 +392,9 @@ function MarkdownImport({
     setError(null);
     try {
       const deckName = name.trim() || "Imported deck";
-      const result = await window.armin.import.createDeckWithCards({
+      const result = await window.armin.import.createDeckWithFlashcards({
         name: deckName,
-        cards: parsed.cards.map((card) => ({
+        flashcards: parsed.cards.map((card) => ({
           front: card.front,
           back: card.back,
           tags: card.tags,
@@ -403,7 +403,7 @@ function MarkdownImport({
       onImport({
         source: "Markdown",
         name: deckName,
-        cardCount: result.cardCount,
+        cardCount: result.flashcardCount,
       });
     } catch (err) {
       setError(errorMessage(err, "The import failed. Please try again."));
@@ -442,7 +442,7 @@ function MarkdownImport({
       ) : (
         <Field
           label="Markdown"
-          hint="Front and back split by ::, cards split by ---"
+          hint="Front and back split by ::, flashcards split by ---"
           info={
             <Tooltip content={<MarkdownFormatHelp />}>
               <button
@@ -469,7 +469,7 @@ function MarkdownImport({
       {parsed.cards.length > 0 && (
         <PreviewSummary
           lines={[
-            `${plural(parsed.cards.length, "card")} ready to import`,
+            `${plural(parsed.cards.length, "flashcard")} ready to import`,
             ...(parsed.skipped > 0
               ? [
                   `${plural(parsed.skipped, "block")} skipped (missing front or back)`,
@@ -482,7 +482,7 @@ function MarkdownImport({
       {attempted && parsed.cards.length === 0 && (
         <PreviewSummary
           tone="warn"
-          lines={["No cards found — check the format"]}
+          lines={["No flashcards found — check the format"]}
         />
       )}
 
@@ -657,10 +657,10 @@ function Field({
 function MarkdownFormatHelp() {
   return (
     <div className="space-y-2">
-      <p className="font-medium text-ink">How cards are detected</p>
+      <p className="font-medium text-ink">How flashcards are detected</p>
       <ul className="space-y-1 text-muted">
         <li>
-          Separate cards with{" "}
+          Separate flashcards with{" "}
           <code className="rounded bg-surface-sunken px-1 font-mono text-ink">
             ---
           </code>{" "}

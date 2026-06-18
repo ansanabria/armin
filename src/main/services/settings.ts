@@ -33,7 +33,7 @@ export type SettingsUpdate = Partial<
     | "relearningSteps"
     | "weights"
     | "prereqStabilityFloor"
-    | "newCardsPerDay"
+    | "newReviewUnitsPerDay"
   >
 >;
 

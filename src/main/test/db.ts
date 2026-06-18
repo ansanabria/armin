@@ -17,12 +17,12 @@ export async function makeContext(profileId: string): Promise<ServiceContext> {
 }
 
 /**
- * Mark a note's prerequisite as secured: every generated card moves into FSRS
- * Review state above the stability floor.
+ * Mark a flashcard's prerequisite as secured: every generated review unit moves
+ * into FSRS Review state above the stability floor.
  */
-export async function securePrereq(ctx: ServiceContext, noteId: string) {
+export async function securePrereq(ctx: ServiceContext, flashcardId: string) {
   await ctx.db
-    .update(schema.cards)
+    .update(schema.reviewUnits)
     .set({
       state: State.Review,
       stability: 2.5,
@@ -32,16 +32,19 @@ export async function securePrereq(ctx: ServiceContext, noteId: string) {
       lastReview: new Date(),
       reps: 2,
     })
-    .where(eq(schema.cards.noteId, noteId))
+    .where(eq(schema.reviewUnits.flashcardId, flashcardId))
     .run();
 }
 
-/** The single generated card for a basic note (test convenience). */
-export async function getOnlyCard(ctx: ServiceContext, noteId: string) {
+/** The single generated review unit for a basic flashcard (test convenience). */
+export async function getOnlyReviewUnit(
+  ctx: ServiceContext,
+  flashcardId: string,
+) {
   const rows = await ctx.db
     .select()
-    .from(schema.cards)
-    .where(eq(schema.cards.noteId, noteId))
+    .from(schema.reviewUnits)
+    .where(eq(schema.reviewUnits.flashcardId, flashcardId))
     .all();
   return rows[0];
 }

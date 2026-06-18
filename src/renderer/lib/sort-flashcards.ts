@@ -1,6 +1,6 @@
-import type { UiCard } from "@/types/view-models";
+import type { UiFlashcard } from "@/types/view-models";
 
-export type CardSortKey =
+export type FlashcardSortKey =
   | "due-soon"
   | "due-later"
   | "created-new"
@@ -14,7 +14,7 @@ export type CardSortKey =
   | "locked-first"
   | "locked-last";
 
-export const CARD_SORT_OPTIONS: { value: CardSortKey; label: string }[] = [
+export const FLASHCARD_SORT_OPTIONS: { value: FlashcardSortKey; label: string }[] = [
   { value: "due-soon", label: "Due soonest" },
   { value: "due-later", label: "Due latest" },
   { value: "created-new", label: "Newest first" },
@@ -44,9 +44,9 @@ export function dueLabelPriority(label: string): number {
   return 80;
 }
 
-export function sortCards<T extends UiCard>(
+export function sortFlashcards<T extends UiFlashcard>(
   cards: T[],
-  sortKey: CardSortKey,
+  sortKey: FlashcardSortKey,
 ): T[] {
   const sorted = [...cards];
 

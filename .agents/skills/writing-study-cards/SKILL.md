@@ -1,6 +1,6 @@
 ---
 name: writing-study-cards
-description: Guidelines for structuring spaced-repetition flashcards and prerequisite graphs when creating cards in Armin. Use whenever generating study cards, decks, or prerequisite hierarchies from a topic, notes, or an article (e.g. via the Armin MCP create_card / import_card_hierarchy tools), or when deciding how to chunk content, what to put in a card, and how cards depend on each other.
+description: Guidelines for structuring spaced-repetition flashcards and prerequisite graphs when creating cards in Armin. Use whenever generating study cards, decks, or prerequisite hierarchies from a topic, notes, or an article (e.g. via the Armin MCP create_flashcard / import_flashcard_hierarchy tools), or when deciding how to chunk content, what to put in a card, and how cards depend on each other.
 ---
 
 # Writing study cards
@@ -74,7 +74,7 @@ Rules for prerequisite edges:
 - **Order from foundations to dependents** across the whole deck.
 - **Keep the graph shallow and meaningful.** A handful of real dependencies beats a dense web. Over-linking locks cards that didn't need to be locked.
 - **No cycles.** If two cards each seem to need the other, they're probably one chunk, or the dependency only runs one way.
-- When building several related cards at once, prefer `import_card_hierarchy`: assign stable `clientId`s and declare `prerequisites` by `clientId` in a single call.
+- When building several related cards at once, prefer `import_flashcard_hierarchy`: assign stable `clientId`s and declare `prerequisites` by `clientId` in a single call.
 
 ## Litmus tests (run before finalizing)
 
@@ -90,6 +90,6 @@ Your job is to turn a given resource into a **complete tree of cards** the learn
 
 - **Cover the resource thoroughly.** Walk the "knowings" from step 1 and decompose every meaningful one into cards. Each load-bearing fact, term, relationship, step, and concept the resource teaches should be reachable through some card. Decompose generously — many focused cards beat a few coarse ones.
 - **But don't pad.** Thorough means covering the real units of knowledge, not inventing trivia. Skip the genuinely obvious (common-sense steps, throwaway asides) and details the resource itself treats as incidental. Coverage of what matters, not completionism for its own sake.
-- **Deliver one connected tree, not a flat pile.** Emit the whole deck in a single `import_card_hierarchy` call with prerequisites wired so foundations unlock dependents. The graph is part of the deliverable; an unconnected list of cards is an incomplete answer.
+- **Deliver one connected tree, not a flat pile.** Emit the whole deck in a single `import_flashcard_hierarchy` call with prerequisites wired so foundations unlock dependents. The graph is part of the deliverable; an unconnected list of cards is an incomplete answer.
 - **Set scope to the learner when known.** If told the learner already knows part of the material, write fewer cards there — reviewing the obvious is demoralizing. Absent that signal, assume a motivated beginner and cover the foundations.
 - **Make every card individually sound.** Before finishing, re-check each card against the five properties and the litmus tests. A card that's vague, intractable, or untethered from the tree is worse than no card.

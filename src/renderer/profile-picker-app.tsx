@@ -1,7 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ChevronRight, Plus, UserRound } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  Plus,
+  Star,
+  StarOff,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import { ProfilePickerShell } from "@/components/profile-picker-shell";
 import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { Dialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { ThemeProvider } from "@/theme/theme-provider";
@@ -10,40 +26,64 @@ import type { Profile } from "@/types/window";
 
 type View = "picker" | "create";
 
-async function loadProfiles() {
-  return (await window.armin?.profiles?.list()) ?? [];
+async function loadProfileData() {
+  const [profiles, defaultId] = await Promise.all([
+    window.armin?.profiles?.list() ?? [],
+    window.armin?.profiles?.getDefault() ?? null,
+  ]);
+  return { profiles, defaultId };
 }
 
 export function ProfilePickerApp() {
   const [view, setView] = useState<View>("picker");
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [defaultId, setDefaultId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [opening, setOpening] = useState(false);
   const [creating, setCreating] = useState(false);
+  const openingRef = useRef(false);
+  const [deletingProfile, setDeletingProfile] = useState<Profile | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
 
+  const refresh = async (showLoading: boolean) => {
+    if (showLoading) setLoading(true);
+    try {
+      const data = await loadProfileData();
+      setProfiles(data.profiles);
+      setDefaultId(data.defaultId);
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
 
-    const refresh = async () => {
-      setLoading(true);
+    const runRefresh = async (showLoading: boolean) => {
+      if (showLoading) setLoading(true);
       try {
-        const list = await loadProfiles();
-        if (!cancelled) setProfiles(list);
+        const data = await loadProfileData();
+        if (!cancelled) {
+          setProfiles(data.profiles);
+          setDefaultId(data.defaultId);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && showLoading) setLoading(false);
       }
     };
 
-    void refresh();
-    window.addEventListener("focus", refresh);
+    void runRefresh(true);
+    const onFocus = () => void runRefresh(false);
+    window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
-      window.removeEventListener("focus", refresh);
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 
@@ -58,12 +98,12 @@ export function ProfilePickerApp() {
   }, [profiles, selectedId]);
 
   const openProfile = async (profile: Profile) => {
-    if (opening) return;
-    setOpening(true);
+    if (openingRef.current) return;
+    openingRef.current = true;
     try {
       await window.armin?.profiles?.open(profile.id, profile.name);
     } finally {
-      setOpening(false);
+      openingRef.current = false;
     }
   };
 
@@ -79,6 +119,45 @@ export function ProfilePickerApp() {
       await openProfile(profile);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const setDefaultProfile = async (id: string) => {
+    await window.armin.profiles.setDefault(id);
+    setDefaultId(id);
+  };
+
+  const clearDefaultProfile = async () => {
+    await window.armin.profiles.clearDefault();
+    setDefaultId(null);
+  };
+
+  const requestDelete = (profile: Profile) => {
+    setDeletingProfile(profile);
+    setDeleteError(null);
+    setDeleteOpen(true);
+  };
+
+  const handleDeleteDialogExit = () => {
+    setDeletingProfile(null);
+    setDeleteError(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deletingProfile || deleting) return;
+
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await window.armin.profiles.delete(deletingProfile.id);
+      setDeleteOpen(false);
+      await refresh(false);
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : "Couldn't delete profile",
+      );
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -106,14 +185,17 @@ export function ProfilePickerApp() {
         {view === "picker" ? (
           <PickerView
             profiles={profiles}
+            defaultId={defaultId}
             loading={loading}
             selectedId={selectedId}
-            opening={opening}
             listRef={listRef}
             onSelect={setSelectedId}
             onOpen={() => selected && void openProfile(selected)}
             onCreate={() => setView("create")}
             onListKeyDown={handleListKeyDown}
+            onSetDefault={(id) => void setDefaultProfile(id)}
+            onClearDefault={() => void clearDefaultProfile()}
+            onDelete={requestDelete}
           />
         ) : (
           <CreateView
@@ -128,30 +210,101 @@ export function ProfilePickerApp() {
           />
         )}
       </ProfilePickerShell>
+
+      <Dialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onExitComplete={handleDeleteDialogExit}
+        title="Delete profile?"
+        description={
+          deletingProfile
+            ? `“${deletingProfile.name}” and all of its decks, flashcards, and study progress will be permanently removed.`
+            : undefined
+        }
+      >
+        {deleteError && (
+          <p className="mb-3 text-sm text-again">{deleteError}</p>
+        )}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={deleting}
+            onClick={() => void confirmDelete()}
+          >
+            {deleting ? "Deleting…" : "Delete profile"}
+          </Button>
+        </div>
+      </Dialog>
     </ThemeProvider>
+  );
+}
+
+function ProfileActionItems({
+  isDefault,
+  onSetDefault,
+  onClearDefault,
+  onDelete,
+  Item,
+  Separator,
+}: {
+  isDefault: boolean;
+  onSetDefault: () => void;
+  onClearDefault: () => void;
+  onDelete: () => void;
+  Item: typeof ContextMenuItem;
+  Separator: typeof ContextMenuSeparator;
+}) {
+  return (
+    <>
+      {isDefault ? (
+        <Item onClick={onClearDefault}>
+          <StarOff className="h-4 w-4" />
+          Remove as default profile
+        </Item>
+      ) : (
+        <Item onClick={onSetDefault}>
+          <Star className="h-4 w-4" />
+          Set as default profile
+        </Item>
+      )}
+      <Separator />
+      <Item variant="destructive" onClick={onDelete}>
+        <Trash2 className="h-4 w-4" />
+        Delete profile
+      </Item>
+    </>
   );
 }
 
 function PickerView({
   profiles,
+  defaultId,
   loading,
   selectedId,
-  opening,
   listRef,
   onSelect,
   onOpen,
   onCreate,
   onListKeyDown,
+  onSetDefault,
+  onClearDefault,
+  onDelete,
 }: {
   profiles: Profile[];
+  defaultId: string | null;
   loading: boolean;
   selectedId: string | null;
-  opening: boolean;
   listRef: React.RefObject<HTMLDivElement | null>;
   onSelect: (id: string) => void;
   onOpen: () => void;
   onCreate: () => void;
   onListKeyDown: (event: React.KeyboardEvent) => void;
+  onSetDefault: (id: string) => void;
+  onClearDefault: () => void;
+  onDelete: (profile: Profile) => void;
 }) {
   const hasProfiles = profiles.length > 0;
 
@@ -167,7 +320,7 @@ function PickerView({
           </p>
         </div>
 
-        {loading ? (
+        {loading && !hasProfiles ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted">
             Loading profiles…
           </div>
@@ -183,44 +336,68 @@ function PickerView({
             <ul className="divide-y divide-border">
               {profiles.map((profile) => {
                 const isSelected = profile.id === selectedId;
+                const isDefault = profile.id === defaultId;
                 return (
                   <li key={profile.id}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={isSelected}
-                      onClick={() => onSelect(profile.id)}
-                      onDoubleClick={() => void onOpen()}
-                      className={cn(
-                        "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150",
-                        isSelected
-                          ? "bg-accent-tint text-ink"
-                          : "text-ink hover:bg-surface-sunken",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                          isSelected
-                            ? "bg-accent text-on-accent"
-                            : "bg-bg-2 text-muted",
-                        )}
-                        aria-hidden
+                    <ContextMenu>
+                      <ContextMenuTrigger
+                        render={
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => onSelect(profile.id)}
+                            onDoubleClick={() => void onOpen()}
+                            className={cn(
+                              "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150",
+                              isSelected
+                                ? "bg-accent-tint text-ink"
+                                : "text-ink hover:bg-surface-sunken",
+                            )}
+                          />
+                        }
                       >
-                        <UserRound className="h-4 w-4" strokeWidth={1.5} />
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {profile.name}
-                      </span>
-                      <ChevronRight
-                        className={cn(
-                          "h-4 w-4 shrink-0",
-                          isSelected ? "text-accent-deep" : "text-faint",
-                        )}
-                        strokeWidth={1.5}
-                        aria-hidden
-                      />
-                    </button>
+                        <span
+                          className={cn(
+                            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+                            isSelected
+                              ? "bg-accent text-on-accent"
+                              : "bg-bg-2 text-muted",
+                          )}
+                          aria-hidden
+                        >
+                          <UserRound className="h-4 w-4" strokeWidth={1.5} />
+                        </span>
+                        <span className="flex min-w-0 flex-1 items-center gap-2">
+                          <span className="truncate text-sm font-medium">
+                            {profile.name}
+                          </span>
+                          {isDefault && (
+                            <span className="shrink-0 rounded-sm bg-accent-tint px-1.5 py-0.5 text-[0.6875rem] font-medium text-accent-deep">
+                              Default
+                            </span>
+                          )}
+                        </span>
+                        <ChevronRight
+                          className={cn(
+                            "h-4 w-4 shrink-0",
+                            isSelected ? "text-accent-deep" : "text-faint",
+                          )}
+                          strokeWidth={1.5}
+                          aria-hidden
+                        />
+                      </ContextMenuTrigger>
+                      <ContextMenuContent className="min-w-48">
+                        <ProfileActionItems
+                          isDefault={isDefault}
+                          onSetDefault={() => onSetDefault(profile.id)}
+                          onClearDefault={onClearDefault}
+                          onDelete={() => onDelete(profile)}
+                          Item={ContextMenuItem}
+                          Separator={ContextMenuSeparator}
+                        />
+                      </ContextMenuContent>
+                    </ContextMenu>
                   </li>
                 );
               })}
@@ -247,10 +424,10 @@ function PickerView({
           <>
             <Button
               className="w-full"
-              disabled={!selectedId || opening}
+              disabled={!selectedId}
               onClick={onOpen}
             >
-              {opening ? "Opening…" : "Open profile"}
+              Open profile
             </Button>
             <Button variant="outline" className="w-full" onClick={onCreate}>
               <Plus className="h-4 w-4" />

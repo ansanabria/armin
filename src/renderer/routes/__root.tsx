@@ -1,6 +1,7 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Layers, GraduationCap, Library, Settings } from "lucide-react";
+import { Layers, Library, Settings } from "lucide-react";
 import { ProfileSwitcher } from "@/components/profile-switcher";
+import { ReviewNavLink } from "@/components/review-nav-link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { WindowControls } from "@/components/window-controls";
 import { cn } from "@/lib/utils";
@@ -9,10 +10,6 @@ const navLink =
   "titlebar-no-drag -mb-px flex h-14 items-center gap-1.5 border-b-2 border-b-transparent px-4 text-sm font-medium text-muted transition-colors duration-150 hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent";
 const navLinkActive =
   "titlebar-no-drag -mb-px flex h-14 items-center gap-1.5 border-b-2 !border-b-accent px-4 text-sm font-medium text-accent transition-colors duration-150 hover:text-accent-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent";
-const reviewButton =
-  "titlebar-no-drag flex h-14 shrink-0 items-center gap-1.5 px-3 text-sm font-medium text-muted transition-colors duration-150 hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent";
-const reviewButtonActive =
-  "titlebar-no-drag flex h-14 shrink-0 items-center gap-1.5 bg-surface-sunken px-3 text-sm font-medium text-accent transition-colors duration-150 hover:text-accent-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent";
 
 const platform = window.arminShell?.platform ?? "linux";
 
@@ -58,17 +55,10 @@ export default function RootLayout() {
           </Link>
         </nav>
 
-        <div className="flex justify-self-end">
+        <div className="flex items-center justify-self-end">
           <ThemeToggle />
           <ProfileSwitcher />
-          <Link
-            to="/review"
-            className={reviewButton}
-            activeProps={{ className: reviewButtonActive }}
-          >
-            <GraduationCap className="h-4 w-4" strokeWidth={1.5} />
-            Review
-          </Link>
+          <ReviewNavLink />
           <WindowControls />
         </div>
       </header>

@@ -1,8 +1,8 @@
 const TILE_EASE = "cubic-bezier(0.25, 1, 0.5, 1)";
 
-export const CARD_TILE_EXIT_MS = 320;
+export const FLASHCARD_TILE_EXIT_MS = 320;
 
-export function liftCardTileFromGrid(tile: HTMLLIElement): HTMLElement[] {
+export function liftFlashcardTileFromGrid(tile: HTMLLIElement): HTMLElement[] {
   const grid = tile.parentElement;
   if (!grid) return [];
 
@@ -40,7 +40,7 @@ export function liftCardTileFromGrid(tile: HTMLLIElement): HTMLElement[] {
   if (animated.length > 0) {
     requestAnimationFrame(() => {
       for (const el of animated) {
-        el.style.transition = `transform ${CARD_TILE_EXIT_MS}ms ${TILE_EASE}`;
+        el.style.transition = `transform ${FLASHCARD_TILE_EXIT_MS}ms ${TILE_EASE}`;
         el.style.transform = "";
       }
     });
@@ -49,7 +49,7 @@ export function liftCardTileFromGrid(tile: HTMLLIElement): HTMLElement[] {
   return siblings;
 }
 
-export function resetLiftedCardTile(tile: HTMLLIElement | null) {
+export function resetLiftedFlashcardTile(tile: HTMLLIElement | null) {
   if (!tile) return;
   tile.style.position = "";
   tile.style.top = "";
@@ -60,7 +60,7 @@ export function resetLiftedCardTile(tile: HTMLLIElement | null) {
   tile.style.zIndex = "";
 }
 
-export function clearCardTileFlipStyles(siblings: HTMLElement[]) {
+export function clearFlashcardTileFlipStyles(siblings: HTMLElement[]) {
   for (const el of siblings) {
     el.style.transform = "";
     el.style.transition = "";

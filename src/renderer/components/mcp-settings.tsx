@@ -45,7 +45,7 @@ export function McpSettings() {
     ? agent === "cursor"
       ? {
           title: ".cursor/mcp.json",
-          hint: "Add this in the project where your agent should create cards.",
+          hint: "Add this in the project where your agent should create flashcards.",
           body: buildCursorMcpConfig(setup),
         }
       : agent === "claude"
@@ -97,7 +97,7 @@ export function McpSettings() {
             <p className="mt-0.5 text-[0.8125rem] leading-snug text-muted">
               The MCP server writes to whichever Armin profile is currently open
               in the desktop app. If multiple profiles are open, your agent will
-              ask which one to use before creating cards.
+              ask which one to use before creating flashcards.
             </p>
             <p className="mt-2 font-mono text-[0.75rem] text-ink">
               {setup.url}
@@ -142,7 +142,7 @@ export function McpSettings() {
             <p className="text-[0.8125rem] leading-snug text-muted">
               Armin hosts the MCP server while the app is open. Keep Armin
               running with the target profile selected while your agent is
-              creating cards, or choose from the open profiles when your agent
+              creating flashcards, or choose from the open profiles when your agent
               asks.
             </p>
           </div>

@@ -1,21 +1,21 @@
 import { eq } from "drizzle-orm";
-import type { Deck, Note } from "../main/db/schema";
+import type { Deck, Flashcard } from "../main/db/schema";
 import { schema } from "../main/db";
 import {
-  generateReviewItems,
-  isCardType,
+  generateReviewUnits,
+  isFlashcardType,
   serializeContent,
   validateContent,
-  type CardType,
-} from "../main/services/card-types";
+  type FlashcardType,
+} from "../main/services/flashcard-types";
 import { getDeck } from "../main/services/decks";
 import { getDeckGraph, refreshLockedForDeck } from "../main/services/graph";
 import type { ServiceContext } from "../main/services/context";
-import { newCardFields } from "../main/services/scheduler";
+import { newReviewUnitFields } from "../main/services/scheduler";
 
-export type HierarchyCardInput = {
+export type HierarchyFlashcardInput = {
   clientId: string;
-  /** Shorthand for basic cards; ignored when `content` is provided. */
+  /** Shorthand for basic flashcards; ignored when `content` is provided. */
   front?: string;
   back?: string;
   type?: string;
@@ -28,44 +28,44 @@ export type ImportHierarchyInput = {
   deckId?: string;
   deckName?: string;
   deckDescription?: string | null;
-  cards: HierarchyCardInput[];
+  flashcards: HierarchyFlashcardInput[];
 };
 
 export type ImportedHierarchy = {
   deck: Deck;
-  cards: Array<Note & { clientId: string }>;
+  flashcards: Array<Flashcard & { clientId: string }>;
   edges: { prereqClientId: string; dependentClientId: string }[];
 };
 
-function assertUniqueClientIds(cards: HierarchyCardInput[]) {
+function assertUniqueClientIds(flashcards: HierarchyFlashcardInput[]) {
   const seen = new Set<string>();
-  for (const card of cards) {
-    if (seen.has(card.clientId)) {
-      throw new Error(`Duplicate card clientId: ${card.clientId}`);
+  for (const flashcard of flashcards) {
+    if (seen.has(flashcard.clientId)) {
+      throw new Error(`Duplicate flashcard clientId: ${flashcard.clientId}`);
     }
-    seen.add(card.clientId);
+    seen.add(flashcard.clientId);
   }
 }
 
-function assertPrerequisitesExist(cards: HierarchyCardInput[]) {
-  const ids = new Set(cards.map((card) => card.clientId));
-  for (const card of cards) {
-    for (const prereqId of card.prerequisites ?? []) {
+function assertPrerequisitesExist(flashcards: HierarchyFlashcardInput[]) {
+  const ids = new Set(flashcards.map((flashcard) => flashcard.clientId));
+  for (const flashcard of flashcards) {
+    for (const prereqId of flashcard.prerequisites ?? []) {
       if (!ids.has(prereqId)) {
         throw new Error(
-          `Card "${card.clientId}" references missing prerequisite "${prereqId}".`,
+          `Flashcard "${flashcard.clientId}" references missing prerequisite "${prereqId}".`,
         );
       }
     }
   }
 }
 
-function assertAcyclicHierarchy(cards: HierarchyCardInput[]) {
+function assertAcyclicHierarchy(flashcards: HierarchyFlashcardInput[]) {
   const dependentsByPrereq = new Map<string, string[]>();
-  for (const card of cards) {
-    for (const prereqId of card.prerequisites ?? []) {
+  for (const flashcard of flashcards) {
+    for (const prereqId of flashcard.prerequisites ?? []) {
       const dependents = dependentsByPrereq.get(prereqId) ?? [];
-      dependents.push(card.clientId);
+      dependents.push(flashcard.clientId);
       dependentsByPrereq.set(prereqId, dependents);
     }
   }
@@ -87,39 +87,42 @@ function assertAcyclicHierarchy(cards: HierarchyCardInput[]) {
     visited.add(id);
   }
 
-  for (const card of cards) {
-    visit(card.clientId);
+  for (const flashcard of flashcards) {
+    visit(flashcard.clientId);
   }
 }
 
-function resolveTypedContent(card: HierarchyCardInput) {
-  const rawType = card.type ?? "basic";
-  if (!isCardType(rawType)) {
-    throw new Error(`Card "${card.clientId}" has unknown type "${rawType}".`);
+function resolveTypedContent(flashcard: HierarchyFlashcardInput) {
+  const rawType = flashcard.type ?? "basic";
+  if (!isFlashcardType(rawType)) {
+    throw new Error(
+      `Flashcard "${flashcard.clientId}" has unknown type "${rawType}".`,
+    );
   }
-  const type: CardType = rawType;
+  const type: FlashcardType = rawType;
   const raw =
-    card.content ?? ({ front: card.front, back: card.back } as unknown);
+    flashcard.content ??
+    ({ front: flashcard.front, back: flashcard.back } as unknown);
   const content = validateContent(type, raw);
   return { type, content };
 }
 
-export async function importCardHierarchy(
+export async function importFlashcardHierarchy(
   ctx: ServiceContext,
   input: ImportHierarchyInput,
 ): Promise<ImportedHierarchy> {
-  assertUniqueClientIds(input.cards);
-  assertPrerequisitesExist(input.cards);
-  assertAcyclicHierarchy(input.cards);
+  assertUniqueClientIds(input.flashcards);
+  assertPrerequisitesExist(input.flashcards);
+  assertAcyclicHierarchy(input.flashcards);
 
   if (!input.deckId && !input.deckName?.trim()) {
     throw new Error("Either deckId or deckName is required.");
   }
 
-  // Validate every card up front so a bad payload fails before any writes.
-  const resolved = input.cards.map((card) => ({
-    card,
-    ...resolveTypedContent(card),
+  // Validate every flashcard up front so a bad payload fails before any writes.
+  const resolved = input.flashcards.map((flashcard) => ({
+    flashcard,
+    ...resolveTypedContent(flashcard),
   }));
 
   const result = ctx.db.transaction((tx) => {
@@ -144,12 +147,12 @@ export async function importCardHierarchy(
         .get();
     }
 
-    const notesByClientId = new Map<string, Note>();
-    const createdNotes: Array<Note & { clientId: string }> = [];
+    const flashcardsByClientId = new Map<string, Flashcard>();
+    const createdFlashcards: Array<Flashcard & { clientId: string }> = [];
 
-    for (const { card, type, content } of resolved) {
-      const note = tx
-        .insert(schema.notes)
+    for (const { flashcard, type, content } of resolved) {
+      const created = tx
+        .insert(schema.flashcards)
         .values({
           deckId: deck.id,
           type,
@@ -159,40 +162,40 @@ export async function importCardHierarchy(
         .returning()
         .get();
 
-      for (const item of generateReviewItems(type, content)) {
-        tx.insert(schema.cards)
+      for (const spec of generateReviewUnits(type, content)) {
+        tx.insert(schema.reviewUnits)
           .values({
-            noteId: note!.id,
+            flashcardId: created!.id,
             deckId: deck.id,
-            subKey: item.subKey,
-            front: item.front,
-            back: item.back,
-            ...newCardFields(),
+            subKey: spec.subKey,
+            front: spec.front,
+            back: spec.back,
+            ...newReviewUnitFields(),
           })
           .run();
       }
 
-      notesByClientId.set(card.clientId, note!);
-      createdNotes.push({ ...note!, clientId: card.clientId });
+      flashcardsByClientId.set(flashcard.clientId, created!);
+      createdFlashcards.push({ ...created!, clientId: flashcard.clientId });
     }
 
     const edges: ImportedHierarchy["edges"] = [];
-    for (const card of input.cards) {
-      const dependent = notesByClientId.get(card.clientId)!;
-      for (const prereqClientId of card.prerequisites ?? []) {
-        const prereq = notesByClientId.get(prereqClientId)!;
-        tx.insert(schema.notePrereqs)
+    for (const flashcard of input.flashcards) {
+      const dependent = flashcardsByClientId.get(flashcard.clientId)!;
+      for (const prereqClientId of flashcard.prerequisites ?? []) {
+        const prereq = flashcardsByClientId.get(prereqClientId)!;
+        tx.insert(schema.flashcardPrereqs)
           .values({ prereqId: prereq.id, dependentId: dependent.id })
           .onConflictDoNothing()
           .run();
         edges.push({
           prereqClientId,
-          dependentClientId: card.clientId,
+          dependentClientId: flashcard.clientId,
         });
       }
     }
 
-    return { deck, cards: createdNotes, edges };
+    return { deck, flashcards: createdFlashcards, edges };
   });
 
   await refreshLockedForDeck(ctx, result.deck.id);

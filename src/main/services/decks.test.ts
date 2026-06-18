@@ -1,10 +1,10 @@
 import { count, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { schema } from "../db";
-import { getOnlyCard, makeContext, useTestDb } from "../test/db";
+import { getOnlyReviewUnit, makeContext, useTestDb } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
-import * as notes from "./notes";
+import * as notes from "./flashcards";
 import * as review from "./review";
 
 useTestDb();
@@ -16,7 +16,7 @@ function basic(
   back: string,
   tags?: string[],
 ) {
-  return notes.createNote({
+  return notes.createFlashcard({
     ctx,
     deckId,
     type: "basic",
@@ -28,9 +28,9 @@ function basic(
 async function tableCount(
   ctx: Awaited<ReturnType<typeof makeContext>>,
   table:
-    | typeof schema.notes
-    | typeof schema.cards
-    | typeof schema.notePrereqs
+    | typeof schema.flashcards
+    | typeof schema.reviewUnits
+    | typeof schema.flashcardPrereqs
     | typeof schema.reviewLogs,
 ) {
   const row = await ctx.db.select({ value: count() }).from(table).get();
@@ -80,22 +80,22 @@ describe("deck lifecycle", () => {
     await graph.addPrereq(ctx, prereq.id, dependent.id);
     await basic(ctx, survivor.id, "Keep", "Me");
 
-    const prereqCard = await getOnlyCard(ctx, prereq.id);
-    await review.rateCard(ctx, prereqCard.id, 3);
+    const prereqCard = await getOnlyReviewUnit(ctx, prereq.id);
+    await review.rateReviewUnit(ctx, prereqCard.id, 3);
     expect(await tableCount(ctx, schema.reviewLogs)).toBe(1);
 
     await decks.deleteDeck(ctx, doomed.id);
 
     expect(await decks.getDeck(ctx, doomed.id)).toBeUndefined();
-    expect(await tableCount(ctx, schema.notePrereqs)).toBe(0);
+    expect(await tableCount(ctx, schema.flashcardPrereqs)).toBe(0);
     expect(await tableCount(ctx, schema.reviewLogs)).toBe(0);
-    expect(await tableCount(ctx, schema.notes)).toBe(1);
-    expect(await tableCount(ctx, schema.cards)).toBe(1);
+    expect(await tableCount(ctx, schema.flashcards)).toBe(1);
+    expect(await tableCount(ctx, schema.reviewUnits)).toBe(1);
 
     const remainingNote = await ctx.db
       .select()
-      .from(schema.notes)
-      .where(eq(schema.notes.deckId, survivor.id))
+      .from(schema.flashcards)
+      .where(eq(schema.flashcards.deckId, survivor.id))
       .all();
     expect(remainingNote).toHaveLength(1);
   });
@@ -104,8 +104,8 @@ describe("deck lifecycle", () => {
     const deck = await decks.createDeck(ctx, { name: "Counts" });
     const note = await basic(ctx, deck.id, "Q", "A");
 
-    const card = await getOnlyCard(ctx, note.id);
-    await review.rateCard(ctx, card.id, 3);
+    const card = await getOnlyReviewUnit(ctx, note.id);
+    await review.rateReviewUnit(ctx, card.id, 3);
 
     const [stats] = await decks.listDecks(ctx);
     expect(stats.total).toBe(1);

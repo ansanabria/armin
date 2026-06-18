@@ -130,7 +130,7 @@ export default function DecksPage() {
     toast({
       tone: "success",
       title: "Import complete",
-      description: `${summary.cardCount} cards added to ${deckLabel}.`,
+      description: `${summary.cardCount} flashcards added to ${deckLabel}.`,
     });
     setImportOpen(false);
   };
@@ -205,7 +205,7 @@ export default function DecksPage() {
         <EmptyState
           icon={Layers}
           title="No decks yet"
-          description="A deck is a set of cards on one subject. Create your first one, then add cards and organize their prerequisites."
+          description="A deck is a set of flashcards on one subject. Create your first one, then add flashcards and organize their prerequisites."
           action={
             <Button onClick={() => setOpen(true)}>
               <Plus className="h-4 w-4" /> Create your first deck
@@ -349,7 +349,7 @@ export default function DecksPage() {
         title="Delete deck?"
         description={
           deletingDeck
-            ? `“${deletingDeck.name}” and all ${deletingDeck.total} cards in it will be permanently removed.`
+            ? `“${deletingDeck.name}” and all ${deletingDeck.total} flashcards in it will be permanently removed.`
             : undefined
         }
       >
@@ -460,7 +460,7 @@ function DeckTile({
             )}
             <div className="mt-4 flex flex-1 flex-col justify-end">
               <div className="flex items-center justify-between text-xs text-muted">
-                <span>{deck.total} cards</span>
+                <span>{deck.total} flashcards</span>
                 <span>{pct}% learned</span>
               </div>
               <Progress

@@ -1,22 +1,46 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { CheckCircle2, AlertTriangle, Check, XCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  AlertTriangle,
+  Check,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+  Undo2,
+  EllipsisVertical,
+  Pencil,
+  Archive,
+  Trash2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Kbd } from "@/components/ui/kbd";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DiagramReview } from "@/components/diagram-review";
+import {
+  FlashcardFormDialog,
+  type CardFormValues,
+} from "@/components/flashcard-form-dialog";
 import { reviewKeys } from "@/lib/armin-query";
 import type { Grade, PreviewOption } from "@/types/window";
-import type { UiReviewCard } from "@/types/view-models";
+import type { UiFlashcard, UiReviewUnit } from "@/types/view-models";
 import {
   matchesTypeAnswer,
   type DiagramContent,
   type TypeAnswerContent,
-} from "../../main/services/card-types";
+} from "../../main/services/flashcard-types";
 import { cn } from "@/lib/utils";
 
 const RATINGS: {
@@ -30,13 +54,26 @@ const RATINGS: {
   { grade: 4, label: "Easy", bg: "bg-easy hover:bg-easy-deep" },
 ];
 
+function reconcileSessionCards(
+  current: UiReviewUnit[],
+  incoming: UiReviewUnit[],
+): UiReviewUnit[] {
+  const incomingById = new Map(incoming.map((c) => [c.id, c]));
+  const currentIds = new Set(current.map((c) => c.id));
+  const updated = current.map((c) => incomingById.get(c.id) ?? c);
+  const appended = incoming.filter((c) => !currentIds.has(c.id));
+  return [...updated, ...appended];
+}
+
 export type ReviewSessionProps = {
   /** Cards due for this session. Tag cards with `deck` to show the source. */
-  queue: UiReviewCard[];
+  queue: UiReviewUnit[];
   /** Top-of-page content — a back link or a page title. */
   header: ReactNode;
   /** Secondary line under the header (e.g. due count). Session progress aligns right. */
   subtitle?: ReactNode;
+  /** Deck selector rendered in the header row (top right). */
+  deckSelector?: ReactNode;
   /** Action shown in the empty/done panel (typically a back button). */
   doneAction: ReactNode;
   /** Copy for the "all caught up" panel after clearing the queue. */
@@ -48,14 +85,23 @@ export type ReviewSessionProps = {
   isLoading?: boolean;
   isError?: boolean;
   onRetry?: () => void;
-  loadPreview: (cardId: string) => Promise<PreviewOption[]>;
-  onRate: (cardId: string, rating: Grade) => Promise<void>;
+  loadPreview: (reviewUnitId: string) => Promise<PreviewOption[]>;
+  onRate: (reviewUnitId: string, rating: Grade) => Promise<void>;
+  onUndo?: (reviewUnitId: string) => Promise<void>;
+  loadCard?: (flashcardId: string) => Promise<UiFlashcard | undefined>;
+  onEditFlashcard?: (
+    flashcardId: string,
+    values: CardFormValues,
+  ) => Promise<void>;
+  onArchiveFlashcard?: (flashcardId: string) => Promise<void>;
+  onDeleteFlashcard?: (flashcardId: string) => Promise<void>;
 };
 
 export function ReviewSession({
   queue,
   header,
   subtitle,
+  deckSelector,
   doneAction,
   doneDescription,
   emptyDescription,
@@ -65,16 +111,25 @@ export function ReviewSession({
   onRetry,
   loadPreview,
   onRate,
+  onUndo,
+  loadCard,
+  onEditFlashcard,
+  onArchiveFlashcard,
+  onDeleteFlashcard,
 }: ReviewSessionProps) {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [rating, setRating] = useState<Grade | null>(null);
-  /** Typed answer for type_answer cards. */
   const [typed, setTyped] = useState("");
-  /** Frozen at session start so refetched queues don't shrink mid-review. */
-  const [sessionQueue, setSessionQueue] = useState<UiReviewCard[] | null>(null);
+  const [sessionCards, setSessionCards] = useState<UiReviewUnit[]>([]);
+  const [history, setHistory] = useState<string[]>([]);
+  const [undoing, setUndoing] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editCard, setEditCard] = useState<UiFlashcard | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [flashcardActionPending, setCardActionPending] = useState(false);
 
-  const cards = isLoading || isError ? [] : (sessionQueue ?? queue);
+  const cards = isLoading || isError ? [] : sessionCards;
   const card = cards[index];
   const done =
     !isLoading && !isError && index >= cards.length && cards.length > 0;
@@ -109,11 +164,26 @@ export function ReviewSession({
     setFlipped(true);
   };
 
+  const removeFromSession = useCallback((reviewUnitId: string) => {
+    setSessionCards((prev) => {
+      const removeIdx = prev.findIndex((c) => c.id === reviewUnitId);
+      const next = prev.filter((c) => c.id !== reviewUnitId);
+      setIndex((i) => {
+        if (removeIdx < 0) return i;
+        if (i > removeIdx) return i - 1;
+        return Math.min(i, Math.max(0, next.length - 1));
+      });
+      return next;
+    });
+    setHistory((h) => h.filter((id) => id !== reviewUnitId));
+  }, []);
+
   const rate = async (grade: Grade) => {
     if (!card || rating) return;
     setRating(grade);
     try {
       await onRate(card.id, grade);
+      setHistory((h) => [...h, card.id]);
       setFlipped(false);
       setTyped("");
       setIndex((i) => i + 1);
@@ -124,20 +194,88 @@ export function ReviewSession({
     }
   };
 
+  const goPrev = () => {
+    if (index > 0) setIndex((i) => i - 1);
+  };
+
+  const goNext = () => {
+    if (index < cards.length - 1) setIndex((i) => i + 1);
+  };
+
+  const undoLast = async () => {
+    if (!onUndo || history.length === 0 || undoing) return;
+    const lastId = history[history.length - 1]!;
+    setUndoing(true);
+    try {
+      await onUndo(lastId);
+      setHistory((h) => h.slice(0, -1));
+      const idx = sessionCards.findIndex((c) => c.id === lastId);
+      if (idx >= 0) setIndex(idx);
+      setFlipped(false);
+      setTyped("");
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  const openEdit = async () => {
+    if (!card || !loadCard) return;
+    const loaded = await loadCard(card.flashcardId);
+    if (loaded) {
+      setEditCard(loaded);
+      setEditOpen(true);
+    }
+  };
+
+  const handleEditSubmit = async (values: CardFormValues) => {
+    if (!editCard || !onEditFlashcard) return;
+    await onEditFlashcard(editCard.id, values);
+    setEditOpen(false);
+  };
+
+  const handleArchive = async () => {
+    if (!card || !onArchiveFlashcard || flashcardActionPending) return;
+    setCardActionPending(true);
+    try {
+      await onArchiveFlashcard(card.flashcardId);
+      removeFromSession(card.id);
+    } finally {
+      setCardActionPending(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!card || !onDeleteFlashcard || flashcardActionPending) return;
+    setCardActionPending(true);
+    try {
+      await onDeleteFlashcard(card.flashcardId);
+      setDeleteConfirmOpen(false);
+      removeFromSession(card.id);
+    } finally {
+      setCardActionPending(false);
+    }
+  };
+
+  const hasCardActions = Boolean(
+    onEditFlashcard || onArchiveFlashcard || onDeleteFlashcard,
+  );
+
   useEffect(() => {
     setIndex(0);
     setFlipped(false);
     setTyped("");
-    setSessionQueue(null);
-  }, [isLoading, isError, resetKey]);
+    setSessionCards([]);
+    setHistory([]);
+  }, [resetKey]);
 
   useEffect(() => {
-    if (!isLoading && !isError && sessionQueue === null) {
-      setSessionQueue(queue);
-    }
-  }, [isLoading, isError, queue, sessionQueue]);
+    if (isLoading || isError) return;
+    setSessionCards((prev) => {
+      if (prev.length === 0) return queue;
+      return reconcileSessionCards(prev, queue);
+    });
+  }, [isLoading, isError, queue]);
 
-  // Reset per-card input state whenever the visible card changes.
   useEffect(() => {
     setFlipped(false);
     setTyped("");
@@ -156,6 +294,12 @@ export function ReviewSession({
         } else if (e.key === " " && !inField) {
           e.preventDefault();
           reveal();
+        } else if (e.key === "ArrowLeft" && !inField) {
+          e.preventDefault();
+          goPrev();
+        } else if (e.key === "ArrowRight" && !inField) {
+          e.preventDefault();
+          goNext();
         }
       } else if (["1", "2", "3", "4"].includes(e.key) && !inField) {
         void rate(Number(e.key) as Grade);
@@ -163,11 +307,14 @@ export function ReviewSession({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isLoading, isError, card, flipped, rating]);
+  }, [isLoading, isError, card, flipped, rating, index, cards.length]);
 
   return (
     <div className="mx-auto max-w-2xl">
-      {header}
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0 flex-1 [&_h1]:m-0">{header}</div>
+        {deckSelector && <div className="shrink-0">{deckSelector}</div>}
+      </div>
 
       {(subtitle || card) && (
         <div
@@ -241,9 +388,71 @@ export function ReviewSession({
 
       {card && (
         <div className="mt-8">
-          <Progress value={index} max={cards.length} className="mb-8" />
+          <div className="mb-8 flex items-center gap-3">
+            <Progress value={index} max={cards.length} className="flex-1" />
+            {onUndo && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={history.length === 0 || undoing}
+                onClick={() => void undoLast()}
+                aria-label="Undo last review"
+              >
+                <Undo2 className="h-4 w-4" />
+                Undo
+              </Button>
+            )}
+          </div>
 
-          <div className="flex min-h-[300px] flex-col items-center justify-center rounded-xl border border-border-strong bg-paper px-10 py-12 text-center">
+          <div className="relative flex min-h-[300px] flex-col items-center justify-center rounded-xl border border-border-strong bg-paper px-10 py-12 text-center">
+            {hasCardActions && (
+              <div className="absolute top-3 right-3">
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label="Flashcard actions"
+                      />
+                    }
+                  >
+                    <EllipsisVertical className="h-4 w-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-40">
+                    {onEditFlashcard && loadCard && (
+                      <DropdownMenuItem onClick={() => void openEdit()}>
+                        <Pencil className="h-4 w-4" />
+                        Edit flashcard
+                      </DropdownMenuItem>
+                    )}
+                    {onArchiveFlashcard && (
+                      <DropdownMenuItem
+                        disabled={flashcardActionPending}
+                        onClick={() => void handleArchive()}
+                      >
+                        <Archive className="h-4 w-4" />
+                        Archive
+                      </DropdownMenuItem>
+                    )}
+                    {onDeleteFlashcard && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          disabled={flashcardActionPending}
+                          onClick={() => setDeleteConfirmOpen(true)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+
             {diagramContent ? (
               <DiagramReview
                 content={diagramContent}
@@ -308,48 +517,105 @@ export function ReviewSession({
             )}
           </div>
 
-          <div className="mt-6">
-            {!flipped ? (
-              <Button size="lg" className="w-full" onClick={reveal}>
-                {isTypeAnswer ? "Check answer" : "Show answer"}
-                <Kbd className="ml-1 border-on-accent/25 bg-on-accent/10 text-on-accent shadow-none">
-                  {isTypeAnswer ? "Enter" : "Space"}
-                </Kbd>
-              </Button>
-            ) : (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {RATINGS.map((r) => (
-                  <button
-                    key={r.grade}
-                    onClick={() => void rate(r.grade)}
-                    disabled={rating !== null}
-                    className={cn(
-                      "flex flex-col items-center gap-0.5 rounded-md px-3 py-2.5 text-sm font-medium text-on-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-                      r.bg,
-                      // Nudge the user toward Again/Good after an auto-check.
-                      isTypeAnswer &&
-                        ((isCorrect && r.grade === 3) ||
-                          (!isCorrect && r.grade === 1))
-                        ? "ring-2 ring-ink ring-offset-2 ring-offset-bg"
-                        : undefined,
-                    )}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      {r.label}
-                      <Kbd className="border-on-accent/25 bg-on-accent/10 text-on-accent shadow-none">
-                        {r.grade}
-                      </Kbd>
-                    </span>
-                    <span className="font-mono text-xs text-on-accent/85">
-                      {intervalLabels.get(r.grade) ?? "…"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="mt-6 flex items-stretch gap-2">
+            <Button
+              variant="outline"
+              size="lg"
+              className="shrink-0 px-3"
+              disabled={index === 0}
+              onClick={goPrev}
+              aria-label="Previous review unit"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+
+            <div className="min-w-0 flex-1">
+              {!flipped ? (
+                <Button size="lg" className="w-full" onClick={reveal}>
+                  {isTypeAnswer ? "Check answer" : "Show answer"}
+                  <Kbd className="ml-1 border-on-accent/25 bg-on-accent/10 text-on-accent shadow-none">
+                    {isTypeAnswer ? "Enter" : "Space"}
+                  </Kbd>
+                </Button>
+              ) : (
+                <div className="grid h-full grid-cols-2 gap-2 sm:grid-cols-4">
+                  {RATINGS.map((r) => (
+                    <button
+                      key={r.grade}
+                      onClick={() => void rate(r.grade)}
+                      disabled={rating !== null}
+                      className={cn(
+                        "flex flex-col items-center justify-center gap-0.5 rounded-md px-3 py-2.5 text-sm font-medium text-on-accent transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+                        r.bg,
+                        isTypeAnswer &&
+                          ((isCorrect && r.grade === 3) ||
+                            (!isCorrect && r.grade === 1))
+                          ? "ring-2 ring-ink ring-offset-2 ring-offset-bg"
+                          : undefined,
+                      )}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        {r.label}
+                        <Kbd className="border-on-accent/25 bg-on-accent/10 text-on-accent shadow-none">
+                          {r.grade}
+                        </Kbd>
+                      </span>
+                      <span className="font-mono text-xs text-on-accent/85">
+                        {intervalLabels.get(r.grade) ?? "…"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Button
+              variant="outline"
+              size="lg"
+              className="shrink-0 px-3"
+              disabled={index >= cards.length - 1}
+              onClick={goNext}
+              aria-label="Next review unit"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
           </div>
         </div>
       )}
+
+      {editCard && onEditFlashcard && (
+        <FlashcardFormDialog
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onExitComplete={() => setEditCard(null)}
+          mode="edit"
+          reviewUnitId={editCard.id}
+          initialType={editCard.type}
+          initialContent={editCard.content}
+          initialTags={editCard.tags}
+          onSubmit={handleEditSubmit}
+        />
+      )}
+
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        title="Delete flashcard?"
+        description="This flashcard will be permanently removed from your deck."
+      >
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={() => setDeleteConfirmOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={flashcardActionPending}
+            onClick={() => void handleDelete()}
+          >
+            Delete flashcard
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

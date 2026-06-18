@@ -1,7 +1,10 @@
-import type { Card, Deck, Note, Settings } from "../../main/db/schema";
+import type { ReviewUnit, Deck, Flashcard, Settings } from "../../main/db/schema";
 import type { DeckWithStats } from "../../main/services/decks";
-import type { BrowseNote, NoteWithMeta } from "../../main/services/notes";
-import type { CardType, CardContent } from "../../main/services/card-types";
+import type {
+  BrowseFlashcard,
+  FlashcardWithMeta,
+} from "../../main/services/flashcards";
+import type { FlashcardType, FlashcardContent } from "../../main/services/flashcard-types";
 import type { SettingsUpdate } from "../../main/services/settings";
 import type {
   PreviewOption,
@@ -27,6 +30,10 @@ export interface ArminApi {
     list(): Promise<Profile[]>;
     create(name: string): Promise<Profile>;
     open(id: string, name?: string): Promise<{ ok: true }>;
+    getDefault(): Promise<string | null>;
+    setDefault(id: string): Promise<{ ok: true }>;
+    clearDefault(): Promise<{ ok: true }>;
+    delete(id: string): Promise<{ ok: true }>;
     showPicker(): Promise<{ ok: true }>;
   };
   decks: {
@@ -40,9 +47,9 @@ export interface ArminApi {
     }): Promise<Deck | undefined>;
     delete(id: string): Promise<{ ok: true }>;
   };
-  cards: {
-    list(deckId: string): Promise<NoteWithMeta[]>;
-    listAll(): Promise<BrowseNote[]>;
+  flashcards: {
+    list(deckId: string): Promise<FlashcardWithMeta[]>;
+    listAll(): Promise<BrowseFlashcard[]>;
     browse(input: {
       offset: number;
       limit: number;
@@ -51,32 +58,37 @@ export interface ArminApi {
       deckId?: string;
       tags?: string[];
     }): Promise<{
-      cards: BrowseNote[];
+      flashcards: BrowseFlashcard[];
       filteredTotal: number;
       libraryTotal: number;
     }>;
     listTags(): Promise<string[]>;
     listDeckTags(deckId: string): Promise<string[]>;
-    get(id: string): Promise<NoteWithMeta | undefined>;
+    get(id: string): Promise<FlashcardWithMeta | undefined>;
     create(input: {
       deckId: string;
-      type: CardType;
-      content: CardContent;
+      type: FlashcardType;
+      content: FlashcardContent;
       tags?: string[];
-    }): Promise<NoteWithMeta>;
+    }): Promise<FlashcardWithMeta>;
     update(input: {
       id: string;
-      type?: CardType;
-      content?: CardContent;
+      type?: FlashcardType;
+      content?: FlashcardContent;
       tags?: string[];
-    }): Promise<NoteWithMeta | undefined>;
+    }): Promise<FlashcardWithMeta | undefined>;
     delete(id: string): Promise<{ ok: true }>;
+    archive(
+      id: string,
+      archived: boolean,
+    ): Promise<FlashcardWithMeta | undefined>;
   };
   review: {
     queue(deckId: string): Promise<ReviewQueueItem[]>;
     queueAll(): Promise<ReviewQueueItem[]>;
-    preview(cardId: string): Promise<PreviewOption[]>;
-    rate(cardId: string, rating: Grade): Promise<ReviewQueueItem>;
+    preview(reviewUnitId: string): Promise<PreviewOption[]>;
+    rate(reviewUnitId: string, rating: Grade): Promise<ReviewQueueItem>;
+    undo(reviewUnitId: string): Promise<ReviewQueueItem | null>;
   };
   graph: {
     get(deckId: string): Promise<DeckGraph>;
@@ -84,7 +96,7 @@ export interface ArminApi {
     removePrereq(prereqId: string, dependentId: string): Promise<{ ok: true }>;
     saveLayout(
       deckId: string,
-      placements: { noteId: string; x: number; y: number }[],
+      placements: { flashcardId: string; x: number; y: number }[],
     ): Promise<{ ok: true }>;
   };
   settings: {
@@ -102,11 +114,11 @@ export interface ArminApi {
       keepScheduling: boolean;
       deckStrategy: "single" | "separate";
     }): Promise<AnkiImportResult>;
-    createDeckWithCards(input: {
+    createDeckWithFlashcards(input: {
       name: string;
       description?: string | null;
-      cards: { front: string; back: string; tags?: string[] }[];
-    }): Promise<{ deckId: string; cardCount: number }>;
+      flashcards: { front: string; back: string; tags?: string[] }[];
+    }): Promise<{ deckId: string; flashcardCount: number }>;
   };
   onDataChanged(cb: () => void): () => void;
 }
@@ -129,15 +141,15 @@ declare global {
 }
 
 export type {
-  Card,
-  Note,
+  ReviewUnit,
+  Flashcard,
   Deck,
   Settings,
   DeckWithStats,
-  NoteWithMeta,
-  BrowseNote,
-  CardType,
-  CardContent,
+  FlashcardWithMeta,
+  BrowseFlashcard,
+  FlashcardType,
+  FlashcardContent,
   PreviewOption,
   ReviewQueueItem,
   DeckGraph,
