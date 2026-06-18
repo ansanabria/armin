@@ -475,5 +475,13 @@ export async function setArchived(
       .run();
   });
 
+  const dependentIds = await getDependentIds(ctx, flashcardId);
+  if (dependentIds.length > 0) {
+    await persistLockedForFlashcardIds(ctx, dependentIds);
+    for (const dependentId of dependentIds) {
+      await syncFlashcardScheduling(ctx, dependentId);
+    }
+  }
+
   return withFlashcardMeta(ctx, { ...flashcard, archived });
 }

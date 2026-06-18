@@ -135,7 +135,13 @@ async function computeLockedByFlashcardIds(
       prereqId: flashcardPrereqs.prereqId,
     })
     .from(flashcardPrereqs)
-    .where(inArray(flashcardPrereqs.dependentId, uniqueIds))
+    .innerJoin(flashcards, eq(flashcardPrereqs.prereqId, flashcards.id))
+    .where(
+      and(
+        inArray(flashcardPrereqs.dependentId, uniqueIds),
+        eq(flashcards.archived, false),
+      ),
+    )
     .all();
 
   if (edges.length === 0) return locked;
@@ -383,22 +389,13 @@ export async function addPrereq(
     );
   }
   const edgeFlashcards = await ctx.db
-    .select({ id: flashcards.id, deckId: flashcards.deckId })
+    .select({ id: flashcards.id })
     .from(flashcards)
     .where(inArray(flashcards.id, [prereqId, dependentId]))
     .all();
   if (edgeFlashcards.length !== 2) {
     throw new Error(
       "Both flashcards must exist before connecting prerequisites.",
-    );
-  }
-  const prereq = edgeFlashcards.find((flashcard) => flashcard.id === prereqId);
-  const dependent = edgeFlashcards.find(
-    (flashcard) => flashcard.id === dependentId,
-  );
-  if (prereq?.deckId !== dependent?.deckId) {
-    throw new Error(
-      "Prerequisite edges can only connect flashcards in one deck.",
     );
   }
   await ctx.db
