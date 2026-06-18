@@ -38,6 +38,7 @@ type SettingsState = Pick<
   | "weights"
   | "prereqStabilityFloor"
   | "newReviewUnitsPerDay"
+  | "keepSiblingReviewUnitsTogether"
 >;
 
 const initial: SettingsState = {
@@ -50,6 +51,7 @@ const initial: SettingsState = {
   weights: null,
   prereqStabilityFloor: 2,
   newReviewUnitsPerDay: 10,
+  keepSiblingReviewUnitsTogether: true,
 };
 
 function toSettingsState(settings: Settings): SettingsState {
@@ -63,6 +65,7 @@ function toSettingsState(settings: Settings): SettingsState {
     weights: settings.weights,
     prereqStabilityFloor: settings.prereqStabilityFloor,
     newReviewUnitsPerDay: settings.newReviewUnitsPerDay,
+    keepSiblingReviewUnitsTogether: settings.keepSiblingReviewUnitsTogether,
   };
 }
 
@@ -202,11 +205,20 @@ export default function SettingsPage() {
           <Row
             label="New review units per day"
             hint="Maximum brand-new review units introduced from the unlock frontier each day."
-            last
           >
             <NewCardsPerDayInput
               value={s.newReviewUnitsPerDay}
               onChange={(v) => set("newReviewUnitsPerDay", v)}
+            />
+          </Row>
+          <Row
+            label="Keep siblings together"
+            hint="Introduce all eligible directions or clozes for a flashcard in the same session."
+            last
+          >
+            <Switch
+              checked={s.keepSiblingReviewUnitsTogether}
+              onCheckedChange={(v) => set("keepSiblingReviewUnitsTogether", v)}
             />
           </Row>
         </Section>

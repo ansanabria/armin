@@ -31,6 +31,8 @@ const api = {
     listDeckTags: (deckId: string) =>
       invoke("flashcards:listDeckTags", { deckId }),
     get: (id: string) => invoke("flashcards:get", { id }),
+    deleteConsequences: (id: string) =>
+      invoke("flashcards:deleteConsequences", { id }),
     create: (input: unknown) => invoke("flashcards:create", input),
     update: (input: unknown) => invoke("flashcards:update", input),
     delete: (id: string) => invoke("flashcards:delete", { id }),

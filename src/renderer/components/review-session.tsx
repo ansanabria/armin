@@ -28,17 +28,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { DiagramReview } from "@/components/diagram-review";
+import { ImageOcclusionReview } from "@/components/image-occlusion-review";
 import {
   FlashcardFormDialog,
   type CardFormValues,
 } from "@/components/flashcard-form-dialog";
 import { reviewKeys } from "@/lib/armin-query";
-import type { Grade, PreviewOption } from "@/types/window";
+import type { FlashcardDeleteConsequences, Grade, PreviewOption } from "@/types/window";
 import type { UiFlashcard, UiReviewUnit } from "@/types/view-models";
 import {
   matchesTypeAnswer,
-  type DiagramContent,
+  type ImageOcclusionContent,
   type TypeAnswerContent,
 } from "../../main/services/flashcard-types";
 import { cn } from "@/lib/utils";
@@ -53,6 +53,22 @@ const RATINGS: {
   { grade: 3, label: "Good", bg: "bg-good hover:bg-good-deep" },
   { grade: 4, label: "Easy", bg: "bg-easy hover:bg-easy-deep" },
 ];
+
+function plural(count: number, singular: string, pluralForm = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
+}
+
+function formatReviewHistory(consequences: FlashcardDeleteConsequences | null) {
+  if (!consequences) return "Loading review history…";
+  if (consequences.reviewLogCount === 0) {
+    return `No review history will be destroyed across ${plural(consequences.reviewUnitCount, "review unit")}.`;
+  }
+
+  const first = consequences.firstReviewAt?.toLocaleDateString();
+  const last = consequences.lastReviewAt?.toLocaleDateString();
+  const span = first && last ? ` from ${first} to ${last}` : "";
+  return `${plural(consequences.reviewLogCount, "review log")} across ${plural(consequences.reviewUnitCount, "review unit")} will be destroyed${span}.`;
+}
 
 function reconcileSessionCards(
   current: UiReviewUnit[],
@@ -95,6 +111,9 @@ export type ReviewSessionProps = {
   ) => Promise<void>;
   onArchiveFlashcard?: (flashcardId: string) => Promise<void>;
   onDeleteFlashcard?: (flashcardId: string) => Promise<void>;
+  loadDeleteConsequences?: (
+    flashcardId: string,
+  ) => Promise<FlashcardDeleteConsequences>;
 };
 
 export function ReviewSession({
@@ -116,6 +135,7 @@ export function ReviewSession({
   onEditFlashcard,
   onArchiveFlashcard,
   onDeleteFlashcard,
+  loadDeleteConsequences,
 }: ReviewSessionProps) {
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -127,6 +147,9 @@ export function ReviewSession({
   const [editOpen, setEditOpen] = useState(false);
   const [editCard, setEditCard] = useState<UiFlashcard | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConsequences, setDeleteConsequences] =
+    useState<FlashcardDeleteConsequences | null>(null);
+  const [deleteConsequencesError, setDeleteConsequencesError] = useState(false);
   const [flashcardActionPending, setCardActionPending] = useState(false);
 
   const cards = isLoading || isError ? [] : sessionCards;
@@ -138,8 +161,10 @@ export function ReviewSession({
   const isTypeAnswer = card?.type === "type_answer";
   const typeAnswerContent =
     card?.type === "type_answer" ? (card.content as TypeAnswerContent) : null;
-  const diagramContent =
-    card?.type === "diagram" ? (card.content as DiagramContent) : null;
+  const imageOcclusionContent =
+    card?.type === "image_occlusion"
+      ? (card.content as ImageOcclusionContent)
+      : null;
   const isCorrect = typeAnswerContent
     ? matchesTypeAnswer(typed, typeAnswerContent)
     : false;
@@ -238,9 +263,22 @@ export function ReviewSession({
     setCardActionPending(true);
     try {
       await onArchiveFlashcard(card.flashcardId);
+      setDeleteConfirmOpen(false);
       removeFromSession(card.id);
     } finally {
       setCardActionPending(false);
+    }
+  };
+
+  const openDeleteConfirm = () => {
+    if (!card) return;
+    setDeleteConsequences(null);
+    setDeleteConsequencesError(false);
+    setDeleteConfirmOpen(true);
+    if (loadDeleteConsequences) {
+      void loadDeleteConsequences(card.flashcardId)
+        .then((summary) => setDeleteConsequences(summary))
+        .catch(() => setDeleteConsequencesError(true));
     }
   };
 
@@ -441,7 +479,7 @@ export function ReviewSession({
                         <DropdownMenuItem
                           variant="destructive"
                           disabled={flashcardActionPending}
-                          onClick={() => setDeleteConfirmOpen(true)}
+                          onClick={openDeleteConfirm}
                         >
                           <Trash2 className="h-4 w-4" />
                           Delete
@@ -453,12 +491,11 @@ export function ReviewSession({
               </div>
             )}
 
-            {diagramContent ? (
-              <DiagramReview
-                content={diagramContent}
+            {imageOcclusionContent ? (
+              <ImageOcclusionReview
+                content={imageOcclusionContent}
                 targetId={card.subKey}
                 flipped={flipped}
-                label={card.back}
               />
             ) : (
               <>
@@ -601,15 +638,46 @@ export function ReviewSession({
         open={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}
         title="Delete flashcard?"
-        description="This flashcard will be permanently removed from your deck."
+        description="This flashcard will be permanently hard-deleted."
       >
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="space-y-3 text-sm text-muted">
+          <p>
+            Archive is the reversible way to set this aside. Delete removes the
+            flashcard, its review units, and its review history permanently.
+          </p>
+          <ul className="space-y-1 rounded-md border border-border bg-surface-sunken p-3">
+            <li>
+              {deleteConsequencesError || !loadDeleteConsequences
+                ? "Dependent count could not be loaded."
+                : deleteConsequences
+                  ? `${plural(deleteConsequences.dependentCount, "dependent")} will be unlocked or recomputed.`
+                  : "Loading dependent count…"}
+            </li>
+            <li>
+              {deleteConsequencesError || !loadDeleteConsequences
+                ? "Review history could not be loaded."
+                : formatReviewHistory(deleteConsequences)}
+            </li>
+          </ul>
+        </div>
+        <div className="mt-5 flex flex-wrap justify-end gap-2 pt-1">
           <Button variant="ghost" onClick={() => setDeleteConfirmOpen(false)}>
             Cancel
           </Button>
+          {onArchiveFlashcard && card && (
+            <Button
+              disabled={flashcardActionPending}
+              onClick={() => void handleArchive()}
+            >
+              Archive instead
+            </Button>
+          )}
           <Button
             variant="destructive"
-            disabled={flashcardActionPending}
+            disabled={
+              flashcardActionPending ||
+              Boolean(loadDeleteConsequences && !deleteConsequences)
+            }
             onClick={() => void handleDelete()}
           >
             Delete flashcard

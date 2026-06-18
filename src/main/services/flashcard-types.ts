@@ -17,7 +17,7 @@ export const FLASHCARD_TYPES = [
   "basic_reversed",
   "cloze",
   "type_answer",
-  "diagram",
+  "image_occlusion",
 ] as const;
 
 export type FlashcardType = (typeof FLASHCARD_TYPES)[number];
@@ -46,33 +46,45 @@ const typeAnswerContentSchema = z.object({
   acceptedAnswers: z.array(z.string()).default([]),
 });
 
-const diagramRegionSchema = z.object({
-  id: z.string().min(1),
+const imageOcclusionGeometrySchema = z.object({
   x: z.number(),
   y: z.number(),
   w: z.number(),
   h: z.number(),
-  label: z.string().min(1),
+});
+
+const imageOcclusionMaskSchema = z.object({
+  id: z.string().min(1),
+  geometry: imageOcclusionGeometrySchema,
+  label: z.string().min(1).optional(),
   hint: z.string().optional(),
 });
 
-const diagramContentSchema = z.object({
-  image: z.string().min(1),
-  regions: z.array(diagramRegionSchema).min(1),
+const imageOcclusionContentSchema = z.object({
+  baseImage: z.string().min(1),
+  masks: z.array(imageOcclusionMaskSchema).min(1),
+  header: z.string().optional(),
+  extra: z.string().optional(),
+  revealMode: z.enum(["hide_all", "hide_one"]).default("hide_all"),
 });
 
 export type BasicContent = z.infer<typeof basicContentSchema>;
 export type ClozeContent = z.infer<typeof clozeContentSchema>;
 export type TypeAnswerContent = z.infer<typeof typeAnswerContentSchema>;
-export type DiagramRegion = z.infer<typeof diagramRegionSchema>;
-export type DiagramContent = z.infer<typeof diagramContentSchema>;
+export type ImageOcclusionGeometry = z.infer<
+  typeof imageOcclusionGeometrySchema
+>;
+export type ImageOcclusionMask = z.infer<typeof imageOcclusionMaskSchema>;
+export type ImageOcclusionContent = z.infer<
+  typeof imageOcclusionContentSchema
+>;
 
 export type FlashcardContentByType = {
   basic: BasicContent;
   basic_reversed: BasicContent;
   cloze: ClozeContent;
   type_answer: TypeAnswerContent;
-  diagram: DiagramContent;
+  image_occlusion: ImageOcclusionContent;
 };
 
 export type FlashcardContent = FlashcardContentByType[FlashcardType];
@@ -90,7 +102,10 @@ export const typedFlashcardContentSchema = z.discriminatedUnion("type", [
     type: z.literal("type_answer"),
     content: typeAnswerContentSchema,
   }),
-  z.object({ type: z.literal("diagram"), content: diagramContentSchema }),
+  z.object({
+    type: z.literal("image_occlusion"),
+    content: imageOcclusionContentSchema,
+  }),
 ]);
 
 const contentSchemaByType = {
@@ -98,15 +113,45 @@ const contentSchemaByType = {
   basic_reversed: basicContentSchema,
   cloze: clozeContentSchema,
   type_answer: typeAnswerContentSchema,
-  diagram: diagramContentSchema,
+  image_occlusion: imageOcclusionContentSchema,
 } as const;
+
+function formatClozeDeletion(deletion: ClozeDeletion) {
+  return deletion.hint
+    ? `{{${deletion.cluster}::${deletion.answer}::${deletion.hint}}}`
+    : `{{${deletion.cluster}::${deletion.answer}}}`;
+}
+
+/** Rewrite bare cloze deletions to explicit cluster numbers. */
+export function normalizeClozeText(text: string): string {
+  const deletions = parseClozes(text);
+  let i = 0;
+  return text.replace(new RegExp(CLOZE_RE.source, "g"), () =>
+    formatClozeDeletion(deletions[i++]),
+  );
+}
+
+function normalizeContent<T extends FlashcardType>(
+  type: T,
+  content: FlashcardContentByType[T],
+): FlashcardContentByType[T] {
+  if (type !== "cloze") return content;
+  const cloze = content as ClozeContent;
+  return {
+    ...cloze,
+    text: normalizeClozeText(cloze.text),
+  } as FlashcardContentByType[T];
+}
 
 /** Validate and normalize a content object for the given type. */
 export function validateContent<T extends FlashcardType>(
   type: T,
   content: unknown,
 ): FlashcardContentByType[T] {
-  return contentSchemaByType[type].parse(content) as FlashcardContentByType[T];
+  return normalizeContent(
+    type,
+    contentSchemaByType[type].parse(content) as FlashcardContentByType[T],
+  );
 }
 
 /** Parse a stored JSON content string into a validated content object. */
@@ -266,7 +311,7 @@ export function generateReviewUnits(
     case "basic_reversed": {
       const c = content as BasicContent;
       return [
-        { subKey: "fwd", front: c.front, back: c.back },
+        { subKey: "", front: c.front, back: c.back },
         { subKey: "rev", front: c.back, back: c.front },
       ];
     }
@@ -282,14 +327,14 @@ export function generateReviewUnits(
       const c = content as TypeAnswerContent;
       return [{ subKey: "", front: c.prompt, back: c.answer }];
     }
-    case "diagram": {
-      const c = content as DiagramContent;
-      return c.regions.map((region) => ({
-        subKey: region.id,
-        front: region.hint
-          ? `Identify the highlighted region — ${region.hint}`
-          : "Identify the highlighted region",
-        back: region.label,
+    case "image_occlusion": {
+      const c = content as ImageOcclusionContent;
+      return c.masks.map((mask) => ({
+        subKey: mask.id,
+        front: [c.header, mask.hint ? `Hint: ${mask.hint}` : null]
+          .filter(Boolean)
+          .join("\n\n") || "Recall the hidden area.",
+        back: mask.label ?? "Hidden area",
       }));
     }
   }
@@ -317,12 +362,12 @@ export function flashcardDisplay(
       const c = content as TypeAnswerContent;
       return { front: c.prompt, back: c.answer };
     }
-    case "diagram": {
-      const c = content as DiagramContent;
-      const count = c.regions.length;
+    case "image_occlusion": {
+      const c = content as ImageOcclusionContent;
+      const count = c.masks.length;
       return {
-        front: `Diagram · ${count} region${count === 1 ? "" : "s"}`,
-        back: c.regions.map((r) => r.label).join(" · "),
+        front: `Image occlusion · ${count} mask${count === 1 ? "" : "s"}`,
+        back: c.masks.map((mask) => mask.label).filter(Boolean).join(" · "),
       };
     }
   }

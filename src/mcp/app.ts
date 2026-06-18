@@ -3,13 +3,19 @@ import * as z from "zod/v4";
 import { getDb, initDb } from "../main/db";
 import { runMigrations } from "../main/db/migrate";
 import type { ServiceContext } from "../main/services/context";
-import { isFlashcardType } from "../main/services/flashcard-types";
+import {
+  isFlashcardType,
+  type FlashcardType,
+} from "../main/services/flashcard-types";
 import { createDeck, listDecks } from "../main/services/decks";
-import { addPrereq } from "../main/services/graph";
+import { addPrereq, removePrereq } from "../main/services/graph";
 import {
   createFlashcard,
+  deleteFlashcard,
   getFlashcard,
   listFlashcards,
+  setArchived,
+  updateFlashcard,
 } from "../main/services/flashcards";
 import type { McpSessionProfile } from "../shared/mcp-session";
 import { importFlashcardHierarchy, readDeckGraph } from "./import-hierarchy";
@@ -207,13 +213,13 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
           .string()
           .optional()
           .describe(
-            "Flashcard type: basic | basic_reversed | cloze | type_answer | diagram. Defaults to basic.",
+            "Flashcard type: basic | basic_reversed | cloze | type_answer | image_occlusion. Defaults to basic.",
           ),
         content: z
           .record(z.string(), z.any())
           .optional()
           .describe(
-            'Type-specific content object. Defaults to { front, back } for basic. Cloze uses { text } with numbered deletions written {{N::answer}} (e.g. "The {{1::mitochondria}} is the powerhouse of the {{2::cell}}."); each distinct number is one review, reuse a number to blank several together, and add a hint with {{N::answer::hint}}.',
+            'Type-specific content object. Defaults to { front, back } for basic. Cloze uses { text } with numbered deletions written {{N::answer}}. Image occlusion uses { baseImage, masks: [{ id, geometry: { x, y, w, h }, label?, hint? }], header?, extra?, revealMode? }.',
           ),
       }),
     },
@@ -242,7 +248,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
     {
       title: "Add Prerequisite",
       description:
-        "Connect two existing flashcards in the same deck. The prerequisite flashcard must be learned before the dependent flashcard unlocks.",
+        "Connect two existing flashcards. The prerequisite flashcard must be learned before the dependent flashcard unlocks.",
       inputSchema: z.object({
         prereqId: idSchema.describe(
           "Flashcard ID for the prerequisite concept.",
@@ -255,6 +261,123 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
     async ({ prereqId, dependentId }) =>
       withSelectedProfile(async () => {
         await addPrereq(ctx(), prereqId, dependentId);
+        return jsonResult({ ok: true, edge: { prereqId, dependentId } });
+      }),
+  );
+
+  server.registerTool(
+    "update_card",
+    {
+      title: "Update Card",
+      description:
+        "Update a flashcard's content, type, and/or tags through Armin's shared flashcard service. Review history is preserved for generated review units whose subKey survives the edit.",
+      inputSchema: z.object({
+        id: idSchema.describe("Flashcard ID to update."),
+        front: z
+          .string()
+          .optional()
+          .describe(
+            "Flashcard front (basic types). Shorthand for content.front.",
+          ),
+        back: z
+          .string()
+          .optional()
+          .describe(
+            "Flashcard back (basic types). Shorthand for content.back.",
+          ),
+        type: z
+          .string()
+          .optional()
+          .describe(
+            "Flashcard type: basic | basic_reversed | cloze | type_answer | image_occlusion.",
+          ),
+        content: z
+          .record(z.string(), z.any())
+          .optional()
+          .describe(
+            'Type-specific content object. Defaults to { front, back } when either shorthand field is provided. Cloze uses { text } with numbered deletions written {{N::answer}}. Image occlusion uses { baseImage, masks: [{ id, geometry: { x, y, w, h }, label?, hint? }], header?, extra?, revealMode? }.',
+          ),
+        tags: z.array(z.string()).optional().describe("Replacement tag names."),
+      }),
+    },
+    async (input) =>
+      withSelectedProfile(async () => {
+        let type: FlashcardType | undefined;
+        if (input.type !== undefined) {
+          if (!isFlashcardType(input.type)) {
+            throw new Error(`Unknown flashcard type: ${input.type}`);
+          }
+          type = input.type;
+        }
+        const content =
+          input.content ??
+          (input.front !== undefined || input.back !== undefined
+            ? { front: input.front, back: input.back }
+            : undefined);
+        const flashcard = await updateFlashcard(ctx(), input.id, {
+          type,
+          content,
+          tags: input.tags,
+        });
+        if (!flashcard) throw new Error(`Flashcard not found: ${input.id}`);
+        return jsonResult({ flashcard });
+      }),
+  );
+
+  server.registerTool(
+    "archive_card",
+    {
+      title: "Archive Card",
+      description:
+        "Archive or unarchive a flashcard through Armin's shared flashcard service. Archived prerequisite cards are inert and dependent locks are recomputed.",
+      inputSchema: z.object({
+        id: idSchema.describe("Flashcard ID to archive or unarchive."),
+        archived: z.boolean().describe("true to archive, false to unarchive."),
+      }),
+    },
+    async ({ id, archived }) =>
+      withSelectedProfile(async () => {
+        const flashcard = await setArchived(ctx(), id, archived);
+        if (!flashcard) throw new Error(`Flashcard not found: ${id}`);
+        return jsonResult({ flashcard });
+      }),
+  );
+
+  server.registerTool(
+    "delete_card",
+    {
+      title: "Delete Card",
+      description:
+        "Permanently delete a flashcard through Armin's shared flashcard service, cascading generated review units/logs and recomputing dependent locks.",
+      inputSchema: z.object({
+        id: idSchema.describe("Flashcard ID to permanently delete."),
+      }),
+    },
+    async ({ id }) =>
+      withSelectedProfile(async () => {
+        await deleteFlashcard(ctx(), id);
+        return jsonResult({ ok: true, id });
+      }),
+  );
+
+  server.registerTool(
+    "remove_prerequisite",
+    {
+      title: "Remove Prerequisite",
+      description:
+        "Remove a prerequisite edge between two existing flashcards and recompute dependent locking.",
+      inputSchema: z.object({
+        prereqId: idSchema.describe(
+          "Flashcard ID for the prerequisite concept.",
+        ),
+        dependentId: idSchema.describe(
+          "Flashcard ID for the concept that no longer depends on it.",
+        ),
+      }),
+    },
+    async ({ prereqId, dependentId }) =>
+      withSelectedProfile(async () => {
+        await removePrereq(ctx(), prereqId, dependentId);
         return jsonResult({ ok: true, edge: { prereqId, dependentId } });
       }),
   );
@@ -299,13 +422,13 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
                   .string()
                   .optional()
                   .describe(
-                    "Flashcard type: basic | basic_reversed | cloze | type_answer | diagram. Defaults to basic.",
+                    "Flashcard type: basic | basic_reversed | cloze | type_answer | image_occlusion. Defaults to basic.",
                   ),
                 content: z
                   .record(z.string(), z.any())
                   .optional()
                   .describe(
-                    'Type-specific content object. Defaults to { front, back } for basic. Cloze uses { text } with numbered deletions written {{N::answer}} (e.g. "The {{1::mitochondria}} is the powerhouse of the {{2::cell}}."); each distinct number is one review, reuse a number to blank several together, and add a hint with {{N::answer::hint}}.',
+                    'Type-specific content object. Defaults to { front, back } for basic. Cloze uses { text } with numbered deletions written {{N::answer}}. Image occlusion uses { baseImage, masks: [{ id, geometry: { x, y, w, h }, label?, hint? }], header?, extra?, revealMode? }.',
                   ),
                 prerequisites: z
                   .array(idSchema)

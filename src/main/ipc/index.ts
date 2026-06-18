@@ -177,6 +177,9 @@ export function registerIpc() {
   registerForProfile("flashcards:get", id, (ctx, { id }) =>
     flashcards.getFlashcard(ctx, id),
   );
+  registerForProfile("flashcards:deleteConsequences", id, (ctx, { id }) =>
+    flashcards.getDeleteConsequences(ctx, id),
+  );
   registerForProfile(
     "flashcards:create",
     z.object({
@@ -346,6 +349,7 @@ export function registerIpc() {
       weights: z.string().nullish(),
       prereqStabilityFloor: z.number().optional(),
       newReviewUnitsPerDay: z.number().int().min(0).optional(),
+      keepSiblingReviewUnitsTogether: z.boolean().optional(),
     }),
     (ctx, patch) => settings.updateSettings(ctx, patch),
   );

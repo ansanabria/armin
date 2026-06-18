@@ -45,6 +45,32 @@ import {
 import { deckKeys, invalidateCoreData } from "@/lib/armin-query";
 import type { UiDeck } from "@/types/view-models";
 
+const IMPORT_TYPE_LABELS: Record<string, string> = {
+  basic: "Basic",
+  basic_reversed: "Reversed",
+  cloze: "Cloze",
+  type_answer: "Type answer",
+  image_occlusion: "Image occlusion",
+};
+
+function importToastDescription(summary: ImportSummary, deckLabel: string) {
+  const lines = [`${summary.cardCount} flashcards added to ${deckLabel}.`];
+  if (summary.importedTypes?.length) {
+    lines.push(
+      `Types: ${summary.importedTypes
+        .map(({ type, count }) => `${IMPORT_TYPE_LABELS[type] ?? type} ${count}`)
+        .join(", ")}.`,
+    );
+  }
+  if (summary.skippedCount && summary.skippedCount > 0) {
+    const reasons = [...new Set(summary.skippedNotes?.map((note) => note.reason))];
+    lines.push(
+      `${summary.skippedCount} skipped${reasons.length ? `: ${reasons.join("; ")}` : ""}.`,
+    );
+  }
+  return lines.join(" ");
+}
+
 export default function DecksPage() {
   const queryClient = useQueryClient();
   const toast = useToast();
@@ -130,7 +156,7 @@ export default function DecksPage() {
     toast({
       tone: "success",
       title: "Import complete",
-      description: `${summary.cardCount} flashcards added to ${deckLabel}.`,
+      description: importToastDescription(summary, deckLabel),
     });
     setImportOpen(false);
   };

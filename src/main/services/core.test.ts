@@ -191,6 +191,29 @@ describe("core services", () => {
     expect(logCount?.value).toBe(1);
   });
 
+  it("summarizes flashcard delete consequences", async () => {
+    const ctx = await makeContext("delete-consequences");
+    const deck = await decks.createDeck(ctx, { name: "Delete" });
+    const prereq = await basic(ctx, deck.id, "Foundation", "Base");
+    const dependentA = await basic(ctx, deck.id, "Advanced A", "Top A");
+    const dependentB = await basic(ctx, deck.id, "Advanced B", "Top B");
+    await graph.addPrereq(ctx, prereq.id, dependentA.id);
+    await graph.addPrereq(ctx, prereq.id, dependentB.id);
+
+    const reviewUnit = await getOnlyReviewUnit(ctx, prereq.id);
+    await review.rateReviewUnit(ctx, reviewUnit.id, 3);
+
+    const consequences = await notes.getDeleteConsequences(ctx, prereq.id);
+
+    expect(consequences).toMatchObject({
+      dependentCount: 2,
+      reviewUnitCount: 1,
+      reviewLogCount: 1,
+    });
+    expect(consequences.firstReviewAt).toBeInstanceOf(Date);
+    expect(consequences.lastReviewAt).toBeInstanceOf(Date);
+  });
+
   it("activates dependents when a prereq becomes secured", async () => {
     const ctx = await makeContext("activate");
     const deck = await decks.createDeck(ctx, { name: "Activate" });
@@ -280,12 +303,16 @@ describe("core services", () => {
     expect((await settings.getSettings(ctx)).requestRetention).toBe(0.9);
     expect((await settings.getSettings(ctx)).prereqStabilityFloor).toBe(2);
     expect((await settings.getSettings(ctx)).newReviewUnitsPerDay).toBe(10);
+    expect((await settings.getSettings(ctx)).keepSiblingReviewUnitsTogether).toBe(
+      true,
+    );
 
     await settings.updateSettings(ctx, {
       requestRetention: 0.86,
       maximumInterval: 1000,
       prereqStabilityFloor: 3,
       newReviewUnitsPerDay: 15,
+      keepSiblingReviewUnitsTogether: false,
     });
 
     const saved = await settings.getSettings(ctx);
@@ -293,5 +320,6 @@ describe("core services", () => {
     expect(saved.maximumInterval).toBe(1000);
     expect(saved.prereqStabilityFloor).toBe(3);
     expect(saved.newReviewUnitsPerDay).toBe(15);
+    expect(saved.keepSiblingReviewUnitsTogether).toBe(false);
   });
 });

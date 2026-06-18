@@ -59,26 +59,15 @@ function startOfToday(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-/** First-time ratings logged today, optionally scoped to one deck. */
+/** First-time ratings logged today across all decks. */
 export async function countNewReviewUnitsIntroducedToday(
   ctx: ServiceContext,
-  deckId?: string,
 ): Promise<number> {
   const since = startOfToday();
   const conditions = [
     gte(reviewLogs.review, since),
     eq(reviewLogs.state, State.New),
   ];
-  if (deckId) {
-    const rows = await ctx.db
-      .select({ reviewUnitId: reviewLogs.reviewUnitId })
-      .from(reviewLogs)
-      .innerJoin(reviewUnits, eq(reviewLogs.reviewUnitId, reviewUnits.id))
-      .where(and(...conditions, eq(reviewUnits.deckId, deckId)))
-      .all();
-    return new Set(rows.map((row) => row.reviewUnitId)).size;
-  }
-
   const rows = await ctx.db
     .select({ reviewUnitId: reviewLogs.reviewUnitId })
     .from(reviewLogs)
@@ -95,10 +84,10 @@ export async function countNewReviewUnitsIntroducedToday(
 export async function buildSessionQueue(
   ctx: ServiceContext,
   deckReviewUnits: ReviewUnit[],
-  deckId?: string,
 ): Promise<ReviewUnit[]> {
   const now = new Date();
-  const { newReviewUnitsPerDay } = await getSettings(ctx);
+  const { newReviewUnitsPerDay, keepSiblingReviewUnitsTogether } =
+    await getSettings(ctx);
   const unlocked = deckReviewUnits.filter(
     (reviewUnit) => !reviewUnit.locked && !reviewUnit.archived,
   );
@@ -118,11 +107,38 @@ export async function buildSessionQueue(
       reviewUnit.due <= now,
   );
 
-  const introducedToday = await countNewReviewUnitsIntroducedToday(ctx, deckId);
+  const introducedToday = await countNewReviewUnitsIntroducedToday(ctx);
   const remaining = Math.max(0, newReviewUnitsPerDay - introducedToday);
-  const cappedFrontier = shuffle([...frontier]).slice(0, remaining);
+  const cappedFrontier = keepSiblingReviewUnitsTogether
+    ? selectFrontierByFlashcard(frontier, remaining)
+    : shuffle([...frontier]).slice(0, remaining);
 
   return [...shuffle([...reviews]), ...cappedFrontier];
+}
+
+function selectFrontierByFlashcard(
+  frontier: ReviewUnit[],
+  remaining: number,
+): ReviewUnit[] {
+  if (remaining <= 0) return [];
+
+  const byFlashcardId = new Map<string, ReviewUnit[]>();
+  for (const reviewUnit of frontier) {
+    const siblings = byFlashcardId.get(reviewUnit.flashcardId) ?? [];
+    siblings.push(reviewUnit);
+    byFlashcardId.set(reviewUnit.flashcardId, siblings);
+  }
+
+  const selected: ReviewUnit[] = [];
+  const seenFlashcards = new Set<string>();
+  for (const reviewUnit of shuffle([...frontier])) {
+    if (selected.length >= remaining) break;
+    if (seenFlashcards.has(reviewUnit.flashcardId)) continue;
+
+    seenFlashcards.add(reviewUnit.flashcardId);
+    selected.push(...(byFlashcardId.get(reviewUnit.flashcardId) ?? []));
+  }
+  return selected;
 }
 
 /** Attach the owning flashcard's type/content to a set of review-unit rows. */
@@ -182,7 +198,7 @@ export async function getQueue(
     .from(reviewUnits)
     .where(eq(reviewUnits.deckId, deckId))
     .all();
-  const ordered = await buildSessionQueue(ctx, deckReviewUnits, deckId);
+  const ordered = await buildSessionQueue(ctx, deckReviewUnits);
   return toReviewQueueItems(ctx, ordered);
 }
 

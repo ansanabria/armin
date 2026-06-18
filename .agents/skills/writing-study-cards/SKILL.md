@@ -59,7 +59,7 @@ Armin card types and when to reach for each:
 | `basic_reversed` | Term ↔ definition pairs where recall is useful both directions (name → meaning _and_ meaning → name).                                                                   |
 | `cloze`          | Closed lists and fill-in-the-blank. One deletion = one review; reuse a number to blank several together. Syntax: `{{1::answer}}`, add a cue with `{{1::answer::hint}}`. |
 | `type_answer`    | Short, exact answers (a term, a number, a ratio) where typing forces precise recall.                                                                                    |
-| `diagram`        | Spatial/visual knowledge — labeling parts, structures, or relationships better seen than described.                                                                     |
+| `image_occlusion` | Spatial/visual knowledge — recalling hidden parts, structures, or relationships better seen than described.                                                            |
 
 Default to `basic`. Don't cram multiple facts into one card to save types — make more cards instead.
 

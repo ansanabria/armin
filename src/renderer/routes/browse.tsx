@@ -406,6 +406,9 @@ export default function BrowsePage() {
                         archived: !card.archived,
                       })
                     }
+                    loadDeleteConsequences={(id) =>
+                      window.armin.flashcards.deleteConsequences(id)
+                    }
                     onDelete={async () => {
                       await deleteCard.mutateAsync(card);
                     }}

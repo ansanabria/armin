@@ -4,7 +4,7 @@ import {
   matchesTypeAnswer,
   renderClozeText,
   validateContent,
-  type DiagramContent,
+  type ImageOcclusionContent,
 } from "./flashcard-types";
 
 describe("cloze parsing", () => {
@@ -29,7 +29,7 @@ describe("generateReviewUnits", () => {
     expect(
       generateReviewUnits("basic_reversed", { front: "F", back: "B" }),
     ).toEqual([
-      { subKey: "fwd", front: "F", back: "B" },
+      { subKey: "", front: "F", back: "B" },
       { subKey: "rev", front: "B", back: "F" },
     ]);
   });
@@ -43,23 +43,27 @@ describe("generateReviewUnits", () => {
     expect(items[1].front).toBe("a and […]");
   });
 
-  it("makes one item per diagram region keyed by region id", () => {
-    const content: DiagramContent = {
-      image: "data:image/png;base64,AAAA",
-      regions: [
-        { id: "r1", x: 0, y: 0, w: 0.5, h: 0.5, label: "Heart" },
+  it("makes one item per image occlusion mask keyed by mask id", () => {
+    const content: ImageOcclusionContent = {
+      baseImage: "data:image/png;base64,AAAA",
+      revealMode: "hide_all",
+      header: "Anatomy",
+      extra: "Review labels.",
+      masks: [
+        {
+          id: "r1",
+          geometry: { x: 0, y: 0, w: 0.5, h: 0.5 },
+          label: "Heart",
+        },
         {
           id: "r2",
-          x: 0.5,
-          y: 0.5,
-          w: 0.2,
-          h: 0.2,
+          geometry: { x: 0.5, y: 0.5, w: 0.2, h: 0.2 },
           label: "Lung",
           hint: "air",
         },
       ],
     };
-    const items = generateReviewUnits("diagram", content);
+    const items = generateReviewUnits("image_occlusion", content);
     expect(items.map((i) => i.subKey)).toEqual(["r1", "r2"]);
     expect(items[0].back).toBe("Heart");
     expect(items[1].front).toContain("air");
@@ -81,15 +85,30 @@ describe("type_answer matching", () => {
 });
 
 describe("validateContent", () => {
+  it("normalizes bare cloze deletions to explicit cluster numbers", () => {
+    expect(
+      validateContent("cloze", { text: "{{a}} then {{b::hint}}" }),
+    ).toEqual({ text: "{{1::a}} then {{2::b::hint}}" });
+  });
+
   it("rejects cloze text without any deletions", () => {
     expect(() =>
       validateContent("cloze", { text: "no clozes here" }),
     ).toThrow();
   });
 
-  it("rejects diagrams without regions", () => {
+  it("rejects image occlusion cards without masks", () => {
     expect(() =>
-      validateContent("diagram", { image: "data:...", regions: [] }),
+      validateContent("image_occlusion", { baseImage: "data:...", masks: [] }),
     ).toThrow();
+  });
+
+  it("defaults image occlusion reveal mode to hide_all", () => {
+    expect(
+      validateContent("image_occlusion", {
+        baseImage: "data:...",
+        masks: [{ id: "m1", geometry: { x: 0, y: 0, w: 1, h: 1 } }],
+      }),
+    ).toMatchObject({ revealMode: "hide_all" });
   });
 });

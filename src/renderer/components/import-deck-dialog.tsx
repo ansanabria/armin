@@ -32,6 +32,9 @@ export type ImportSummary = {
   name: string;
   cardCount: number;
   deckCount?: number;
+  importedTypes?: { type: string; count: number }[];
+  skippedCount?: number;
+  skippedNotes?: { noteType: string; cardCount: number; reason: string }[];
 };
 
 type ImportDeckDialogProps = {
@@ -115,7 +118,7 @@ function ChooseSource({ onPick }: { onPick: (step: Step) => void }) {
       <SourceOption
         icon={Package}
         title="Anki deck"
-        description="Import an .apkg or .colpkg export. Basic front/back cards (with tags) come over; other types like cloze are skipped for now."
+        description="Import an .apkg or .colpkg export. Supported note types come over with tags; unmappable notes are reported and skipped."
         onClick={() => onPick("anki")}
       />
       <SourceOption
@@ -246,6 +249,9 @@ function AnkiImport({
             : name.trim() || "Imported deck",
         cardCount: result.cardCount,
         deckCount: result.deckCount,
+        importedTypes: result.importedTypes,
+        skippedCount: result.skippedCount,
+        skippedNotes: result.skippedNotes,
       });
     } catch (err) {
       setError(errorMessage(err, "The import failed. Please try again."));
@@ -267,9 +273,8 @@ function AnkiImport({
       <p className="flex items-start gap-2 text-xs text-muted">
         <CircleHelp className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>
-          Armin imports <span className="text-ink">basic front/back flashcards</span>{" "}
-          and their tags. Other flashcard types (like cloze) are skipped for now —
-          support for them is coming later.
+          Armin imports supported Anki note types and their tags. Notes that do
+          not map to an Armin type are skipped and listed in the report.
         </span>
       </p>
 
@@ -323,6 +328,7 @@ function AnkiImport({
           <PreviewSummary
             lines={[
               `${plural(analysis.totalCards, "flashcard")} ready to import`,
+              ...formatImportedTypes(analysis.importedTypes),
               multiDeck && strategy === "separate"
                 ? `Across ${plural(analysis.decks.length, "deck")}`
                 : "Into a single deck",
@@ -331,6 +337,13 @@ function AnkiImport({
 
           {analysis.warnings.length > 0 && (
             <PreviewSummary tone="warn" lines={analysis.warnings} />
+          )}
+
+          {analysis.skippedNotes.length > 0 && (
+            <PreviewSummary
+              tone="warn"
+              lines={formatSkippedNotes(analysis.skippedNotes)}
+            />
           )}
         </>
       )}
@@ -504,6 +517,34 @@ function errorMessage(err: unknown, fallback: string): string {
     return err.message.replace(/^Error invoking remote method '[^']*':\s*/, "");
   }
   return fallback;
+}
+
+const ANKI_TYPE_LABELS: Record<string, string> = {
+  basic: "Basic",
+  basic_reversed: "Reversed",
+  cloze: "Cloze",
+  type_answer: "Type answer",
+  image_occlusion: "Image occlusion",
+};
+
+function formatImportedTypes(
+  importedTypes: { type: string; count: number }[],
+): string[] {
+  if (importedTypes.length === 0) return [];
+  return [
+    `Imported types: ${importedTypes
+      .map(({ type, count }) => `${ANKI_TYPE_LABELS[type] ?? type} ${count}`)
+      .join(", ")}`,
+  ];
+}
+
+function formatSkippedNotes(
+  skippedNotes: { noteType: string; cardCount: number; reason: string }[],
+): string[] {
+  return skippedNotes.map(
+    (note) =>
+      `${note.noteType}: ${plural(note.cardCount, "card")} skipped. ${note.reason}`,
+  );
 }
 
 function FileDrop({
