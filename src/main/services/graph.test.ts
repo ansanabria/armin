@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getOnlyReviewUnit, makeContext, securePrereq, useTestDb } from "../test/db";
+import {
+  getOnlyReviewUnit,
+  makeContext,
+  securePrereq,
+  useTestDb,
+} from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
 import * as notes from "./flashcards";
@@ -22,6 +27,42 @@ function basic(
 }
 
 describe("prerequisite edges", () => {
+  it("allows a secured prerequisite in one deck to unlock a dependent in another", async () => {
+    const ctx = await makeContext("edge-cross-deck");
+    const prereqDeck = await decks.createDeck(ctx, { name: "Prereqs" });
+    const dependentDeck = await decks.createDeck(ctx, { name: "Dependents" });
+    const prereq = await basic(ctx, prereqDeck.id, "P", "P");
+    const dependent = await basic(ctx, dependentDeck.id, "D", "D");
+
+    await graph.addPrereq(ctx, prereq.id, dependent.id);
+
+    expect(await graph.getPrereqIds(ctx, dependent.id)).toEqual([prereq.id]);
+    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
+    expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(true);
+
+    await securePrereq(ctx, prereq.id);
+    await graph.activateUnlockedDependents(ctx, prereq.id);
+
+    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+    const dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
+    expect(dependentCard.locked).toBe(false);
+    expect(isPendingSchedule(dependentCard)).toBe(false);
+  });
+
+  it("prevents cycles across deck boundaries", async () => {
+    const ctx = await makeContext("edge-cross-deck-cycle");
+    const firstDeck = await decks.createDeck(ctx, { name: "First" });
+    const secondDeck = await decks.createDeck(ctx, { name: "Second" });
+    const first = await basic(ctx, firstDeck.id, "A", "A");
+    const second = await basic(ctx, secondDeck.id, "B", "B");
+
+    await graph.addPrereq(ctx, first.id, second.id);
+
+    await expect(graph.addPrereq(ctx, second.id, first.id)).rejects.toThrow(
+      "That edge would create a cycle in the prerequisite graph.",
+    );
+  });
+
   it("removePrereq unlocks the dependent and restores scheduling", async () => {
     const ctx = await makeContext("edge-remove");
     const deck = await decks.createDeck(ctx, { name: "Remove" });
@@ -81,6 +122,55 @@ describe("prerequisite edges", () => {
     await securePrereq(ctx, b.id);
     await graph.refreshLockedAfterPrereqSecured(ctx, b.id);
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+  });
+
+  it("archive and unarchive of an unsecured prerequisite toggles dependent locking", async () => {
+    const ctx = await makeContext("edge-archive-unsecured");
+    const deck = await decks.createDeck(ctx, { name: "Archive" });
+    const prereq = await basic(ctx, deck.id, "P", "P");
+    const dependent = await basic(ctx, deck.id, "D", "D");
+    await graph.addPrereq(ctx, prereq.id, dependent.id);
+
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
+    expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(true);
+
+    await notes.setArchived(ctx, prereq.id, true);
+
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    let dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
+    expect(dependentCard.locked).toBe(false);
+    expect(isPendingSchedule(dependentCard)).toBe(false);
+
+    await notes.setArchived(ctx, prereq.id, false);
+
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
+    dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
+    expect(dependentCard.locked).toBe(true);
+    expect(isPendingSchedule(dependentCard)).toBe(true);
+  });
+
+  it("archive and unarchive of a secured prerequisite keeps dependents unlocked", async () => {
+    const ctx = await makeContext("edge-archive-secured");
+    const deck = await decks.createDeck(ctx, { name: "Archive secured" });
+    const prereq = await basic(ctx, deck.id, "P", "P");
+    const dependent = await basic(ctx, deck.id, "D", "D");
+    await graph.addPrereq(ctx, prereq.id, dependent.id);
+
+    await securePrereq(ctx, prereq.id);
+    await graph.refreshLockedAfterPrereqSecured(ctx, prereq.id);
+    await graph.syncFlashcardScheduling(ctx, dependent.id);
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
+
+    await notes.setArchived(ctx, prereq.id, true);
+
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
+
+    await notes.setArchived(ctx, prereq.id, false);
+
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
   });
 });
 
