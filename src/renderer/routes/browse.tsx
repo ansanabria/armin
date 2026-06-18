@@ -8,8 +8,8 @@ import {
 } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Tag, Layers, AlertTriangle, Library, CircleDot } from "lucide-react";
-import { CardFormDialog } from "@/components/card-form-dialog";
-import { CardTile } from "@/components/card-tile";
+import { FlashcardFormDialog } from "@/components/flashcard-form-dialog";
+import { FlashcardTile } from "@/components/flashcard-tile";
 import { SortControl } from "@/components/sort-control";
 import {
   SearchableMultiSelect,
@@ -27,16 +27,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
-import type { CardFormValues } from "@/components/card-form-dialog";
+import type { CardFormValues } from "@/components/flashcard-form-dialog";
 import {
-  cardKeys,
+  flashcardKeys,
   deckKeys,
   invalidateCoreData,
   type BrowseQueryFilters,
 } from "@/lib/armin-query";
-import { toUiBrowseCard, type UiBrowseCard } from "@/types/view-models";
+import { toUiBrowseFlashcard, type UiBrowseFlashcard } from "@/types/view-models";
 import { BROWSE_SORT_OPTIONS, type BrowseSortKey } from "@/lib/browse";
-import { STATE_OPTIONS } from "@/lib/card-filters";
+import { STATE_OPTIONS } from "@/lib/flashcard-filters";
 import { BROWSE_PAGE_SIZE } from "../../shared/browse";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +52,7 @@ export default function BrowsePage() {
   const [deckFilter, setDeckFilter] = useState("");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<UiBrowseCard | null>(null);
+  const [editing, setEditing] = useState<UiBrowseFlashcard | null>(null);
 
   const browseFilters = useMemo((): BrowseQueryFilters => {
     const filters: BrowseQueryFilters = { sort };
@@ -71,14 +71,14 @@ export default function BrowsePage() {
   });
 
   const tagsQuery = useQuery({
-    queryKey: cardKeys.tags,
-    queryFn: () => window.armin.cards.listTags(),
+    queryKey: flashcardKeys.tags,
+    queryFn: () => window.armin.flashcards.listTags(),
   });
 
   const browseQuery = useInfiniteQuery({
-    queryKey: cardKeys.browse(browseFilters),
+    queryKey: flashcardKeys.browse(browseFilters),
     queryFn: ({ pageParam }) =>
-      window.armin.cards.browse({
+      window.armin.flashcards.browse({
         offset: pageParam,
         limit: BROWSE_PAGE_SIZE,
         sort: browseFilters.sort,
@@ -89,7 +89,7 @@ export default function BrowsePage() {
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       const loaded = allPages.reduce(
-        (count, page) => count + page.cards.length,
+        (count, page) => count + page.flashcards.length,
         0,
       );
       return loaded < lastPage.filteredTotal ? loaded : undefined;
@@ -100,8 +100,8 @@ export default function BrowsePage() {
   const displayed = useMemo(
     () =>
       (browseQuery.data?.pages ?? [])
-        .flatMap((page) => page.cards)
-        .map(toUiBrowseCard),
+        .flatMap((page) => page.flashcards)
+        .map(toUiBrowseFlashcard),
     [browseQuery.data],
   );
 
@@ -139,7 +139,7 @@ export default function BrowsePage() {
     browseFilters,
   ]);
 
-  const openEdit = (card: UiBrowseCard) => {
+  const openEdit = (card: UiBrowseFlashcard) => {
     setEditing(card);
     setOpen(true);
   };
@@ -152,25 +152,43 @@ export default function BrowsePage() {
 
   const updateCard = useMutation({
     mutationFn: (values: CardFormValues & { id: string }) =>
-      window.armin.cards.update(values),
+      window.armin.flashcards.update(values),
     onSuccess: (_card, values) => {
       invalidateCoreData(queryClient, editing?.deckId);
       if (values.id)
-        void queryClient.invalidateQueries({ queryKey: cardKeys.all });
-      toast({ tone: "success", title: "Card updated" });
+        void queryClient.invalidateQueries({ queryKey: flashcardKeys.all });
+      toast({ tone: "success", title: "Flashcard updated" });
       closeDialog();
     },
-    onError: () => toast({ tone: "error", title: "Couldn’t update card" }),
+    onError: () => toast({ tone: "error", title: "Couldn’t update flashcard" }),
   });
 
   const deleteCard = useMutation({
-    mutationFn: (card: UiBrowseCard) =>
-      window.armin.cards.delete(card.id).then(() => card),
+    mutationFn: (card: UiBrowseFlashcard) =>
+      window.armin.flashcards.delete(card.id).then(() => card),
     onSuccess: (card) => {
       invalidateCoreData(queryClient, card.deckId);
-      toast({ tone: "error", title: "Card deleted" });
+      toast({ tone: "error", title: "Flashcard deleted" });
     },
-    onError: () => toast({ tone: "error", title: "Couldn’t delete card" }),
+    onError: () => toast({ tone: "error", title: "Couldn’t delete flashcard" }),
+  });
+
+  const archiveCard = useMutation({
+    mutationFn: ({
+      card,
+      archived,
+    }: {
+      card: UiBrowseFlashcard;
+      archived: boolean;
+    }) => window.armin.flashcards.archive(card.id, archived).then(() => card),
+    onSuccess: (card, { archived }) => {
+      invalidateCoreData(queryClient, card.deckId);
+      toast({
+        tone: "success",
+        title: archived ? "Flashcard archived" : "Flashcard unarchived",
+      });
+    },
+    onError: () => toast({ tone: "error", title: "Could not update flashcard" }),
   });
 
   const saveCard = (values: CardFormValues) => {
@@ -218,7 +236,7 @@ export default function BrowsePage() {
           Browse
         </h1>
         <p className="mt-1.5 text-sm text-muted">
-          Every card across your decks. Filter and sort to find anything.
+          Every flashcard across your decks. Filter and sort to find anything.
         </p>
       </header>
 
@@ -230,7 +248,7 @@ export default function BrowsePage() {
             <AlertTriangle className="h-6 w-6" strokeWidth={1.5} />
           </div>
           <h3 className="text-base font-semibold text-ink">
-            Couldn&apos;t load your cards
+            Couldn&apos;t load your flashcards
           </h3>
           <p className="mt-1 max-w-[40ch] text-sm text-muted">
             Something went wrong reading from local storage. Your data is safe
@@ -249,8 +267,8 @@ export default function BrowsePage() {
       {!isInitialLoading && !browseQuery.isError && libraryTotal === 0 && (
         <EmptyState
           icon={Library}
-          title="No cards yet"
-          description="Create a deck and add cards. They'll all show up here."
+          title="No flashcards yet"
+          description="Create a deck and add flashcards. They’ll all show up here."
           action={
             <Link to="/">
               <Button variant="outline">Go to decks</Button>
@@ -363,15 +381,15 @@ export default function BrowsePage() {
 
           <p className="mb-3 text-xs text-muted">
             {hasMore
-              ? `Showing ${displayed.length} of ${filteredTotal} cards (${libraryTotal} total)`
-              : `${filteredTotal} of ${libraryTotal} cards`}
+              ? `Showing ${displayed.length} of ${filteredTotal} flashcards (${libraryTotal} total)`
+              : `${filteredTotal} of ${libraryTotal} flashcards`}
           </p>
 
           {filteredTotal > 0 ? (
             <>
               <ul className="card-grid grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {displayed.map((card) => (
-                  <CardTile
+                  <FlashcardTile
                     key={`${card.deckId}-${card.id}`}
                     card={card}
                     deckName={card.deckName}
@@ -380,6 +398,12 @@ export default function BrowsePage() {
                       navigate({
                         to: "/deck/$deckId",
                         params: { deckId: card.deckId },
+                      })
+                    }
+                    onArchiveToggle={() =>
+                      void archiveCard.mutateAsync({
+                        card,
+                        archived: !card.archived,
                       })
                     }
                     onDelete={async () => {
@@ -404,18 +428,18 @@ export default function BrowsePage() {
             </>
           ) : (
             <p className="border border-border bg-bg-2 px-6 py-10 text-center text-sm text-muted">
-              No cards match the current filters.
+              No flashcards match the current filters.
             </p>
           )}
         </>
       )}
 
-      <CardFormDialog
+      <FlashcardFormDialog
         open={open}
         onClose={closeDialog}
         onExitComplete={handleDialogExitComplete}
         mode="edit"
-        cardId={editing?.id ?? null}
+        reviewUnitId={editing?.id ?? null}
         initialType={editing?.type ?? "basic"}
         initialContent={editing?.content ?? null}
         initialTags={editing?.tags ?? []}

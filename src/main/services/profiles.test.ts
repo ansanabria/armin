@@ -22,7 +22,15 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { createProfile, getProfile, listProfiles } from "./profiles";
+import {
+  clearDefaultProfile,
+  createProfile,
+  deleteProfile,
+  getDefaultProfileId,
+  getProfile,
+  listProfiles,
+  setDefaultProfile,
+} from "./profiles";
 
 let root: string;
 
@@ -67,5 +75,35 @@ describe("profiles service", () => {
 
   it("rejects empty profile names", () => {
     expect(() => createProfile("   ")).toThrow(/Profile name is required/);
+  });
+
+  it("sets, reads, and clears the default profile", () => {
+    const profile = createProfile("Default User");
+    expect(getDefaultProfileId()).toBeNull();
+
+    setDefaultProfile(profile.id);
+    expect(getDefaultProfileId()).toBe(profile.id);
+
+    clearDefaultProfile();
+    expect(getDefaultProfileId()).toBeNull();
+  });
+
+  it("rejects setting default for a missing profile", () => {
+    expect(() => setDefaultProfile("missing-id")).toThrow(/Profile not found/);
+  });
+
+  it("deletes a profile and clears default when needed", () => {
+    const keep = createProfile("Keep");
+    const remove = createProfile("Remove");
+    setDefaultProfile(remove.id);
+
+    deleteProfile(remove.id);
+    expect(listProfiles().map((p) => p.name)).toEqual(["Keep"]);
+    expect(getDefaultProfileId()).toBeNull();
+    expect(getProfile(remove.id)).toBeUndefined();
+  });
+
+  it("rejects deleting a missing profile", () => {
+    expect(() => deleteProfile("missing-id")).toThrow(/Profile not found/);
   });
 });

@@ -17,23 +17,23 @@ import {
   Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CardFormDialog } from "@/components/card-form-dialog";
-import { CardTile } from "@/components/card-tile";
+import { FlashcardFormDialog } from "@/components/flashcard-form-dialog";
+import { FlashcardTile } from "@/components/flashcard-tile";
 import { SortControl } from "@/components/sort-control";
 import { SearchableMultiSelect } from "@/components/ui/combobox";
-import { CARD_SORT_OPTIONS, type CardSortKey } from "@/lib/sort-cards";
+import { FLASHCARD_SORT_OPTIONS, type FlashcardSortKey } from "@/lib/sort-flashcards";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import {
-  cardKeys,
+  flashcardKeys,
   deckKeys,
   invalidateCoreData,
   type BrowseQueryFilters,
 } from "@/lib/armin-query";
-import { toUiCard, type UiCard } from "@/types/view-models";
-import type { CardFormValues } from "@/components/card-form-dialog";
+import { toUiFlashcard, type UiFlashcard } from "@/types/view-models";
+import type { CardFormValues } from "@/components/flashcard-form-dialog";
 import { BROWSE_PAGE_SIZE } from "../../shared/browse";
 
 export default function DeckPage() {
@@ -42,8 +42,8 @@ export default function DeckPage() {
   const toast = useToast();
 
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<UiCard | null>(null);
-  const [sort, setSort] = useState<CardSortKey>("due-soon");
+  const [editing, setEditing] = useState<UiFlashcard | null>(null);
+  const [sort, setSort] = useState<FlashcardSortKey>("due-soon");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
 
   const browseFilters = useMemo((): BrowseQueryFilters => {
@@ -58,14 +58,14 @@ export default function DeckPage() {
   });
 
   const tagsQuery = useQuery({
-    queryKey: cardKeys.deckTags(deckId),
-    queryFn: () => window.armin.cards.listDeckTags(deckId),
+    queryKey: flashcardKeys.deckTags(deckId),
+    queryFn: () => window.armin.flashcards.listDeckTags(deckId),
   });
 
   const cardsQuery = useInfiniteQuery({
-    queryKey: cardKeys.browse(browseFilters),
+    queryKey: flashcardKeys.browse(browseFilters),
     queryFn: ({ pageParam }) =>
-      window.armin.cards.browse({
+      window.armin.flashcards.browse({
         offset: pageParam,
         limit: BROWSE_PAGE_SIZE,
         sort: browseFilters.sort,
@@ -75,7 +75,7 @@ export default function DeckPage() {
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       const loaded = allPages.reduce(
-        (count, page) => count + page.cards.length,
+        (count, page) => count + page.flashcards.length,
         0,
       );
       return loaded < lastPage.filteredTotal ? loaded : undefined;
@@ -86,8 +86,8 @@ export default function DeckPage() {
   const displayed = useMemo(
     () =>
       (cardsQuery.data?.pages ?? [])
-        .flatMap((page) => page.cards)
-        .map(toUiCard),
+        .flatMap((page) => page.flashcards)
+        .map(toUiFlashcard),
     [cardsQuery.data],
   );
 
@@ -133,7 +133,7 @@ export default function DeckPage() {
     setEditing(null);
     setOpen(true);
   };
-  const openEdit = (card: UiCard) => {
+  const openEdit = (card: UiFlashcard) => {
     setEditing(card);
     setOpen(true);
   };
@@ -146,32 +146,45 @@ export default function DeckPage() {
 
   const createCard = useMutation({
     mutationFn: (values: CardFormValues) =>
-      window.armin.cards.create({ deckId, ...values }),
+      window.armin.flashcards.create({ deckId, ...values }),
     onSuccess: () => {
       invalidateCoreData(queryClient, deckId);
-      toast({ tone: "success", title: "Card added" });
+      toast({ tone: "success", title: "Flashcard added" });
     },
-    onError: () => toast({ tone: "error", title: "Couldn’t add card" }),
+    onError: () => toast({ tone: "error", title: "Couldn’t add flashcard" }),
   });
 
   const updateCard = useMutation({
     mutationFn: (values: CardFormValues & { id: string }) =>
-      window.armin.cards.update(values),
+      window.armin.flashcards.update(values),
     onSuccess: () => {
       invalidateCoreData(queryClient, deckId);
-      toast({ tone: "success", title: "Card updated" });
+      toast({ tone: "success", title: "Flashcard updated" });
       closeDialog();
     },
-    onError: () => toast({ tone: "error", title: "Couldn’t update card" }),
+    onError: () => toast({ tone: "error", title: "Couldn’t update flashcard" }),
   });
 
   const deleteCard = useMutation({
-    mutationFn: (id: string) => window.armin.cards.delete(id),
+    mutationFn: (id: string) => window.armin.flashcards.delete(id),
     onSuccess: () => {
       invalidateCoreData(queryClient, deckId);
-      toast({ tone: "error", title: "Card deleted" });
+      toast({ tone: "error", title: "Flashcard deleted" });
     },
-    onError: () => toast({ tone: "error", title: "Couldn’t delete card" }),
+    onError: () => toast({ tone: "error", title: "Couldn’t delete flashcard" }),
+  });
+
+  const archiveCard = useMutation({
+    mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
+      window.armin.flashcards.archive(id, archived),
+    onSuccess: (_note, { archived }) => {
+      invalidateCoreData(queryClient, deckId);
+      toast({
+        tone: "success",
+        title: archived ? "Flashcard archived" : "Flashcard unarchived",
+      });
+    },
+    onError: () => toast({ tone: "error", title: "Could not update flashcard" }),
   });
 
   const saveCard = async (values: CardFormValues) => {
@@ -207,7 +220,7 @@ export default function DeckPage() {
               <AlertTriangle className="h-6 w-6" strokeWidth={1.5} />
             </div>
             <h3 className="text-base font-semibold text-ink">
-              Couldn&apos;t load these cards
+              Couldn&apos;t load these flashcards
             </h3>
             <p className="mt-1 max-w-[40ch] text-sm text-muted">
               Something went wrong reading from local storage. Your data is safe
@@ -258,7 +271,7 @@ export default function DeckPage() {
             {deck.name}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            {deck.total} cards
+            {deck.total} flashcards
             <span className="text-border-strong"> · </span>
             {deck.learned} learned
             {dueCount > 0 && (
@@ -293,8 +306,8 @@ export default function DeckPage() {
       {deck.total === 0 && !cardsLoading && (
         <EmptyState
           icon={Layers}
-          title="No cards in this deck"
-          description="Add a card by hand, then connect prerequisites in the graph as the deck grows."
+          title="No flashcards in this deck"
+          description="Add a flashcard by hand, then connect prerequisites in the graph as the deck grows."
           action={
             <Button onClick={openNew}>
               <Plus className="h-4 w-4" /> Add your first card
@@ -344,7 +357,7 @@ export default function DeckPage() {
                 fieldLayout
                 value={sort}
                 onChange={setSort}
-                options={CARD_SORT_OPTIONS}
+                options={FLASHCARD_SORT_OPTIONS}
                 triggerClassName="min-w-[11rem]"
               />
             </div>
@@ -356,15 +369,21 @@ export default function DeckPage() {
             <>
               <p className="mb-3 text-xs text-muted">
                 {hasMore
-                  ? `Showing ${displayed.length} of ${filteredTotal} cards`
-                  : `${filteredTotal} cards`}
+                  ? `Showing ${displayed.length} of ${filteredTotal} flashcards`
+                  : `${filteredTotal} flashcards`}
               </p>
               <ul className="card-grid grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {displayed.map((card) => (
-                  <CardTile
+                  <FlashcardTile
                     key={card.id}
                     card={card}
                     onOpen={() => openEdit(card)}
+                    onArchiveToggle={() =>
+                      void archiveCard.mutateAsync({
+                        id: card.id,
+                        archived: !card.archived,
+                      })
+                    }
                     onDelete={async () => {
                       await deleteCard.mutateAsync(card.id);
                     }}
@@ -389,18 +408,18 @@ export default function DeckPage() {
 
           {!cardsLoading && filteredTotal === 0 && (
             <p className="border border-border bg-bg-2 px-6 py-10 text-center text-sm text-muted">
-              No cards match the selected tags.
+              No flashcards match the selected tags.
             </p>
           )}
         </>
       )}
 
-      <CardFormDialog
+      <FlashcardFormDialog
         open={open}
         onClose={closeDialog}
         onExitComplete={handleDialogExitComplete}
         mode={editing ? "edit" : "create"}
-        cardId={editing?.id ?? null}
+        reviewUnitId={editing?.id ?? null}
         initialType={editing?.type ?? "basic"}
         initialContent={editing?.content ?? null}
         initialTags={editing?.tags ?? []}

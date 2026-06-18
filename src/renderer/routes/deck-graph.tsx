@@ -3,15 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, GitBranch, Plus } from "lucide-react";
 import type { Viewport, XYPosition } from "@xyflow/react";
-import { CardFormDialog } from "@/components/card-form-dialog";
+import { FlashcardFormDialog } from "@/components/flashcard-form-dialog";
 import { PrerequisiteGraph } from "@/components/prerequisite-graph/prerequisite-graph";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { deckKeys, graphKeys, invalidateCoreData } from "@/lib/armin-query";
 import { toUiDeckGraph, type UiDeckGraph } from "@/types/view-models";
-import type { CardFormValues } from "@/components/card-form-dialog";
-import type { CardContent, CardType } from "@/types/window";
+import type { CardFormValues } from "@/components/flashcard-form-dialog";
+import type { FlashcardContent, FlashcardType } from "@/types/window";
 import { cn } from "@/lib/utils";
 
 const viewportStorageKey = (deckId: string) => `armin:graph-viewport:${deckId}`;
@@ -70,8 +70,8 @@ export default function DeckGraphPage() {
   const [graph, setGraph] = useState<UiDeckGraph>({ nodes: [], edges: [] });
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingType, setEditingType] = useState<CardType>("basic");
-  const [editingContent, setEditingContent] = useState<CardContent | null>(
+  const [editingType, setEditingType] = useState<FlashcardType>("basic");
+  const [editingContent, setEditingContent] = useState<FlashcardContent | null>(
     null,
   );
   const [pendingPlacement, setPendingPlacement] = useState<XYPosition | null>(
@@ -135,7 +135,7 @@ export default function DeckGraphPage() {
     setPendingConnectFrom(null);
     // Fetch the full note content before opening: the form hydrates on the
     // open transition, and graph nodes only carry display strings.
-    const note = await window.armin.cards.get(nodeId);
+    const note = await window.armin.flashcards.get(nodeId);
     setEditingType(note?.type ?? node.type);
     setEditingContent(note?.content ?? null);
     setOpen(true);
@@ -143,7 +143,7 @@ export default function DeckGraphPage() {
 
   const createCard = useMutation({
     mutationFn: (values: CardFormValues) =>
-      window.armin.cards.create({ deckId, ...values }),
+      window.armin.flashcards.create({ deckId, ...values }),
     onSuccess: (card) => {
       if (pendingPlacement) {
         setNodePlacements((current) => ({
@@ -151,7 +151,7 @@ export default function DeckGraphPage() {
           [card.id]: pendingPlacement,
         }));
         void window.armin.graph.saveLayout(deckId, [
-          { noteId: card.id, x: pendingPlacement.x, y: pendingPlacement.y },
+          { flashcardId: card.id, x: pendingPlacement.x, y: pendingPlacement.y },
         ]);
       }
       if (pendingConnectFrom) {
@@ -161,31 +161,31 @@ export default function DeckGraphPage() {
         });
       }
       invalidateCoreData(queryClient, deckId);
-      toast({ tone: "success", title: "Card added to graph" });
+      toast({ tone: "success", title: "Flashcard added to graph" });
       closeDialog();
     },
-    onError: () => toast({ tone: "error", title: "Couldn’t add card" }),
+    onError: () => toast({ tone: "error", title: "Couldn’t add flashcard" }),
   });
 
   const updateCard = useMutation({
     mutationFn: (values: CardFormValues & { id: string }) =>
-      window.armin.cards.update(values),
+      window.armin.flashcards.update(values),
     onSuccess: () => {
       invalidateCoreData(queryClient, deckId);
-      toast({ tone: "success", title: "Card updated" });
+      toast({ tone: "success", title: "Flashcard updated" });
       closeDialog();
     },
-    onError: () => toast({ tone: "error", title: "Couldn’t update card" }),
+    onError: () => toast({ tone: "error", title: "Couldn’t update flashcard" }),
   });
 
   const deleteCard = useMutation({
-    mutationFn: (id: string) => window.armin.cards.delete(id),
+    mutationFn: (id: string) => window.armin.flashcards.delete(id),
     onSuccess: () => {
       invalidateCoreData(queryClient, deckId);
-      toast({ tone: "error", title: "Card deleted" });
+      toast({ tone: "error", title: "Flashcard deleted" });
     },
     onError: () => {
-      toast({ tone: "error", title: "Couldn’t delete card" });
+      toast({ tone: "error", title: "Couldn’t delete flashcard" });
       void graphQuery.refetch();
     },
   });
@@ -195,7 +195,7 @@ export default function DeckGraphPage() {
       window.armin.graph.addPrereq(edge.prereqId, edge.dependentId),
     onSuccess: () => invalidateCoreData(queryClient, deckId),
     onError: () => {
-      toast({ tone: "error", title: "Couldn’t link cards" });
+      toast({ tone: "error", title: "Couldn’t link flashcards" });
       void graphQuery.refetch();
     },
   });
@@ -211,7 +211,7 @@ export default function DeckGraphPage() {
   });
 
   const saveLayout = useMutation({
-    mutationFn: (placements: { noteId: string; x: number; y: number }[]) =>
+    mutationFn: (placements: { flashcardId: string; x: number; y: number }[]) =>
       window.armin.graph.saveLayout(deckId, placements),
     onError: () => toast({ tone: "error", title: "Couldn’t save layout" }),
   });
@@ -308,7 +308,7 @@ export default function DeckGraphPage() {
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-bg">
           <EmptyState
             icon={GitBranch}
-            title="No cards yet"
+            title="No flashcards yet"
             description="Double-click the canvas to add your first card."
             action={
               <Button
@@ -343,12 +343,12 @@ export default function DeckGraphPage() {
         />
       )}
 
-      <CardFormDialog
+      <FlashcardFormDialog
         open={open}
         onClose={closeDialog}
         onExitComplete={handleDialogExitComplete}
         mode={editingId ? "edit" : "create"}
-        cardId={editingId}
+        reviewUnitId={editingId}
         initialType={editingId ? editingType : "basic"}
         initialContent={editingId ? editingContent : null}
         onSubmit={saveCard}

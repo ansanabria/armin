@@ -210,7 +210,7 @@ describe("Anki package import", () => {
     expect(result.deckCount).toBe(1);
     expect(result.cardCount).toBe(10);
 
-    const rows = await ctx.db.select().from(schema.cards).all();
+    const rows = await ctx.db.select().from(schema.reviewUnits).all();
     expect(rows).toHaveLength(10);
 
     // The review card kept its FSRS state (state 2 = Review, reps 3).
@@ -226,7 +226,7 @@ describe("Anki package import", () => {
     const tags = await ctx.db.select().from(schema.tags).all();
     expect(tags.map((t) => t.name).sort()).toEqual(["capital", "europe"]);
 
-    const notes = await ctx.db.select().from(schema.notes).all();
+    const notes = await ctx.db.select().from(schema.flashcards).all();
     expect(notes.map((n) => n.type).sort()).toEqual([
       "basic",
       "basic",
@@ -255,7 +255,7 @@ describe("Anki package import", () => {
     expect(decks.map((d) => d.name).sort()).toEqual(["Geography", "Science"]);
 
     // keepScheduling=false → every card is a fresh New card.
-    const cards = await ctx.db.select().from(schema.cards).all();
+    const cards = await ctx.db.select().from(schema.reviewUnits).all();
     expect(cards.every((c) => c.state === 0 && c.reps === 0)).toBe(true);
   });
 });

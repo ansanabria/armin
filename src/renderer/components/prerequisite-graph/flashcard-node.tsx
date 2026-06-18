@@ -7,17 +7,17 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import { StateBadge, type CardState } from "@/components/ui/badge";
+import { StateBadge, type ReviewState } from "@/components/ui/badge";
 import { MarkdownContent } from "@/components/ui/markdown-content";
-import { CardTypeBadge } from "@/components/card-type-badge";
-import type { CardType } from "../../../main/services/card-types";
+import { FlashcardTypeBadge } from "@/components/flashcard-type-badge";
+import type { FlashcardType } from "../../../main/services/flashcard-types";
 import { cn } from "@/lib/utils";
 
 export type CardNodeData = {
   front: string;
   back: string;
-  type: CardType;
-  state: CardState;
+  type: FlashcardType;
+  state: ReviewState;
   locked: boolean;
   isIsolated: boolean;
 };
@@ -68,7 +68,7 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
 
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <StateBadge state={data.state} locked={data.locked} />
-        <CardTypeBadge type={data.type} />
+        <FlashcardTypeBadge type={data.type} />
         {data.isIsolated && (
           <span className="text-[0.625rem] font-medium uppercase tracking-wide text-muted">
             Isolated
@@ -92,4 +92,4 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
   );
 }
 
-export const CardNode = memo(CardNodeComponent);
+export const FlashcardNode = memo(CardNodeComponent);

@@ -118,13 +118,13 @@ describe("MCP stdio server", () => {
     const names = tools.tools.map((tool) => tool.name).sort();
     expect(names).toEqual([
       "add_prerequisite",
-      "create_card",
       "create_deck",
-      "get_card",
+      "create_flashcard",
       "get_deck_graph",
-      "import_card_hierarchy",
-      "list_cards",
+      "get_flashcard",
+      "import_flashcard_hierarchy",
       "list_decks",
+      "list_flashcards",
       "list_open_profiles",
       "select_profile",
     ]);
@@ -150,7 +150,7 @@ describe("MCP stdio server", () => {
 
     const createdCard = parseToolText(
       await client!.callTool({
-        name: "create_card",
+        name: "create_flashcard",
         arguments: {
           deckId,
           front: "What is MCP?",
@@ -158,14 +158,14 @@ describe("MCP stdio server", () => {
         },
       }),
     );
-    const cardId = (createdCard.card as { id: string }).id;
+    const reviewUnitId = (createdCard.flashcard as { id: string }).id;
 
     const imported = parseToolText(
       await client!.callTool({
-        name: "import_card_hierarchy",
+        name: "import_flashcard_hierarchy",
         arguments: {
           deckName: "Hierarchy Deck",
-          cards: [
+          flashcards: [
             { clientId: "base", front: "Base", back: "Foundation" },
             {
               clientId: "next",
@@ -179,32 +179,32 @@ describe("MCP stdio server", () => {
     );
     const hierarchyDeckId = (imported.deck as { id: string }).id;
     const baseId = (
-      imported.cards as Array<{ clientId: string; id: string }>
+      imported.flashcards as Array<{ clientId: string; id: string }>
     ).find((c) => c.clientId === "base")!.id;
     const nextId = (
-      imported.cards as Array<{ clientId: string; id: string }>
+      imported.flashcards as Array<{ clientId: string; id: string }>
     ).find((c) => c.clientId === "next")!.id;
 
     await client!.callTool({
       name: "add_prerequisite",
-      arguments: { prereqId: cardId, dependentId: nextId },
+      arguments: { prereqId: reviewUnitId, dependentId: nextId },
     });
 
     const listed = parseToolText(
       await client!.callTool({
-        name: "list_cards",
+        name: "list_flashcards",
         arguments: { deckId: hierarchyDeckId },
       }),
     );
-    expect((listed.cards as unknown[]).length).toBeGreaterThanOrEqual(2);
+    expect((listed.flashcards as unknown[]).length).toBeGreaterThanOrEqual(2);
 
     const fetched = parseToolText(
       await client!.callTool({
-        name: "get_card",
+        name: "get_flashcard",
         arguments: { id: baseId },
       }),
     );
-    expect((fetched.card as { front: string }).front).toBe("Base");
+    expect((fetched.flashcard as { front: string }).front).toBe("Base");
 
     const graph = parseToolText(
       await client!.callTool({

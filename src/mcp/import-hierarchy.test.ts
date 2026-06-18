@@ -1,20 +1,20 @@
 import { count, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { schema } from "../main/db";
-import * as notes from "../main/services/notes";
+import * as notes from "../main/services/flashcards";
 import * as decks from "../main/services/decks";
 import { makeContext, useTestDb } from "../main/test/db";
-import { importCardHierarchy, readDeckGraph } from "./import-hierarchy";
+import { importFlashcardHierarchy, readDeckGraph } from "./import-hierarchy";
 
 useTestDb();
 
-describe("importCardHierarchy", () => {
+describe("importFlashcardHierarchy", () => {
   it("creates a deck and hierarchy from deckName", async () => {
     const ctx = await makeContext("import-new-deck");
-    const result = await importCardHierarchy(ctx, {
+    const result = await importFlashcardHierarchy(ctx, {
       deckName: "TypeScript basics",
       deckDescription: "Foundations to advanced",
-      cards: [
+      flashcards: [
         { clientId: "js", front: "JS values", back: "Primitives and objects" },
         {
           clientId: "ts",
@@ -26,13 +26,13 @@ describe("importCardHierarchy", () => {
     });
 
     expect(result.deck.name).toBe("TypeScript basics");
-    expect(result.cards).toHaveLength(2);
+    expect(result.flashcards).toHaveLength(2);
     expect(result.edges).toEqual([
       { prereqClientId: "js", dependentClientId: "ts" },
     ]);
 
-    const dependent = result.cards.find((c) => c.clientId === "ts")!;
-    const persistedDependent = await notes.getNote(ctx, dependent.id);
+    const dependent = result.flashcards.find((c) => c.clientId === "ts")!;
+    const persistedDependent = await notes.getFlashcard(ctx, dependent.id);
     expect(persistedDependent?.locked).toBe(true);
 
     const graph = await readDeckGraph(ctx, result.deck.id);
@@ -49,24 +49,24 @@ describe("importCardHierarchy", () => {
       description: null,
     });
 
-    const result = await importCardHierarchy(ctx, {
+    const result = await importFlashcardHierarchy(ctx, {
       deckId: deck.id,
-      cards: [
+      flashcards: [
         { clientId: "a", front: "A", back: "A" },
         { clientId: "b", front: "B", back: "B", prerequisites: ["a"] },
       ],
     });
 
     expect(result.deck.id).toBe(deck.id);
-    expect(result.cards.every((c) => c.deckId === deck.id)).toBe(true);
+    expect(result.flashcards.every((c) => c.deckId === deck.id)).toBe(true);
   });
 
   it("rejects cyclic hierarchies", async () => {
     const ctx = await makeContext("import-cycle");
     await expect(
-      importCardHierarchy(ctx, {
+      importFlashcardHierarchy(ctx, {
         deckName: "Cycle",
-        cards: [
+        flashcards: [
           { clientId: "a", front: "A", back: "A", prerequisites: ["b"] },
           { clientId: "b", front: "B", back: "B", prerequisites: ["a"] },
         ],
@@ -76,9 +76,9 @@ describe("importCardHierarchy", () => {
 
   it("imports typed content cards alongside basic shorthand", async () => {
     const ctx = await makeContext("import-typed");
-    const result = await importCardHierarchy(ctx, {
+    const result = await importFlashcardHierarchy(ctx, {
       deckName: "Typed",
-      cards: [
+      flashcards: [
         { clientId: "plain", front: "F", back: "B" },
         {
           clientId: "gap",
@@ -89,11 +89,11 @@ describe("importCardHierarchy", () => {
       ],
     });
 
-    const cloze = result.cards.find((card) => card.clientId === "gap")!;
+    const cloze = result.flashcards.find((card) => card.clientId === "gap")!;
     const clozeCards = await ctx.db
       .select()
-      .from(schema.cards)
-      .where(eq(schema.cards.noteId, cloze.id))
+      .from(schema.reviewUnits)
+      .where(eq(schema.reviewUnits.flashcardId, cloze.id))
       .all();
     expect(clozeCards.map((card) => card.subKey).sort()).toEqual(["c1", "c2"]);
   });
@@ -101,9 +101,9 @@ describe("importCardHierarchy", () => {
   it("rejects unknown card types before writing anything", async () => {
     const ctx = await makeContext("import-bad-type");
     await expect(
-      importCardHierarchy(ctx, {
+      importFlashcardHierarchy(ctx, {
         deckName: "Bad",
-        cards: [
+        flashcards: [
           { clientId: "ok", front: "F", back: "B" },
           { clientId: "bad", type: "mystery", content: {} },
         ],

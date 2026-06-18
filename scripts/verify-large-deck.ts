@@ -52,19 +52,19 @@ async function main() {
     .run(tagId, "large", now);
 
   const insertNote = client.prepare(
-    `INSERT INTO notes (
+    `INSERT INTO flashcards (
           id, deck_id, type, content, pos_x, pos_y, locked, created_at, updated_at
         ) VALUES (?, ?, 'basic', ?, NULL, NULL, 0, ?, ?)`,
   );
   const insertCard = client.prepare(
-    `INSERT INTO cards (
-          id, note_id, deck_id, sub_key, front, back, due, stability, difficulty,
+    `INSERT INTO review_units (
+          id, flashcard_id, deck_id, sub_key, front, back, due, stability, difficulty,
           elapsed_days, scheduled_days, learning_steps, reps, lapses, state,
           created_at, updated_at
         ) VALUES (?, ?, ?, '', ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?, ?)`,
   );
   const insertNoteTag = client.prepare(
-    `INSERT INTO note_tags (note_id, tag_id) VALUES (?, ?)`,
+    `INSERT INTO flashcard_tags (flashcard_id, tag_id) VALUES (?, ?)`,
   );
   const seedBatch = client.transaction((from: number, to: number) => {
     for (let i = from; i <= to; i++) {
@@ -133,11 +133,11 @@ async function main() {
   const expectedTagged = Math.floor(count / 10);
   const checks: [string, boolean][] = [
     ["deck.total", deck?.total === count],
-    ["page1.count", page1.cards.length === BROWSE_PAGE_SIZE],
+    ["page1.count", page1.flashcards.length === BROWSE_PAGE_SIZE],
     ["page1.filteredTotal", page1.filteredTotal === count],
-    ["pageMid.count", pageMid.cards.length === BROWSE_PAGE_SIZE],
-    ["pageLast.count", pageLast.cards.length === BROWSE_PAGE_SIZE],
-    ["dueSoon.count", dueSoon.cards.length === BROWSE_PAGE_SIZE],
+    ["pageMid.count", pageMid.flashcards.length === BROWSE_PAGE_SIZE],
+    ["pageLast.count", pageLast.flashcards.length === BROWSE_PAGE_SIZE],
+    ["dueSoon.count", dueSoon.flashcards.length === BROWSE_PAGE_SIZE],
     ["tagged.filteredTotal", tagged.filteredTotal === expectedTagged],
     ["tags.includes(large)", tags.includes("large")],
   ];
@@ -152,8 +152,8 @@ async function main() {
   console.log(
     `Deck: ${count} cards, ${deck?.due} due, ${deck?.learned} learned`,
   );
-  console.log(`Page 1 newest: ${page1.cards[0]?.front}`);
-  console.log(`Page last: ${pageLast.cards[0]?.front}`);
+  console.log(`Page 1 newest: ${page1.flashcards[0]?.front}`);
+  console.log(`Page last: ${pageLast.flashcards[0]?.front}`);
   console.log(`Tagged cards: ${tagged.filteredTotal}`);
 
   closeDb();

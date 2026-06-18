@@ -3,8 +3,9 @@ import started from "electron-squirrel-startup";
 import { closeDb } from "./db";
 import { loadDevToolsExtensions } from "./devtools";
 import { applyLinuxDesktopEntry } from "./icon";
-import { registerIpc } from "./ipc";
+import { registerIpc, openProfile } from "./ipc";
 import { startEmbeddedMcpServer, stopEmbeddedMcpServer } from "./mcp-http";
+import * as profiles from "./services/profiles";
 import { openProfilePicker } from "./windows";
 
 if (process.env.ARMIN_DATA_DIR) {
@@ -16,6 +17,18 @@ if (started) {
   app.quit();
 }
 
+async function openStartupProfile() {
+  const defaultId = profiles.getDefaultProfileId();
+  if (defaultId) {
+    const profile = profiles.getProfile(defaultId);
+    if (profile) {
+      await openProfile(profile.id, profile.name);
+      return;
+    }
+  }
+  openProfilePicker();
+}
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -25,7 +38,7 @@ app.on("ready", async () => {
   registerIpc();
   await startEmbeddedMcpServer();
   await loadDevToolsExtensions();
-  openProfilePicker();
+  await openStartupProfile();
 });
 
 app.on("quit", () => {
@@ -46,7 +59,7 @@ app.on("activate", () => {
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
-    openProfilePicker();
+    void openStartupProfile();
   }
 });
 

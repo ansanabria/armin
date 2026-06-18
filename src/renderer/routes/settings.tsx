@@ -37,7 +37,7 @@ type SettingsState = Pick<
   | "relearningSteps"
   | "weights"
   | "prereqStabilityFloor"
-  | "newCardsPerDay"
+  | "newReviewUnitsPerDay"
 >;
 
 const initial: SettingsState = {
@@ -49,7 +49,7 @@ const initial: SettingsState = {
   relearningSteps: "10m",
   weights: null,
   prereqStabilityFloor: 2,
-  newCardsPerDay: 10,
+  newReviewUnitsPerDay: 10,
 };
 
 function toSettingsState(settings: Settings): SettingsState {
@@ -62,7 +62,7 @@ function toSettingsState(settings: Settings): SettingsState {
     relearningSteps: settings.relearningSteps,
     weights: settings.weights,
     prereqStabilityFloor: settings.prereqStabilityFloor,
-    newCardsPerDay: settings.newCardsPerDay,
+    newReviewUnitsPerDay: settings.newReviewUnitsPerDay,
   };
 }
 
@@ -153,13 +153,13 @@ export default function SettingsPage() {
               onChange={(v) => set("maximumInterval", v)}
             />
           </Row>
-          <Row label="Learning steps" hint="Short steps for brand-new cards.">
+          <Row label="Learning steps" hint="Short steps for brand-new review units.">
             <StepsInput
               value={s.learningSteps}
               onChange={(v) => set("learningSteps", v)}
             />
           </Row>
-          <Row label="Relearning steps" hint="Steps after you forget a card.">
+          <Row label="Relearning steps" hint="Steps after you forget a review unit.">
             <StepsInput
               value={s.relearningSteps}
               onChange={(v) => set("relearningSteps", v)}
@@ -176,7 +176,7 @@ export default function SettingsPage() {
           </Row>
           <Row
             label="Short-term scheduling"
-            hint="Use same-day learning steps for new and lapsed cards."
+            hint="Use same-day learning steps for new and lapsed review units."
             last
           >
             <Switch
@@ -188,7 +188,7 @@ export default function SettingsPage() {
 
         <Section
           title="Learning path"
-          description="How prerequisite cards unlock and how many new cards enter each day."
+          description="How prerequisite flashcards unlock and how many new review units enter each day."
         >
           <Row
             label="Prerequisite stability"
@@ -200,20 +200,20 @@ export default function SettingsPage() {
             />
           </Row>
           <Row
-            label="New cards per day"
-            hint="Maximum brand-new cards introduced from the unlock frontier each day."
+            label="New review units per day"
+            hint="Maximum brand-new review units introduced from the unlock frontier each day."
             last
           >
             <NewCardsPerDayInput
-              value={s.newCardsPerDay}
-              onChange={(v) => set("newCardsPerDay", v)}
+              value={s.newReviewUnitsPerDay}
+              onChange={(v) => set("newReviewUnitsPerDay", v)}
             />
           </Row>
         </Section>
 
         <Section
-          title="AI card creation"
-          description="Connect a coding agent to Armin's local MCP server so it can generate cards."
+          title="AI flashcard creation"
+          description="Connect a coding agent to Armin's local MCP server so it can generate flashcards."
         >
           <McpSettings />
         </Section>

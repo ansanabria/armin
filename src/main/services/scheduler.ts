@@ -6,19 +6,19 @@ import {
   type FSRS,
   type Steps,
 } from "ts-fsrs";
-import type { Card as DbCard, Settings } from "../db/schema";
+import type { ReviewUnit as DbReviewUnit, Settings } from "../db/schema";
 import { getSettings } from "./settings";
 import type { ServiceContext } from "./context";
 
-/** Cards awaiting prerequisite unlock use a far-future due date. */
+/** Review units awaiting prerequisite unlock use a far-future due date. */
 export const PENDING_DUE = new Date("2099-01-01T00:00:00.000Z");
 
 export const DEFAULT_PREREQ_STABILITY_FLOOR = 2;
-export const DEFAULT_NEW_CARDS_PER_DAY = 10;
+export const DEFAULT_NEW_REVIEW_UNITS_PER_DAY = 10;
 
-/** The subset of card columns that hold FSRS scheduling state. */
+/** The subset of review-unit columns that hold FSRS scheduling state. */
 export type FsrsFields = Pick<
-  DbCard,
+  DbReviewUnit,
   | "due"
   | "stability"
   | "difficulty"
@@ -87,13 +87,13 @@ export function fromFsrsCard(card: FsrsCard): FsrsFields {
   };
 }
 
-/** Fresh FSRS state for a brand-new card ready to study. */
-export function newCardFields(now: Date = new Date()): FsrsFields {
+/** Fresh FSRS state for a brand-new review unit ready to study. */
+export function newReviewUnitFields(now: Date = new Date()): FsrsFields {
   return fromFsrsCard(createEmptyCard(now));
 }
 
-/** FSRS placeholder for cards blocked by unmet prerequisites. */
-export function pendingCardFields(): FsrsFields {
+/** FSRS placeholder for review units blocked by unmet prerequisites. */
+export function pendingReviewUnitFields(): FsrsFields {
   return {
     due: PENDING_DUE,
     stability: 0,
@@ -109,21 +109,23 @@ export function pendingCardFields(): FsrsFields {
 }
 
 export function isPendingSchedule(
-  card: Pick<DbCard, "due" | "lastReview" | "reps">,
+  reviewUnit: Pick<DbReviewUnit, "due" | "lastReview" | "reps">,
 ): boolean {
   return (
-    card.reps === 0 &&
-    card.lastReview == null &&
-    card.due.getTime() >= PENDING_DUE.getTime()
+    reviewUnit.reps === 0 &&
+    reviewUnit.lastReview == null &&
+    reviewUnit.due.getTime() >= PENDING_DUE.getTime()
   );
 }
 
 /** A prerequisite is secured enough to unlock dependents. */
 export function isPrereqSecured(
-  card: Pick<DbCard, "state" | "stability">,
+  reviewUnit: Pick<DbReviewUnit, "state" | "stability">,
   stabilityFloor: number,
 ): boolean {
-  return card.state === State.Review && card.stability >= stabilityFloor;
+  return (
+    reviewUnit.state === State.Review && reviewUnit.stability >= stabilityFloor
+  );
 }
 
 export { State };

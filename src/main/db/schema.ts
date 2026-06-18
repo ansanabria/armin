@@ -31,18 +31,19 @@ export const decks = sqliteTable("decks", {
 });
 
 /**
- * A note is the authored unit the user creates and edits. It owns the content
- * (a type-specific JSON blob), tags, prerequisite edges, the graph position and
- * the lock state. A note generates one or more {@link cards} review items.
+ * A flashcard is the authored unit the user creates and edits. It owns the
+ * content (a type-specific JSON blob), tags, prerequisite edges, the graph
+ * position and the lock state. A flashcard generates one or more
+ * {@link reviewUnits} review units.
  */
-export const notes = sqliteTable(
-  "notes",
+export const flashcards = sqliteTable(
+  "flashcards",
   {
     id: uuid(),
     deckId: text("deck_id")
       .notNull()
       .references(() => decks.id, { onDelete: "cascade" }),
-    /** One of CardType: basic | basic_reversed | cloze | type_answer | diagram. */
+    /** One of FlashcardType: basic | basic_reversed | cloze | type_answer | diagram. */
     type: text("type").notNull().default("basic"),
     /** Type-specific content, serialized as JSON. */
     content: text("content").notNull(),
@@ -52,33 +53,35 @@ export const notes = sqliteTable(
     posY: real("pos_y"),
     /** Denormalized prerequisite lock; synced when graph or prereq FSRS changes. */
     locked: integer("locked", { mode: "boolean" }).notNull().default(false),
+    /** When true, excluded from review queues but still visible in browse/deck. */
+    archived: integer("archived", { mode: "boolean" }).notNull().default(false),
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
-    index("notes_deck_id_idx").on(t.deckId),
-    index("notes_deck_created_idx").on(t.deckId, t.createdAt),
-    index("notes_deck_locked_idx").on(t.deckId, t.locked),
+    index("flashcards_deck_id_idx").on(t.deckId),
+    index("flashcards_deck_created_idx").on(t.deckId, t.createdAt),
+    index("flashcards_deck_locked_idx").on(t.deckId, t.locked),
   ],
 );
 
 /**
- * A card is a generated review item belonging to a {@link notes} row. It holds
- * the FSRS scheduling state inline, mirroring the `Card` shape from `ts-fsrs`,
- * plus the cached rendered display strings for this review item.
+ * A review unit is a generated review item belonging to a {@link flashcards}
+ * row. It holds the FSRS scheduling state inline, mirroring the `Card` shape
+ * from `ts-fsrs`, plus the cached rendered display strings for this review unit.
  */
-export const cards = sqliteTable(
-  "cards",
+export const reviewUnits = sqliteTable(
+  "review_units",
   {
     id: uuid(),
-    noteId: text("note_id")
+    flashcardId: text("flashcard_id")
       .notNull()
-      .references(() => notes.id, { onDelete: "cascade" }),
+      .references(() => flashcards.id, { onDelete: "cascade" }),
     deckId: text("deck_id")
       .notNull()
       .references(() => decks.id, { onDelete: "cascade" }),
-    /** Stable per-note key identifying which review item this is (e.g. "", "fwd", "c1"). */
+    /** Stable per-flashcard key identifying which review unit this is (e.g. "", "fwd", "c1"). */
     subKey: text("sub_key").notNull().default(""),
     front: text("front").notNull(),
     back: text("back").notNull(),
@@ -95,49 +98,52 @@ export const cards = sqliteTable(
     // State enum: 0=New, 1=Learning, 2=Review, 3=Relearning
     state: integer("state").notNull().default(0),
     lastReview: integer("last_review", { mode: "timestamp_ms" }),
-    /** Mirror of the owning note's lock; queue filters on this. */
+    /** Mirror of the owning flashcard's lock; queue filters on this. */
     locked: integer("locked", { mode: "boolean" }).notNull().default(false),
+    /** Mirror of the owning flashcard's archive flag; queue filters on this. */
+    archived: integer("archived", { mode: "boolean" }).notNull().default(false),
 
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
-    index("cards_deck_id_idx").on(t.deckId),
-    index("cards_note_id_idx").on(t.noteId),
-    index("cards_deck_created_idx").on(t.deckId, t.createdAt),
-    index("cards_deck_due_idx").on(t.deckId, t.due),
-    index("cards_deck_state_idx").on(t.deckId, t.state),
-    index("cards_deck_locked_idx").on(t.deckId, t.locked),
+    index("review_units_deck_id_idx").on(t.deckId),
+    index("review_units_flashcard_id_idx").on(t.flashcardId),
+    index("review_units_deck_created_idx").on(t.deckId, t.createdAt),
+    index("review_units_deck_due_idx").on(t.deckId, t.due),
+    index("review_units_deck_state_idx").on(t.deckId, t.state),
+    index("review_units_deck_locked_idx").on(t.deckId, t.locked),
+    index("review_units_deck_archived_idx").on(t.deckId, t.archived),
   ],
 );
 
 /**
- * Prerequisite edges forming the knowledge DAG between notes: `prereqId` must be
- * learned before `dependentId` becomes reviewable.
+ * Prerequisite edges forming the knowledge DAG between flashcards: `prereqId`
+ * must be learned before `dependentId` becomes reviewable.
  */
-export const notePrereqs = sqliteTable(
-  "note_prereqs",
+export const flashcardPrereqs = sqliteTable(
+  "flashcard_prereqs",
   {
     prereqId: text("prereq_id")
       .notNull()
-      .references(() => notes.id, { onDelete: "cascade" }),
+      .references(() => flashcards.id, { onDelete: "cascade" }),
     dependentId: text("dependent_id")
       .notNull()
-      .references(() => notes.id, { onDelete: "cascade" }),
+      .references(() => flashcards.id, { onDelete: "cascade" }),
   },
   (t) => [
     primaryKey({ columns: [t.prereqId, t.dependentId] }),
-    index("note_prereqs_dependent_idx").on(t.dependentId),
-    index("note_prereqs_prereq_idx").on(t.prereqId),
+    index("flashcard_prereqs_dependent_idx").on(t.dependentId),
+    index("flashcard_prereqs_prereq_idx").on(t.prereqId),
   ],
 );
 
 /** Append-only history of every review (mirrors ts-fsrs `ReviewLog`). */
 export const reviewLogs = sqliteTable("review_logs", {
   id: uuid(),
-  cardId: text("card_id")
+  reviewUnitId: text("review_unit_id")
     .notNull()
-    .references(() => cards.id, { onDelete: "cascade" }),
+    .references(() => reviewUnits.id, { onDelete: "cascade" }),
   rating: integer("rating").notNull(),
   state: integer("state").notNull(),
   due: integer("due", { mode: "timestamp_ms" }).notNull(),
@@ -156,19 +162,19 @@ export const tags = sqliteTable("tags", {
   createdAt: createdAt(),
 });
 
-export const noteTags = sqliteTable(
-  "note_tags",
+export const flashcardTags = sqliteTable(
+  "flashcard_tags",
   {
-    noteId: text("note_id")
+    flashcardId: text("flashcard_id")
       .notNull()
-      .references(() => notes.id, { onDelete: "cascade" }),
+      .references(() => flashcards.id, { onDelete: "cascade" }),
     tagId: text("tag_id")
       .notNull()
       .references(() => tags.id, { onDelete: "cascade" }),
   },
   (t) => [
-    primaryKey({ columns: [t.noteId, t.tagId] }),
-    index("note_tags_tag_id_idx").on(t.tagId),
+    primaryKey({ columns: [t.flashcardId, t.tagId] }),
+    index("flashcard_tags_tag_id_idx").on(t.tagId),
   ],
 );
 
@@ -190,8 +196,10 @@ export const settings = sqliteTable("settings", {
   weights: text("weights"),
   /** Minimum FSRS stability before a prereq counts as secured. */
   prereqStabilityFloor: real("prereq_stability_floor").notNull().default(2),
-  /** Max brand-new cards introduced per calendar day (frontier cap). */
-  newCardsPerDay: integer("new_cards_per_day").notNull().default(10),
+  /** Max brand-new review units introduced per calendar day (frontier cap). */
+  newReviewUnitsPerDay: integer("new_review_units_per_day")
+    .notNull()
+    .default(10),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
@@ -199,10 +207,10 @@ export const settings = sqliteTable("settings", {
 
 export type Deck = typeof decks.$inferSelect;
 export type NewDeck = typeof decks.$inferInsert;
-export type Note = typeof notes.$inferSelect;
-export type NewNote = typeof notes.$inferInsert;
-export type Card = typeof cards.$inferSelect;
-export type NewCard = typeof cards.$inferInsert;
+export type Flashcard = typeof flashcards.$inferSelect;
+export type NewFlashcard = typeof flashcards.$inferInsert;
+export type ReviewUnit = typeof reviewUnits.$inferSelect;
+export type NewReviewUnit = typeof reviewUnits.$inferInsert;
 export type ReviewLog = typeof reviewLogs.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
 export type Tag = typeof tags.$inferSelect;

@@ -3,7 +3,7 @@ import { ImagePlus, Trash2 } from "lucide-react";
 import type {
   DiagramContent,
   DiagramRegion,
-} from "../../main/services/card-types";
+} from "../../main/services/flashcard-types";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 

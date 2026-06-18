@@ -4,29 +4,29 @@ import { schema } from "../db";
 import { makeContext, useTestDb } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
-import * as notes from "./notes";
+import * as notes from "./flashcards";
 import { State } from "./scheduler";
 
 useTestDb();
 
 function cardsForNote(
   ctx: Awaited<ReturnType<typeof makeContext>>,
-  noteId: string,
+  flashcardId: string,
 ) {
   return ctx.db
     .select()
-    .from(schema.cards)
-    .where(eq(schema.cards.noteId, noteId))
-    .orderBy(asc(schema.cards.subKey))
+    .from(schema.reviewUnits)
+    .where(eq(schema.reviewUnits.flashcardId, flashcardId))
+    .orderBy(asc(schema.reviewUnits.subKey))
     .all();
 }
 
 async function secureCard(
   ctx: Awaited<ReturnType<typeof makeContext>>,
-  cardId: string,
+  reviewUnitId: string,
 ) {
   await ctx.db
-    .update(schema.cards)
+    .update(schema.reviewUnits)
     .set({
       state: State.Review,
       stability: 2.5,
@@ -34,7 +34,7 @@ async function secureCard(
       lastReview: new Date(),
       due: new Date(),
     })
-    .where(eq(schema.cards.id, cardId))
+    .where(eq(schema.reviewUnits.id, reviewUnitId))
     .run();
 }
 
@@ -42,7 +42,7 @@ describe("note → card generation", () => {
   it("generates forward and reverse cards for basic_reversed", async () => {
     const ctx = await makeContext("gen-reversed");
     const deck = await decks.createDeck(ctx, { name: "R" });
-    const note = await notes.createNote({
+    const note = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "basic_reversed",
@@ -57,7 +57,7 @@ describe("note → card generation", () => {
   it("generates one card per cloze cluster", async () => {
     const ctx = await makeContext("gen-cloze");
     const deck = await decks.createDeck(ctx, { name: "C" });
-    const note = await notes.createNote({
+    const note = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "cloze",
@@ -69,11 +69,11 @@ describe("note → card generation", () => {
   });
 });
 
-describe("updateNote reconciliation", () => {
+describe("updateFlashcard reconciliation", () => {
   it("preserves FSRS state for unchanged sub-keys and adds new ones", async () => {
     const ctx = await makeContext("reconcile");
     const deck = await decks.createDeck(ctx, { name: "Edit" });
-    const note = await notes.createNote({
+    const note = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "cloze",
@@ -86,7 +86,7 @@ describe("updateNote reconciliation", () => {
     await secureCard(ctx, c1.id);
 
     // Add a third cluster; c1 and c2 keep their identities.
-    await notes.updateNote(ctx, note.id, {
+    await notes.updateFlashcard(ctx, note.id, {
       content: { text: "{{1::a}} and {{2::b}} and {{3::c}}" },
     });
 
@@ -106,7 +106,7 @@ describe("updateNote reconciliation", () => {
   it("deletes cards whose sub-keys disappear", async () => {
     const ctx = await makeContext("reconcile-delete");
     const deck = await decks.createDeck(ctx, { name: "Shrink" });
-    const note = await notes.createNote({
+    const note = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "cloze",
@@ -114,7 +114,7 @@ describe("updateNote reconciliation", () => {
     });
     expect(await cardsForNote(ctx, note.id)).toHaveLength(2);
 
-    await notes.updateNote(ctx, note.id, {
+    await notes.updateFlashcard(ctx, note.id, {
       content: { text: "{{1::a}} only" },
     });
 
@@ -123,11 +123,11 @@ describe("updateNote reconciliation", () => {
   });
 });
 
-describe("deleteNote", () => {
+describe("deleteFlashcard", () => {
   it("removes the note, its generated cards, and tag links", async () => {
     const ctx = await makeContext("delete-note");
     const deck = await decks.createDeck(ctx, { name: "Delete" });
-    const note = await notes.createNote({
+    const note = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "basic_reversed",
@@ -136,14 +136,14 @@ describe("deleteNote", () => {
     });
     expect(await cardsForNote(ctx, note.id)).toHaveLength(2);
 
-    await notes.deleteNote(ctx, note.id);
+    await notes.deleteFlashcard(ctx, note.id);
 
-    expect(await notes.getNote(ctx, note.id)).toBeUndefined();
+    expect(await notes.getFlashcard(ctx, note.id)).toBeUndefined();
     expect(await cardsForNote(ctx, note.id)).toHaveLength(0);
     const tagLinks = await ctx.db
       .select()
-      .from(schema.noteTags)
-      .where(eq(schema.noteTags.noteId, note.id))
+      .from(schema.flashcardTags)
+      .where(eq(schema.flashcardTags.flashcardId, note.id))
       .all();
     expect(tagLinks).toHaveLength(0);
   });
@@ -151,24 +151,24 @@ describe("deleteNote", () => {
   it("unlocks dependents when their only prerequisite is deleted", async () => {
     const ctx = await makeContext("delete-prereq");
     const deck = await decks.createDeck(ctx, { name: "Orphan" });
-    const prereq = await notes.createNote({
+    const prereq = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "basic",
       content: { front: "P", back: "P" },
     });
-    const dependent = await notes.createNote({
+    const dependent = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "basic",
       content: { front: "D", back: "D" },
     });
     await graph.addPrereq(ctx, prereq.id, dependent.id);
-    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(true);
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
 
-    await notes.deleteNote(ctx, prereq.id);
+    await notes.deleteFlashcard(ctx, prereq.id);
 
-    const after = await notes.getNote(ctx, dependent.id);
+    const after = await notes.getFlashcard(ctx, dependent.id);
     expect(after?.locked).toBe(false);
     const [dependentCard] = await cardsForNote(ctx, dependent.id);
     expect(dependentCard.locked).toBe(false);
@@ -180,19 +180,19 @@ describe("deleteNote", () => {
   it("keeps dependents locked while another unsecured prerequisite remains", async () => {
     const ctx = await makeContext("delete-one-prereq");
     const deck = await decks.createDeck(ctx, { name: "Partial" });
-    const prereqA = await notes.createNote({
+    const prereqA = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "basic",
       content: { front: "A", back: "A" },
     });
-    const prereqB = await notes.createNote({
+    const prereqB = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "basic",
       content: { front: "B", back: "B" },
     });
-    const dependent = await notes.createNote({
+    const dependent = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "basic",
@@ -201,15 +201,15 @@ describe("deleteNote", () => {
     await graph.addPrereq(ctx, prereqA.id, dependent.id);
     await graph.addPrereq(ctx, prereqB.id, dependent.id);
 
-    await notes.deleteNote(ctx, prereqA.id);
+    await notes.deleteFlashcard(ctx, prereqA.id);
 
-    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(true);
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
 
     const [bCard] = await cardsForNote(ctx, prereqB.id);
     await secureCard(ctx, bCard.id);
     await graph.refreshLockedAfterPrereqSecured(ctx, prereqB.id);
 
-    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(false);
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
   });
 });
 
@@ -218,13 +218,13 @@ describe("note-level securing", () => {
     const ctx = await makeContext("all-secured");
     const deck = await decks.createDeck(ctx, { name: "Secure" });
     // A reversed prereq has two cards; both must be secured.
-    const prereq = await notes.createNote({
+    const prereq = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "basic_reversed",
       content: { front: "F", back: "B" },
     });
-    const dependent = await notes.createNote({
+    const dependent = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "basic",

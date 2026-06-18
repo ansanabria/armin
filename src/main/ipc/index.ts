@@ -1,13 +1,13 @@
 import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
-import { getDb, initDb } from "../db";
+import { getDb, initDb, deleteProfileData } from "../db";
 import { runMigrations } from "../db/migrate";
 import { setActiveProfileId } from "../profiles/active";
 import type { ServiceContext } from "../services/context";
 import * as decks from "../services/decks";
-import * as notes from "../services/notes";
+import * as flashcards from "../services/flashcards";
 import * as browse from "../services/browse";
-import { CARD_TYPES } from "../services/card-types";
+import { FLASHCARD_TYPES } from "../services/flashcard-types";
 import { BROWSE_SORT_KEYS } from "../../shared/browse";
 import * as review from "../services/review";
 import * as graph from "../services/graph";
@@ -17,6 +17,7 @@ import * as profiles from "../services/profiles";
 import { analyzeAnkiPackage, commitAnkiImport } from "../services/anki/import";
 import {
   getProfileIdForWebContents,
+  isProfileOpen,
   openMainWindow,
   openProfilePicker,
 } from "../windows";
@@ -72,6 +73,14 @@ async function serviceContextForEvent(
   return { profileId, db: getDb(profileId) };
 }
 
+export async function openProfile(id: string, name?: string) {
+  setActiveProfileId(id);
+  await ensureDbReady(id);
+  const profileName = name ?? profiles.getProfile(id)?.name;
+  await openMainWindow(id, profileName);
+  return { ok: true as const };
+}
+
 export function registerIpc() {
   // --- profiles (local JSON store; per-profile data dirs come later) ---
   register("profiles:list", z.void().optional(), () => profiles.listProfiles());
@@ -83,14 +92,30 @@ export function registerIpc() {
   register(
     "profiles:open",
     z.object({ id: z.string(), name: z.string().optional() }),
-    async ({ id, name }) => {
-      setActiveProfileId(id);
-      await ensureDbReady(id);
-      const profileName = name ?? profiles.getProfile(id)?.name;
-      await openMainWindow(id, profileName);
-      return { ok: true as const };
-    },
+    ({ id, name }) => openProfile(id, name),
   );
+  register("profiles:getDefault", z.void().optional(), () =>
+    profiles.getDefaultProfileId(),
+  );
+  register("profiles:setDefault", id, ({ id }) => {
+    profiles.setDefaultProfile(id);
+    return { ok: true as const };
+  });
+  register("profiles:clearDefault", z.void().optional(), () => {
+    profiles.clearDefaultProfile();
+    return { ok: true as const };
+  });
+  register("profiles:delete", id, async ({ id }) => {
+    if (isProfileOpen(id)) {
+      throw new Error(
+        "Close this profile's window before deleting it.",
+      );
+    }
+    deleteProfileData(id);
+    profiles.deleteProfile(id);
+    dbReady.delete(id);
+    return { ok: true as const };
+  });
   register("profiles:showPicker", z.void().optional(), () => {
     openProfilePicker();
     return { ok: true as const };
@@ -120,17 +145,17 @@ export function registerIpc() {
     return { ok: true };
   });
 
-  // --- cards (a user "card" is a note; channels kept for renderer stability) ---
+  // --- flashcards (the authored unit) ---
   registerForProfile(
-    "cards:list",
+    "flashcards:list",
     z.object({ deckId: z.string() }),
-    (ctx, { deckId }) => notes.listNotes(ctx, deckId),
+    (ctx, { deckId }) => flashcards.listFlashcards(ctx, deckId),
   );
-  registerForProfile("cards:listAll", z.void().optional(), (ctx) =>
-    notes.listAllNotes(ctx),
+  registerForProfile("flashcards:listAll", z.void().optional(), (ctx) =>
+    flashcards.listAllFlashcards(ctx),
   );
   registerForProfile(
-    "cards:browse",
+    "flashcards:browse",
     z.object({
       offset: z.number().int().min(0),
       limit: z.number().int().min(1).max(100),
@@ -141,25 +166,27 @@ export function registerIpc() {
     }),
     (ctx, input) => browse.listBrowsePage(ctx, input),
   );
-  registerForProfile("cards:listTags", z.void().optional(), (ctx) =>
+  registerForProfile("flashcards:listTags", z.void().optional(), (ctx) =>
     browse.listAllTagNames(ctx),
   );
   registerForProfile(
-    "cards:listDeckTags",
+    "flashcards:listDeckTags",
     z.object({ deckId: z.string() }),
     (ctx, { deckId }) => browse.listDeckTagNames(ctx, deckId),
   );
-  registerForProfile("cards:get", id, (ctx, { id }) => notes.getNote(ctx, id));
+  registerForProfile("flashcards:get", id, (ctx, { id }) =>
+    flashcards.getFlashcard(ctx, id),
+  );
   registerForProfile(
-    "cards:create",
+    "flashcards:create",
     z.object({
       deckId: z.string(),
-      type: z.enum(CARD_TYPES),
+      type: z.enum(FLASHCARD_TYPES),
       content: z.unknown(),
       tags: z.array(z.string()).optional(),
     }),
     (ctx, input) =>
-      notes.createNote({
+      flashcards.createFlashcard({
         ctx,
         deckId: input.deckId,
         type: input.type,
@@ -168,19 +195,28 @@ export function registerIpc() {
       }),
   );
   registerForProfile(
-    "cards:update",
+    "flashcards:update",
     z.object({
       id: z.string(),
-      type: z.enum(CARD_TYPES).optional(),
+      type: z.enum(FLASHCARD_TYPES).optional(),
       content: z.unknown().optional(),
       tags: z.array(z.string()).optional(),
     }),
-    (ctx, { id, ...patch }) => notes.updateNote(ctx, id, patch),
+    (ctx, { id, ...patch }) => flashcards.updateFlashcard(ctx, id, patch),
   );
-  registerForProfile("cards:delete", id, async (ctx, { id }) => {
-    await notes.deleteNote(ctx, id);
+  registerForProfile("flashcards:delete", id, async (ctx, { id }) => {
+    await flashcards.deleteFlashcard(ctx, id);
     return { ok: true };
   });
+  registerForProfile(
+    "flashcards:archive",
+    z.object({ id: z.string(), archived: z.boolean() }),
+    async (ctx, { id, archived }) => {
+      const flashcard = await flashcards.setArchived(ctx, id, archived);
+      notifyDataChanged();
+      return flashcard;
+    },
+  );
 
   // --- import ---
   register(
@@ -202,11 +238,11 @@ export function registerIpc() {
     (ctx, input) => commitAnkiImport(ctx, input),
   );
   registerForProfile(
-    "import:createDeckWithCards",
+    "import:createDeckWithFlashcards",
     z.object({
       name: z.string().min(1),
       description: z.string().nullish(),
-      cards: z
+      flashcards: z
         .array(
           z.object({
             front: z.string().min(1),
@@ -216,7 +252,7 @@ export function registerIpc() {
         )
         .min(1),
     }),
-    (ctx, input) => decks.createDeckWithCards(ctx, input),
+    (ctx, input) => decks.createDeckWithFlashcards(ctx, input),
   );
 
   // --- review ---
@@ -230,14 +266,23 @@ export function registerIpc() {
   );
   registerForProfile(
     "review:preview",
-    z.object({ cardId: z.string() }),
-    (ctx, { cardId }) => review.previewCard(ctx, cardId),
+    z.object({ reviewUnitId: z.string() }),
+    (ctx, { reviewUnitId }) => review.previewReviewUnit(ctx, reviewUnitId),
   );
   registerForProfile(
     "review:rate",
-    z.object({ cardId: z.string(), rating: z.number().int().min(1).max(4) }),
-    (ctx, { cardId, rating }) =>
-      review.rateCard(ctx, cardId, rating as 1 | 2 | 3 | 4),
+    z.object({ reviewUnitId: z.string(), rating: z.number().int().min(1).max(4) }),
+    (ctx, { reviewUnitId, rating }) =>
+      review.rateReviewUnit(ctx, reviewUnitId, rating as 1 | 2 | 3 | 4),
+  );
+  registerForProfile(
+    "review:undo",
+    z.object({ reviewUnitId: z.string() }),
+    async (ctx, { reviewUnitId }) => {
+      const result = await review.undoReview(ctx, reviewUnitId);
+      notifyDataChanged();
+      return result;
+    },
   );
 
   // --- graph ---
@@ -268,7 +313,7 @@ export function registerIpc() {
       deckId: z.string(),
       placements: z.array(
         z.object({
-          noteId: z.string(),
+          flashcardId: z.string(),
           x: z.number(),
           y: z.number(),
         }),
@@ -300,7 +345,7 @@ export function registerIpc() {
       relearningSteps: z.string().optional(),
       weights: z.string().nullish(),
       prereqStabilityFloor: z.number().optional(),
-      newCardsPerDay: z.number().int().min(0).optional(),
+      newReviewUnitsPerDay: z.number().int().min(0).optional(),
     }),
     (ctx, patch) => settings.updateSettings(ctx, patch),
   );

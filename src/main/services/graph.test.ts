@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getOnlyCard, makeContext, securePrereq, useTestDb } from "../test/db";
+import { getOnlyReviewUnit, makeContext, securePrereq, useTestDb } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
-import * as notes from "./notes";
+import * as notes from "./flashcards";
 import { isPendingSchedule } from "./scheduler";
 
 useTestDb();
@@ -13,7 +13,7 @@ function basic(
   front: string,
   back: string,
 ) {
-  return notes.createNote({
+  return notes.createFlashcard({
     ctx,
     deckId,
     type: "basic",
@@ -29,13 +29,13 @@ describe("prerequisite edges", () => {
     const dependent = await basic(ctx, deck.id, "D", "D");
 
     await graph.addPrereq(ctx, prereq.id, dependent.id);
-    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(true);
-    expect(isPendingSchedule(await getOnlyCard(ctx, dependent.id))).toBe(true);
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
+    expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(true);
 
     await graph.removePrereq(ctx, prereq.id, dependent.id);
 
-    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(false);
-    const card = await getOnlyCard(ctx, dependent.id);
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    const card = await getOnlyReviewUnit(ctx, dependent.id);
     expect(isPendingSchedule(card)).toBe(false);
     expect(card.locked).toBe(false);
   });
@@ -93,15 +93,15 @@ describe("canvas layout", () => {
     const outside = await basic(ctx, other.id, "Out", "Out");
 
     await graph.saveLayout(ctx, deck.id, [
-      { noteId: inside.id, x: 10, y: 20 },
-      { noteId: outside.id, x: 99, y: 99 },
+      { flashcardId: inside.id, x: 10, y: 20 },
+      { flashcardId: outside.id, x: 99, y: 99 },
     ]);
 
-    const insideNote = await notes.getNote(ctx, inside.id);
+    const insideNote = await notes.getFlashcard(ctx, inside.id);
     expect(insideNote?.posX).toBe(10);
     expect(insideNote?.posY).toBe(20);
 
-    const outsideNote = await notes.getNote(ctx, outside.id);
+    const outsideNote = await notes.getFlashcard(ctx, outside.id);
     expect(outsideNote?.posX).toBeNull();
     expect(outsideNote?.posY).toBeNull();
   });
@@ -112,7 +112,7 @@ describe("canvas layout", () => {
     const prereq = await basic(ctx, deck.id, "Front P", "Back P");
     const dependent = await basic(ctx, deck.id, "Front D", "Back D");
     await graph.addPrereq(ctx, prereq.id, dependent.id);
-    await graph.saveLayout(ctx, deck.id, [{ noteId: prereq.id, x: 1, y: 2 }]);
+    await graph.saveLayout(ctx, deck.id, [{ flashcardId: prereq.id, x: 1, y: 2 }]);
 
     const result = await graph.getDeckGraph(ctx, deck.id);
     expect(result.edges).toEqual([

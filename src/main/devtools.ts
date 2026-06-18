@@ -35,6 +35,19 @@ function isDevToolsToggleShortcut(input: Input): boolean {
   return input.control && input.shift;
 }
 
+function isReloadShortcut(input: Input): boolean {
+  if (input.type !== "keyDown" || input.key.toLowerCase() !== "r") {
+    return false;
+  }
+
+  // Chromium defaults: Ctrl+Shift+R (Linux/Windows), Cmd+Shift+R (macOS).
+  if (process.platform === "darwin") {
+    return input.meta && input.shift;
+  }
+
+  return input.control && input.shift;
+}
+
 export function toggleDevTools(window: BrowserWindow): void {
   if (window.webContents.isDevToolsOpened()) {
     window.webContents.closeDevTools();
@@ -43,14 +56,15 @@ export function toggleDevTools(window: BrowserWindow): void {
   }
 }
 
-/** Register DevTools shortcuts when the app menu is hidden. */
-export function registerDevToolsShortcuts(window: BrowserWindow): void {
-  if (app.isPackaged) {
-    return;
-  }
-
+/** Register window shortcuts when the app menu is hidden. */
+export function registerWindowShortcuts(window: BrowserWindow): void {
   window.webContents.on("before-input-event", (_event, input) => {
-    if (isDevToolsToggleShortcut(input)) {
+    if (isReloadShortcut(input)) {
+      window.webContents.reloadIgnoringCache();
+      return;
+    }
+
+    if (!app.isPackaged && isDevToolsToggleShortcut(input)) {
       toggleDevTools(window);
     }
   });

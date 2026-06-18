@@ -137,7 +137,7 @@ async function addCardThroughUi(
   await expect(async () => {
     cardId = await page.evaluate(
       async ({ id, expectedFront, expectedBack, expectedTags }) => {
-        const cards = await window.armin.cards.list(id);
+        const cards = await window.armin.flashcards.list(id);
         const card = cards.find(
           (candidate) =>
             candidate.front === expectedFront &&
@@ -176,7 +176,7 @@ async function expectReviewCompleted(
     .poll(() =>
       page.evaluate(async (id) => {
         // A reviewed note leaves the New state (0); aggregate state reflects it.
-        const card = await window.armin.cards.get(id);
+        const card = await window.armin.flashcards.get(id);
         return card && card.state !== 0 ? 1 : 0;
       }, cardId),
     )

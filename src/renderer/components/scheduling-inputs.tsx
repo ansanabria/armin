@@ -324,7 +324,7 @@ export function NewCardsPerDayInput({
           invalid && invalidInputClass,
         )}
       />
-      <UnitLabel>cards</UnitLabel>
+      <UnitLabel>review units</UnitLabel>
     </div>
   );
 }

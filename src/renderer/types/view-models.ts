@@ -1,39 +1,40 @@
-import type { CardState } from "@/components/ui/badge";
+import type { ReviewState } from "@/components/ui/badge";
 import type {
-  BrowseNote,
-  CardContent,
-  CardType,
+  BrowseFlashcard,
+  FlashcardContent,
+  FlashcardType,
   DeckGraph,
   DeckWithStats,
-  NoteWithMeta,
+  FlashcardWithMeta,
   ReviewQueueItem,
 } from "@/types/window";
 
 export type UiDeck = DeckWithStats;
 
-export type UiCard = {
+export type UiFlashcard = {
   id: string;
   deckId: string;
-  type: CardType;
-  content: CardContent;
+  type: FlashcardType;
+  content: FlashcardContent;
   front: string;
   back: string;
-  state: CardState;
+  state: ReviewState;
   locked: boolean;
+  archived: boolean;
   dueLabel: string;
   createdAt: string;
   tags: string[];
 };
 
-export type UiBrowseCard = UiCard & {
+export type UiBrowseFlashcard = UiFlashcard & {
   deckName: string;
 };
 
-export type UiReviewCard = {
+export type UiReviewUnit = {
   id: string;
-  noteId: string;
-  type: CardType;
-  content: CardContent;
+  flashcardId: string;
+  type: FlashcardType;
+  content: FlashcardContent;
   subKey: string;
   front: string;
   back: string;
@@ -45,8 +46,8 @@ export type UiGraphNode = {
   id: string;
   front: string;
   back: string;
-  type: CardType;
-  state: CardState;
+  type: FlashcardType;
+  state: ReviewState;
   locked: boolean;
   x: number | null;
   y: number | null;
@@ -98,33 +99,34 @@ export function formatDueLabel(
   return compactFutureLabel(due, now);
 }
 
-export function toUiCard(note: NoteWithMeta): UiCard {
+export function toUiFlashcard(flashcard: FlashcardWithMeta): UiFlashcard {
   return {
-    id: note.id,
-    deckId: note.deckId,
-    type: note.type,
-    content: note.content,
-    front: note.front,
-    back: note.back,
-    state: note.state as CardState,
-    locked: note.locked,
-    dueLabel: formatDueLabel(note),
-    createdAt: toDate(note.createdAt)?.toISOString() ?? "",
-    tags: note.tags,
+    id: flashcard.id,
+    deckId: flashcard.deckId,
+    type: flashcard.type,
+    content: flashcard.content,
+    front: flashcard.front,
+    back: flashcard.back,
+    state: flashcard.state as ReviewState,
+    locked: flashcard.locked,
+    archived: flashcard.archived,
+    dueLabel: formatDueLabel(flashcard),
+    createdAt: toDate(flashcard.createdAt)?.toISOString() ?? "",
+    tags: flashcard.tags,
   };
 }
 
-export function toUiBrowseCard(note: BrowseNote): UiBrowseCard {
+export function toUiBrowseFlashcard(flashcard: BrowseFlashcard): UiBrowseFlashcard {
   return {
-    ...toUiCard(note),
-    deckName: note.deckName,
+    ...toUiFlashcard(flashcard),
+    deckName: flashcard.deckName,
   };
 }
 
-export function toUiReviewCard(item: ReviewQueueItem): UiReviewCard {
+export function toUiReviewUnit(item: ReviewQueueItem): UiReviewUnit {
   return {
-    id: item.cardId,
-    noteId: item.noteId,
+    id: item.reviewUnitId,
+    flashcardId: item.flashcardId,
     type: item.type,
     content: item.content,
     subKey: item.subKey,
@@ -139,7 +141,7 @@ export function toUiDeckGraph(graph: DeckGraph): UiDeckGraph {
   return {
     nodes: graph.nodes.map((node) => ({
       ...node,
-      state: node.state as CardState,
+      state: node.state as ReviewState,
     })),
     edges: graph.edges,
   };

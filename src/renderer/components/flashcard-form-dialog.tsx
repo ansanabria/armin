@@ -17,14 +17,14 @@ import { cn } from "@/lib/utils";
 import {
   clozeClusters,
   parseClozes,
-  type CardContent,
-  type CardType,
+  type FlashcardContent,
+  type FlashcardType,
   type DiagramContent,
-} from "../../main/services/card-types";
+} from "../../main/services/flashcard-types";
 
 export type CardFormValues = {
-  type: CardType;
-  content: CardContent;
+  type: FlashcardType;
+  content: FlashcardContent;
   tags: string[];
 };
 
@@ -33,14 +33,14 @@ type CardFormDialogProps = {
   onClose: () => void;
   onExitComplete?: () => void;
   mode: "create" | "edit";
-  cardId?: string | null;
-  initialType?: CardType;
-  initialContent?: CardContent | null;
+  reviewUnitId?: string | null;
+  initialType?: FlashcardType;
+  initialContent?: FlashcardContent | null;
   initialTags?: string[];
   onSubmit: (values: CardFormValues) => void | Promise<void>;
 };
 
-const TYPE_OPTIONS: { value: CardType; label: string }[] = [
+const TYPE_OPTIONS: { value: FlashcardType; label: string }[] = [
   { value: "basic", label: "Basic" },
   { value: "basic_reversed", label: "Reversed" },
   { value: "cloze", label: "Cloze" },
@@ -50,18 +50,18 @@ const TYPE_OPTIONS: { value: CardType; label: string }[] = [
 
 const EMPTY_DIAGRAM: DiagramContent = { image: "", regions: [] };
 
-export function CardFormDialog({
+export function FlashcardFormDialog({
   open,
   onClose,
   onExitComplete,
   mode,
-  cardId = null,
+  reviewUnitId = null,
   initialType = "basic",
   initialContent = null,
   initialTags = [],
   onSubmit,
 }: CardFormDialogProps) {
-  const [type, setType] = useState<CardType>(initialType);
+  const [type, setType] = useState<FlashcardType>(initialType);
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
   const [clozeText, setClozeText] = useState("");
@@ -73,7 +73,7 @@ export function CardFormDialog({
 
   const [displaySession, setDisplaySession] = useState({
     mode,
-    cardId: cardId ?? null,
+    reviewUnitId: reviewUnitId ?? null,
   });
   const [createSession, setCreateSession] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -90,7 +90,7 @@ export function CardFormDialog({
     setDiagram(EMPTY_DIAGRAM);
   };
 
-  const hydrateFrom = (t: CardType, content: CardContent | null) => {
+  const hydrateFrom = (t: FlashcardType, content: FlashcardContent | null) => {
     resetFields();
     setType(t);
     if (!content) return;
@@ -118,16 +118,16 @@ export function CardFormDialog({
     if (open && !wasOpenRef.current) {
       hydrateFrom(initialType, initialContent);
       setTags(initialTags);
-      setDisplaySession({ mode, cardId: cardId ?? null });
+      setDisplaySession({ mode, reviewUnitId: reviewUnitId ?? null });
       if (mode === "create") setCreateSession(0);
     }
     wasOpenRef.current = open;
-  }, [open, initialType, initialContent, initialTags, cardId, mode]);
+  }, [open, initialType, initialContent, initialTags, reviewUnitId, mode]);
 
   const displayMode = open ? mode : displaySession.mode;
-  const displayCardId = open ? (cardId ?? null) : displaySession.cardId;
+  const displayCardId = open ? (reviewUnitId ?? null) : displaySession.reviewUnitId;
 
-  const buildContent = (): CardContent | null => {
+  const buildContent = (): FlashcardContent | null => {
     switch (type) {
       case "basic":
       case "basic_reversed": {
@@ -193,7 +193,7 @@ export function CardFormDialog({
       open={open}
       onClose={onClose}
       onExitComplete={onExitComplete}
-      title={displayMode === "edit" ? "Edit card" : "Add card"}
+      title={displayMode === "edit" ? "Edit flashcard" : "Add card"}
       className="max-w-[35rem]"
     >
       <div className="space-y-4">
@@ -224,7 +224,7 @@ export function CardFormDialog({
               <MarkdownEditor
                 key={`front-${editorKey}`}
                 autoFocus
-                aria-label="Card front"
+                aria-label="Flashcard front"
                 value={front}
                 onChange={setFront}
                 placeholder="What does `typeof null` return?"
@@ -240,7 +240,7 @@ export function CardFormDialog({
             >
               <MarkdownEditor
                 key={`back-${editorKey}`}
-                aria-label="Card back"
+                aria-label="Flashcard back"
                 value={back}
                 onChange={setBack}
                 placeholder={

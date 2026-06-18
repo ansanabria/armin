@@ -3,12 +3,16 @@ import * as z from "zod/v4";
 import { getDb, initDb } from "../main/db";
 import { runMigrations } from "../main/db/migrate";
 import type { ServiceContext } from "../main/services/context";
-import { isCardType } from "../main/services/card-types";
+import { isFlashcardType } from "../main/services/flashcard-types";
 import { createDeck, listDecks } from "../main/services/decks";
 import { addPrereq } from "../main/services/graph";
-import { createNote, getNote, listNotes } from "../main/services/notes";
+import {
+  createFlashcard,
+  getFlashcard,
+  listFlashcards,
+} from "../main/services/flashcards";
 import type { McpSessionProfile } from "../shared/mcp-session";
-import { importCardHierarchy, readDeckGraph } from "./import-hierarchy";
+import { importFlashcardHierarchy, readDeckGraph } from "./import-hierarchy";
 
 export type ArminMcpState = {
   activeProfileId: string | null;
@@ -39,7 +43,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
     },
     {
       instructions:
-        "Use Armin to create study cards and prerequisite hierarchies. If multiple Armin profiles are open, call list_open_profiles, ask the user which profile to use, then call select_profile before creating or reading cards. Prefer import_card_hierarchy when creating multiple related cards: assign stable clientId values, set prerequisites to those clientIds, and submit the whole hierarchy in one call. Cards should be atomic, accurate, and ordered from foundations to dependents.",
+        "Use Armin to create study flashcards and prerequisite hierarchies. If multiple Armin profiles are open, call list_open_profiles, ask the user which profile to use, then call select_profile before creating or reading flashcards. Prefer import_flashcard_hierarchy when creating multiple related flashcards: assign stable clientId values, set prerequisites to those clientIds, and submit the whole hierarchy in one call. Flashcards should be atomic, accurate, and ordered from foundations to dependents.",
     },
   );
 
@@ -151,7 +155,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
     "list_decks",
     {
       title: "List Decks",
-      description: "List Armin decks and basic review/card counts.",
+      description: "List Armin decks and basic review-unit/flashcard counts.",
       inputSchema: z.object({}),
     },
     async () =>
@@ -164,7 +168,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
     "create_deck",
     {
       title: "Create Deck",
-      description: "Create a deck that cards can be imported into.",
+      description: "Create a deck that flashcards can be imported into.",
       inputSchema: z.object({
         name: z.string().min(1).describe("Deck name."),
         description: z
@@ -180,26 +184,30 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
   );
 
   server.registerTool(
-    "create_card",
+    "create_flashcard",
     {
-      title: "Create Card",
+      title: "Create Flashcard",
       description:
-        "Create one card in an existing deck. Use import_card_hierarchy for batch hierarchy creation.",
+        "Create one flashcard in an existing deck. Use import_flashcard_hierarchy for batch hierarchy creation.",
       inputSchema: z.object({
         deckId: idSchema.describe("Destination deck ID."),
         front: z
           .string()
           .optional()
-          .describe("Card front (basic types). Shorthand for content.front."),
+          .describe(
+            "Flashcard front (basic types). Shorthand for content.front.",
+          ),
         back: z
           .string()
           .optional()
-          .describe("Card back (basic types). Shorthand for content.back."),
+          .describe(
+            "Flashcard back (basic types). Shorthand for content.back.",
+          ),
         type: z
           .string()
           .optional()
           .describe(
-            "Card type: basic | basic_reversed | cloze | type_answer | diagram. Defaults to basic.",
+            "Flashcard type: basic | basic_reversed | cloze | type_answer | diagram. Defaults to basic.",
           ),
         content: z
           .record(z.string(), z.any())
@@ -212,20 +220,20 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
     async (input) =>
       withSelectedProfile(async () => {
         const rawType = input.type ?? "basic";
-        if (!isCardType(rawType)) {
-          throw new Error(`Unknown card type: ${rawType}`);
+        if (!isFlashcardType(rawType)) {
+          throw new Error(`Unknown flashcard type: ${rawType}`);
         }
         const content = input.content ?? {
           front: input.front,
           back: input.back,
         };
-        const card = await createNote({
+        const flashcard = await createFlashcard({
           ctx: ctx(),
           deckId: input.deckId,
           type: rawType,
           content,
         });
-        return jsonResult({ card });
+        return jsonResult({ flashcard });
       }),
   );
 
@@ -234,11 +242,13 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
     {
       title: "Add Prerequisite",
       description:
-        "Connect two existing cards in the same deck. The prerequisite card must be learned before the dependent card unlocks.",
+        "Connect two existing flashcards in the same deck. The prerequisite flashcard must be learned before the dependent flashcard unlocks.",
       inputSchema: z.object({
-        prereqId: idSchema.describe("Card ID for the prerequisite concept."),
+        prereqId: idSchema.describe(
+          "Flashcard ID for the prerequisite concept.",
+        ),
         dependentId: idSchema.describe(
-          "Card ID for the concept that depends on it.",
+          "Flashcard ID for the concept that depends on it.",
         ),
       }),
     },
@@ -250,11 +260,11 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
   );
 
   server.registerTool(
-    "import_card_hierarchy",
+    "import_flashcard_hierarchy",
     {
-      title: "Import Card Hierarchy",
+      title: "Import Flashcard Hierarchy",
       description:
-        "Create many cards and prerequisite edges in one call. Use clientId values to describe the hierarchy before real Armin card IDs exist.",
+        "Create many flashcards and prerequisite edges in one call. Use clientId values to describe the hierarchy before real Armin flashcard IDs exist.",
       inputSchema: z
         .object({
           deckId: idSchema
@@ -271,7 +281,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
             .string()
             .nullish()
             .describe("Optional description for a newly created deck."),
-          cards: z
+          flashcards: z
             .array(
               z.object({
                 clientId: idSchema.describe(
@@ -280,16 +290,16 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
                 front: z
                   .string()
                   .optional()
-                  .describe("Card front (basic types)."),
+                  .describe("Flashcard front (basic types)."),
                 back: z
                   .string()
                   .optional()
-                  .describe("Card back (basic types)."),
+                  .describe("Flashcard back (basic types)."),
                 type: z
                   .string()
                   .optional()
                   .describe(
-                    "Card type: basic | basic_reversed | cloze | type_answer | diagram. Defaults to basic.",
+                    "Flashcard type: basic | basic_reversed | cloze | type_answer | diagram. Defaults to basic.",
                   ),
                 content: z
                   .record(z.string(), z.any())
@@ -301,7 +311,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
                   .array(idSchema)
                   .optional()
                   .describe(
-                    "clientId values for cards that must be learned before this card.",
+                    "clientId values for flashcards that must be learned before this flashcard.",
                   ),
               }),
             )
@@ -313,7 +323,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
     },
     async (input) =>
       withSelectedProfile(async () =>
-        jsonResult(await importCardHierarchy(ctx(), input)),
+        jsonResult(await importFlashcardHierarchy(ctx(), input)),
       ),
   );
 
@@ -321,7 +331,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
     "get_deck_graph",
     {
       title: "Get Deck Graph",
-      description: "Read cards and prerequisite edges for a deck.",
+      description: "Read flashcards and prerequisite edges for a deck.",
       inputSchema: z.object({
         deckId: idSchema.describe("Deck ID to inspect."),
       }),
@@ -333,32 +343,32 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
   );
 
   server.registerTool(
-    "list_cards",
+    "list_flashcards",
     {
-      title: "List Cards",
-      description: "List cards in a deck.",
+      title: "List Flashcards",
+      description: "List flashcards in a deck.",
       inputSchema: z.object({
         deckId: idSchema.describe("Deck ID to inspect."),
       }),
     },
     async ({ deckId }) =>
       withSelectedProfile(async () =>
-        jsonResult({ cards: await listNotes(ctx(), deckId) }),
+        jsonResult({ flashcards: await listFlashcards(ctx(), deckId) }),
       ),
   );
 
   server.registerTool(
-    "get_card",
+    "get_flashcard",
     {
-      title: "Get Card",
-      description: "Read one card by ID.",
+      title: "Get Flashcard",
+      description: "Read one flashcard by ID.",
       inputSchema: z.object({
-        id: idSchema.describe("Card ID."),
+        id: idSchema.describe("Flashcard ID."),
       }),
     },
     async ({ id }) =>
       withSelectedProfile(async () =>
-        jsonResult({ card: await getNote(ctx(), id) }),
+        jsonResult({ flashcard: await getFlashcard(ctx(), id) }),
       ),
   );
 

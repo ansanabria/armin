@@ -1,12 +1,12 @@
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { schema } from "../db";
 import type { Deck } from "../db/schema";
 import type { ServiceContext } from "./context";
-import { createNote } from "./notes";
+import { createFlashcard } from "./flashcards";
 import { buildSessionQueue } from "./review";
 import { State } from "./scheduler";
 
-const { decks, cards, notes } = schema;
+const { decks, reviewUnits, flashcards } = schema;
 
 export type DeckWithStats = Deck & {
   total: number;
@@ -20,28 +20,38 @@ async function withStats(
   ctx: ServiceContext,
   deck: Deck,
 ): Promise<DeckWithStats> {
-  const [noteCountRow, deckCards] = await Promise.all([
+  const [flashcardCountRow, deckReviewUnits] = await Promise.all([
     ctx.db
       .select({ value: count() })
-      .from(notes)
-      .where(eq(notes.deckId, deck.id))
+      .from(flashcards)
+      .where(and(eq(flashcards.deckId, deck.id), eq(flashcards.archived, false)))
       .get(),
-    ctx.db.select().from(cards).where(eq(cards.deckId, deck.id)).all(),
+    ctx.db
+      .select()
+      .from(reviewUnits)
+      .where(
+        and(eq(reviewUnits.deckId, deck.id), eq(reviewUnits.archived, false)),
+      )
+      .all(),
   ]);
-  const due = (await buildSessionQueue(ctx, deckCards, deck.id)).length;
-  const learning = deckCards.filter(
-    (card) => card.state === State.Learning || card.state === State.Relearning,
+  const due = (await buildSessionQueue(ctx, deckReviewUnits, deck.id)).length;
+  const learning = deckReviewUnits.filter(
+    (reviewUnit) =>
+      reviewUnit.state === State.Learning ||
+      reviewUnit.state === State.Relearning,
   ).length;
-  const learned = deckCards.filter(
-    (card) => card.state === State.Review,
+  const learned = deckReviewUnits.filter(
+    (reviewUnit) => reviewUnit.state === State.Review,
   ).length;
 
   return {
     ...deck,
-    // A "card" to the user is a note; review-item counts (cards) drive the rest.
-    total: noteCountRow?.value ?? 0,
+    // "total" counts flashcards; the review-unit rows drive the rest.
+    total: flashcardCountRow?.value ?? 0,
     due,
-    newCount: deckCards.filter((card) => card.state === State.New).length,
+    newCount: deckReviewUnits.filter(
+      (reviewUnit) => reviewUnit.state === State.New,
+    ).length,
     learning,
     learned,
   };
@@ -99,31 +109,31 @@ export async function deleteDeck(
 }
 
 /**
- * Create a deck and populate it with cards in one call — used by the import
- * flows (e.g. Markdown) where the parsed cards already exist.
+ * Create a deck and populate it with flashcards in one call — used by the import
+ * flows (e.g. Markdown) where the parsed flashcards already exist.
  */
-export async function createDeckWithCards(
+export async function createDeckWithFlashcards(
   ctx: ServiceContext,
   input: {
     name: string;
     description?: string | null;
-    cards: { front: string; back: string; tags?: string[] }[];
+    flashcards: { front: string; back: string; tags?: string[] }[];
   },
-): Promise<{ deckId: string; cardCount: number }> {
+): Promise<{ deckId: string; flashcardCount: number }> {
   const deck = await createDeck(ctx, {
     name: input.name,
     description: input.description ?? null,
   });
 
-  for (const card of input.cards) {
-    await createNote({
+  for (const flashcard of input.flashcards) {
+    await createFlashcard({
       ctx,
       deckId: deck.id,
       type: "basic",
-      content: { front: card.front, back: card.back },
-      tags: card.tags,
+      content: { front: flashcard.front, back: flashcard.back },
+      tags: flashcard.tags,
     });
   }
 
-  return { deckId: deck.id, cardCount: input.cards.length };
+  return { deckId: deck.id, flashcardCount: input.flashcards.length };
 }

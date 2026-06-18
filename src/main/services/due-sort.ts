@@ -1,7 +1,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import { schema } from "../db";
 
-const { cards } = schema;
+const { reviewUnits } = schema;
 
 /** Mirrors renderer `dueLabelPriority` using raw scheduling fields. */
 export function dueSortPriority(
@@ -27,14 +27,14 @@ export function dueSortPriority(
 
 /** SQL expression matching `dueSortPriority` for paginated ORDER BY. */
 export function sqlDueSortPriority(nowMs: number): SQL {
-  const dueMs = sql`cast(${cards.due} as integer)`;
+  const dueMs = sql`cast(${reviewUnits.due} as integer)`;
   const delta = sql`${dueMs} - ${nowMs}`;
   const mins = sql`((${delta}) + 59999) / 60000`;
   const days = sql`((${delta}) + 86399999) / 86400000`;
 
   return sql`case
-    when ${cards.locked} then 95
-    when ${cards.state} = 0 then 90
+    when ${reviewUnits.locked} then 95
+    when ${reviewUnits.state} = 0 then 90
     when ${dueMs} <= ${nowMs} then 0
     when ${mins} < 60 then 1.0 + (${mins} * 1.0) / 1000.0
     when ${days} < 30 then 10.0 + (${days} * 1.0)

@@ -4,10 +4,13 @@ import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReviewSession } from "@/components/review-session";
+import type { CardFormValues } from "@/components/flashcard-form-dialog";
 import { deckKeys, invalidateCoreData, reviewKeys } from "@/lib/armin-query";
-import { toUiReviewCard } from "@/types/view-models";
+import { toUiFlashcard, toUiReviewUnit } from "@/types/view-models";
 import type { Grade } from "@/types/window";
 import { useToast } from "@/components/ui/toast";
+
+const QUEUE_POLL_MS = 15_000;
 
 export default function ReviewPage() {
   const { deckId } = useParams({ from: "/deck/$deckId/review" });
@@ -21,20 +24,58 @@ export default function ReviewPage() {
   const queueQuery = useQuery({
     queryKey: reviewKeys.deck(deckId),
     queryFn: () => window.armin.review.queue(deckId),
+    refetchInterval: QUEUE_POLL_MS,
+    refetchOnWindowFocus: true,
   });
 
   const queue = useMemo(
-    () => (queueQuery.data ?? []).map(toUiReviewCard),
+    () => (queueQuery.data ?? []).map(toUiReviewUnit),
     [queueQuery.data],
   );
 
   const rate = useMutation({
-    mutationFn: ({ cardId, rating }: { cardId: string; rating: Grade }) =>
-      window.armin.review.rate(cardId, rating),
+    mutationFn: ({ reviewUnitId, rating }: { reviewUnitId: string; rating: Grade }) =>
+      window.armin.review.rate(reviewUnitId, rating),
     onSuccess: () => {
       invalidateCoreData(queryClient, deckId);
     },
-    onError: () => toast({ tone: "error", title: "Couldn’t save review" }),
+    onError: () => toast({ tone: "error", title: "Couldn't save review" }),
+  });
+
+  const undo = useMutation({
+    mutationFn: (reviewUnitId: string) => window.armin.review.undo(reviewUnitId),
+    onSuccess: () => {
+      invalidateCoreData(queryClient, deckId);
+    },
+    onError: () => toast({ tone: "error", title: "Couldn't undo review" }),
+  });
+
+  const updateCard = useMutation({
+    mutationFn: (values: CardFormValues & { id: string }) =>
+      window.armin.flashcards.update(values),
+    onSuccess: () => {
+      invalidateCoreData(queryClient, deckId);
+      toast({ tone: "success", title: "Flashcard updated" });
+    },
+    onError: () => toast({ tone: "error", title: "Couldn't update flashcard" }),
+  });
+
+  const archiveCard = useMutation({
+    mutationFn: (flashcardId: string) => window.armin.flashcards.archive(flashcardId, true),
+    onSuccess: () => {
+      invalidateCoreData(queryClient, deckId);
+      toast({ tone: "success", title: "Flashcard archived" });
+    },
+    onError: () => toast({ tone: "error", title: "Couldn't archive flashcard" }),
+  });
+
+  const deleteCard = useMutation({
+    mutationFn: (flashcardId: string) => window.armin.flashcards.delete(flashcardId),
+    onSuccess: () => {
+      invalidateCoreData(queryClient, deckId);
+      toast({ tone: "error", title: "Flashcard deleted" });
+    },
+    onError: () => toast({ tone: "error", title: "Couldn't delete flashcard" }),
   });
 
   if (!deckQuery.isLoading && !deckQuery.isError && !deckQuery.data) {
@@ -63,9 +104,25 @@ export default function ReviewPage() {
         void deckQuery.refetch();
         void queueQuery.refetch();
       }}
-      loadPreview={(cardId) => window.armin.review.preview(cardId)}
-      onRate={(cardId, rating) =>
-        rate.mutateAsync({ cardId, rating }).then(() => undefined)
+      loadPreview={(reviewUnitId) => window.armin.review.preview(reviewUnitId)}
+      onRate={(reviewUnitId, rating) =>
+        rate.mutateAsync({ reviewUnitId, rating }).then(() => undefined)
+      }
+      onUndo={(reviewUnitId) =>
+        undo.mutateAsync(reviewUnitId).then(() => undefined)
+      }
+      loadCard={async (flashcardId) => {
+        const note = await window.armin.flashcards.get(flashcardId);
+        return note ? toUiFlashcard(note) : undefined;
+      }}
+      onEditFlashcard={(flashcardId, values) =>
+        updateCard.mutateAsync({ id: flashcardId, ...values }).then(() => undefined)
+      }
+      onArchiveFlashcard={(flashcardId) =>
+        archiveCard.mutateAsync(flashcardId).then(() => undefined)
+      }
+      onDeleteFlashcard={(flashcardId) =>
+        deleteCard.mutateAsync(flashcardId).then(() => undefined)
       }
       header={
         <Link
@@ -81,8 +138,8 @@ export default function ReviewPage() {
           <Button variant="outline">Back to deck</Button>
         </Link>
       }
-      doneDescription="You cleared every card due in this deck. New cards unlock as their prerequisites are learned."
-      emptyDescription="Nothing is due here right now. Come back when cards are scheduled, or add more to get ahead."
+      doneDescription="You cleared every review unit due in this deck. New review units unlock as their prerequisites are learned."
+      emptyDescription="Nothing is due here right now. Come back when review units are scheduled, or add more to get ahead."
     />
   );
 }

@@ -1,37 +1,41 @@
 import { and, eq, inArray, notInArray } from "drizzle-orm";
 import { schema } from "../db";
-import { noteDisplay, parseStoredContent, type CardType } from "./card-types";
+import {
+  flashcardDisplay,
+  parseStoredContent,
+  type FlashcardType,
+} from "./flashcard-types";
 import type { ServiceContext } from "./context";
 import {
   isPendingSchedule,
   isPrereqSecured,
-  newCardFields,
-  pendingCardFields,
+  newReviewUnitFields,
+  pendingReviewUnitFields,
 } from "./scheduler";
 import { getSettings } from "./settings";
 
-const { cards, notePrereqs, notes } = schema;
+const { reviewUnits, flashcardPrereqs, flashcards } = schema;
 
 export async function getPrereqIds(
   ctx: ServiceContext,
-  noteId: string,
+  flashcardId: string,
 ): Promise<string[]> {
   const rows = await ctx.db
-    .select({ id: notePrereqs.prereqId })
-    .from(notePrereqs)
-    .where(eq(notePrereqs.dependentId, noteId))
+    .select({ id: flashcardPrereqs.prereqId })
+    .from(flashcardPrereqs)
+    .where(eq(flashcardPrereqs.dependentId, flashcardId))
     .all();
   return rows.map((r) => r.id);
 }
 
 export async function getDependentIds(
   ctx: ServiceContext,
-  noteId: string,
+  flashcardId: string,
 ): Promise<string[]> {
   const rows = await ctx.db
-    .select({ id: notePrereqs.dependentId })
-    .from(notePrereqs)
-    .where(eq(notePrereqs.prereqId, noteId))
+    .select({ id: flashcardPrereqs.dependentId })
+    .from(flashcardPrereqs)
+    .where(eq(flashcardPrereqs.prereqId, flashcardId))
     .all();
   return rows.map((r) => r.id);
 }
@@ -41,69 +45,72 @@ async function getPrereqStabilityFloor(ctx: ServiceContext): Promise<number> {
 }
 
 /**
- * A note is "secured" only when every review item it generated is secured in
- * FSRS (Review state with stability at or above the user floor).
+ * A flashcard is "secured" only when every review unit it generated is secured
+ * in FSRS (Review state with stability at or above the user floor).
  */
-async function getNotesSecured(
+async function getFlashcardsSecured(
   ctx: ServiceContext,
-  noteIds: string[],
+  flashcardIds: string[],
 ): Promise<Map<string, boolean>> {
-  const uniqueIds = [...new Set(noteIds)];
+  const uniqueIds = [...new Set(flashcardIds)];
   const secured = new Map(uniqueIds.map((id) => [id, false]));
   if (uniqueIds.length === 0) return secured;
 
   const floor = await getPrereqStabilityFloor(ctx);
   const rows = await ctx.db
     .select({
-      noteId: cards.noteId,
-      state: cards.state,
-      stability: cards.stability,
+      flashcardId: reviewUnits.flashcardId,
+      state: reviewUnits.state,
+      stability: reviewUnits.stability,
     })
-    .from(cards)
-    .where(inArray(cards.noteId, uniqueIds))
+    .from(reviewUnits)
+    .where(inArray(reviewUnits.flashcardId, uniqueIds))
     .all();
 
-  const byNote = new Map<string, { state: number; stability: number }[]>();
+  const byFlashcard = new Map<string, { state: number; stability: number }[]>();
   for (const row of rows) {
-    const list = byNote.get(row.noteId) ?? [];
+    const list = byFlashcard.get(row.flashcardId) ?? [];
     list.push(row);
-    byNote.set(row.noteId, list);
+    byFlashcard.set(row.flashcardId, list);
   }
 
   for (const id of uniqueIds) {
-    const cardRows = byNote.get(id) ?? [];
+    const reviewUnitRows = byFlashcard.get(id) ?? [];
     secured.set(
       id,
-      cardRows.length > 0 &&
-        cardRows.every((row) => isPrereqSecured(row, floor)),
+      reviewUnitRows.length > 0 &&
+        reviewUnitRows.every((row) => isPrereqSecured(row, floor)),
     );
   }
 
   return secured;
 }
 
-/** A note is unlocked when none of its prerequisite notes are still locked. */
+/**
+ * A flashcard is unlocked when none of its prerequisite flashcards are still
+ * locked.
+ */
 export async function isUnlocked(
   ctx: ServiceContext,
-  noteId: string,
+  flashcardId: string,
 ): Promise<boolean> {
-  const locked = await getLockedByNoteIds(ctx, [noteId]);
-  return !(locked.get(noteId) ?? false);
+  const locked = await getLockedByFlashcardIds(ctx, [flashcardId]);
+  return !(locked.get(flashcardId) ?? false);
 }
 
-/** Batch locked lookup from the denormalized notes.locked column. */
-export async function getLockedByNoteIds(
+/** Batch locked lookup from the denormalized flashcards.locked column. */
+export async function getLockedByFlashcardIds(
   ctx: ServiceContext,
-  noteIds: string[],
+  flashcardIds: string[],
 ): Promise<Map<string, boolean>> {
-  const uniqueIds = [...new Set(noteIds)];
+  const uniqueIds = [...new Set(flashcardIds)];
   const locked = new Map(uniqueIds.map((id) => [id, false]));
   if (uniqueIds.length === 0) return locked;
 
   const rows = await ctx.db
-    .select({ id: notes.id, locked: notes.locked })
-    .from(notes)
-    .where(inArray(notes.id, uniqueIds))
+    .select({ id: flashcards.id, locked: flashcards.locked })
+    .from(flashcards)
+    .where(inArray(flashcards.id, uniqueIds))
     .all();
 
   for (const row of rows) {
@@ -114,27 +121,27 @@ export async function getLockedByNoteIds(
 }
 
 /** Recompute lock state from the prerequisite graph + prereq securedness. */
-async function computeLockedByNoteIds(
+async function computeLockedByFlashcardIds(
   ctx: ServiceContext,
-  noteIds: string[],
+  flashcardIds: string[],
 ): Promise<Map<string, boolean>> {
-  const uniqueIds = [...new Set(noteIds)];
+  const uniqueIds = [...new Set(flashcardIds)];
   const locked = new Map(uniqueIds.map((id) => [id, false]));
   if (uniqueIds.length === 0) return locked;
 
   const edges = await ctx.db
     .select({
-      dependentId: notePrereqs.dependentId,
-      prereqId: notePrereqs.prereqId,
+      dependentId: flashcardPrereqs.dependentId,
+      prereqId: flashcardPrereqs.prereqId,
     })
-    .from(notePrereqs)
-    .where(inArray(notePrereqs.dependentId, uniqueIds))
+    .from(flashcardPrereqs)
+    .where(inArray(flashcardPrereqs.dependentId, uniqueIds))
     .all();
 
   if (edges.length === 0) return locked;
 
   const prereqIds = [...new Set(edges.map((edge) => edge.prereqId))];
-  const securedByNote = await getNotesSecured(ctx, prereqIds);
+  const securedByFlashcard = await getFlashcardsSecured(ctx, prereqIds);
 
   const prereqsByDependent = new Map<string, string[]>();
   for (const edge of edges) {
@@ -147,7 +154,7 @@ async function computeLockedByNoteIds(
     const prereqList = prereqsByDependent.get(id) ?? [];
     if (prereqList.length === 0) continue;
     const unlocked = prereqList.every((prereqId) =>
-      securedByNote.get(prereqId),
+      securedByFlashcard.get(prereqId),
     );
     locked.set(id, !unlocked);
   }
@@ -155,27 +162,27 @@ async function computeLockedByNoteIds(
   return locked;
 }
 
-/** Persist note lock state and mirror it onto every generated review item. */
-export async function persistLockedForNoteIds(
+/** Persist flashcard lock state and mirror it onto every generated review unit. */
+export async function persistLockedForFlashcardIds(
   ctx: ServiceContext,
-  noteIds: string[],
+  flashcardIds: string[],
 ): Promise<void> {
-  const uniqueIds = [...new Set(noteIds)];
+  const uniqueIds = [...new Set(flashcardIds)];
   if (uniqueIds.length === 0) return;
 
-  const computed = await computeLockedByNoteIds(ctx, uniqueIds);
+  const computed = await computeLockedByFlashcardIds(ctx, uniqueIds);
   const now = new Date();
 
   await ctx.db.transaction((tx) => {
     for (const id of uniqueIds) {
       const locked = computed.get(id) ?? false;
-      tx.update(notes)
+      tx.update(flashcards)
         .set({ locked, updatedAt: now })
-        .where(eq(notes.id, id))
+        .where(eq(flashcards.id, id))
         .run();
-      tx.update(cards)
+      tx.update(reviewUnits)
         .set({ locked, updatedAt: now })
-        .where(eq(cards.noteId, id))
+        .where(eq(reviewUnits.flashcardId, id))
         .run();
     }
   });
@@ -207,7 +214,7 @@ export async function refreshLockedAfterPrereqChange(
 ): Promise<void> {
   const affected = await collectTransitiveDependents(ctx, dependentId);
   affected.push(dependentId);
-  await persistLockedForNoteIds(ctx, affected);
+  await persistLockedForFlashcardIds(ctx, affected);
 }
 
 export async function refreshLockedAfterPrereqSecured(
@@ -216,34 +223,34 @@ export async function refreshLockedAfterPrereqSecured(
 ): Promise<void> {
   const affected = await collectTransitiveDependents(ctx, prereqId);
   if (affected.length === 0) return;
-  await persistLockedForNoteIds(ctx, affected);
+  await persistLockedForFlashcardIds(ctx, affected);
 }
 
 export async function refreshAllLockedStates(
   ctx: ServiceContext,
 ): Promise<void> {
   const dependents = await ctx.db
-    .selectDistinct({ id: notePrereqs.dependentId })
-    .from(notePrereqs)
+    .selectDistinct({ id: flashcardPrereqs.dependentId })
+    .from(flashcardPrereqs)
     .all();
   const dependentIds = dependents.map((row) => row.id);
 
   if (dependentIds.length === 0) {
-    await ctx.db.update(notes).set({ locked: false }).run();
-    await ctx.db.update(cards).set({ locked: false }).run();
+    await ctx.db.update(flashcards).set({ locked: false }).run();
+    await ctx.db.update(reviewUnits).set({ locked: false }).run();
     return;
   }
 
-  await persistLockedForNoteIds(ctx, dependentIds);
+  await persistLockedForFlashcardIds(ctx, dependentIds);
   await ctx.db
-    .update(notes)
+    .update(flashcards)
     .set({ locked: false })
-    .where(notInArray(notes.id, dependentIds))
+    .where(notInArray(flashcards.id, dependentIds))
     .run();
   await ctx.db
-    .update(cards)
+    .update(reviewUnits)
     .set({ locked: false })
-    .where(notInArray(cards.noteId, dependentIds))
+    .where(notInArray(reviewUnits.flashcardId, dependentIds))
     .run();
 }
 
@@ -251,39 +258,39 @@ export async function refreshLockedForDeck(
   ctx: ServiceContext,
   deckId: string,
 ): Promise<void> {
-  const deckNotes = await ctx.db
-    .select({ id: notes.id })
-    .from(notes)
-    .where(eq(notes.deckId, deckId))
+  const deckFlashcards = await ctx.db
+    .select({ id: flashcards.id })
+    .from(flashcards)
+    .where(eq(flashcards.deckId, deckId))
     .all();
-  const deckNoteIds = deckNotes.map((row) => row.id);
-  if (deckNoteIds.length === 0) return;
+  const deckFlashcardIds = deckFlashcards.map((row) => row.id);
+  if (deckFlashcardIds.length === 0) return;
 
   const dependents = await ctx.db
-    .selectDistinct({ id: notePrereqs.dependentId })
-    .from(notePrereqs)
-    .where(inArray(notePrereqs.dependentId, deckNoteIds))
+    .selectDistinct({ id: flashcardPrereqs.dependentId })
+    .from(flashcardPrereqs)
+    .where(inArray(flashcardPrereqs.dependentId, deckFlashcardIds))
     .all();
   const dependentIds = dependents.map((row) => row.id);
 
   if (dependentIds.length > 0) {
-    await persistLockedForNoteIds(ctx, dependentIds);
+    await persistLockedForFlashcardIds(ctx, dependentIds);
   }
 
-  const nonDependentIds = deckNoteIds.filter(
+  const nonDependentIds = deckFlashcardIds.filter(
     (id) => !dependentIds.includes(id),
   );
   if (nonDependentIds.length === 0) return;
 
   await ctx.db
-    .update(notes)
+    .update(flashcards)
     .set({ locked: false })
-    .where(inArray(notes.id, nonDependentIds))
+    .where(inArray(flashcards.id, nonDependentIds))
     .run();
   await ctx.db
-    .update(cards)
+    .update(reviewUnits)
     .set({ locked: false })
-    .where(inArray(cards.noteId, nonDependentIds))
+    .where(inArray(reviewUnits.flashcardId, nonDependentIds))
     .run();
 }
 
@@ -305,41 +312,44 @@ async function reaches(
   return false;
 }
 
-/** Align FSRS scheduling with lock state for a note's never-studied cards. */
-export async function syncNoteScheduling(
+/**
+ * Align FSRS scheduling with lock state for a flashcard's never-studied review
+ * units.
+ */
+export async function syncFlashcardScheduling(
   ctx: ServiceContext,
-  noteId: string,
+  flashcardId: string,
 ): Promise<void> {
-  const note = await ctx.db
-    .select({ locked: notes.locked })
-    .from(notes)
-    .where(eq(notes.id, noteId))
+  const flashcard = await ctx.db
+    .select({ locked: flashcards.locked })
+    .from(flashcards)
+    .where(eq(flashcards.id, flashcardId))
     .get();
-  if (!note) return;
+  if (!flashcard) return;
 
-  const unlocked = !note.locked;
-  const siblingCards = await ctx.db
+  const unlocked = !flashcard.locked;
+  const siblingReviewUnits = await ctx.db
     .select()
-    .from(cards)
-    .where(eq(cards.noteId, noteId))
+    .from(reviewUnits)
+    .where(eq(reviewUnits.flashcardId, flashcardId))
     .all();
   const now = new Date();
 
-  for (const card of siblingCards) {
-    if (card.reps > 0 || card.lastReview != null) continue;
-    const pending = isPendingSchedule(card);
+  for (const reviewUnit of siblingReviewUnits) {
+    if (reviewUnit.reps > 0 || reviewUnit.lastReview != null) continue;
+    const pending = isPendingSchedule(reviewUnit);
 
     if (!unlocked && !pending) {
       await ctx.db
-        .update(cards)
-        .set({ ...pendingCardFields(), locked: true, updatedAt: now })
-        .where(eq(cards.id, card.id))
+        .update(reviewUnits)
+        .set({ ...pendingReviewUnitFields(), locked: true, updatedAt: now })
+        .where(eq(reviewUnits.id, reviewUnit.id))
         .run();
     } else if (unlocked && pending) {
       await ctx.db
-        .update(cards)
-        .set({ ...newCardFields(now), locked: false, updatedAt: now })
-        .where(eq(cards.id, card.id))
+        .update(reviewUnits)
+        .set({ ...newReviewUnitFields(now), locked: false, updatedAt: now })
+        .where(eq(reviewUnits.id, reviewUnit.id))
         .run();
     }
   }
@@ -348,12 +358,14 @@ export async function syncNoteScheduling(
 /** Start FSRS for dependents whose prerequisites just became secured. */
 export async function activateUnlockedDependents(
   ctx: ServiceContext,
-  noteId: string,
+  flashcardId: string,
 ): Promise<void> {
-  await refreshLockedAfterPrereqSecured(ctx, noteId);
-  const dependentIds = await getDependentIds(ctx, noteId);
+  await refreshLockedAfterPrereqSecured(ctx, flashcardId);
+  const dependentIds = await getDependentIds(ctx, flashcardId);
   await Promise.all(
-    dependentIds.map((dependentId) => syncNoteScheduling(ctx, dependentId)),
+    dependentIds.map((dependentId) =>
+      syncFlashcardScheduling(ctx, dependentId),
+    ),
   );
 }
 
@@ -363,33 +375,39 @@ export async function addPrereq(
   dependentId: string,
 ): Promise<void> {
   if (prereqId === dependentId) {
-    throw new Error("A card cannot be its own prerequisite.");
+    throw new Error("A flashcard cannot be its own prerequisite.");
   }
   if (await reaches(ctx, dependentId, prereqId)) {
     throw new Error(
       "That edge would create a cycle in the prerequisite graph.",
     );
   }
-  const edgeNotes = await ctx.db
-    .select({ id: notes.id, deckId: notes.deckId })
-    .from(notes)
-    .where(inArray(notes.id, [prereqId, dependentId]))
+  const edgeFlashcards = await ctx.db
+    .select({ id: flashcards.id, deckId: flashcards.deckId })
+    .from(flashcards)
+    .where(inArray(flashcards.id, [prereqId, dependentId]))
     .all();
-  if (edgeNotes.length !== 2) {
-    throw new Error("Both cards must exist before connecting prerequisites.");
+  if (edgeFlashcards.length !== 2) {
+    throw new Error(
+      "Both flashcards must exist before connecting prerequisites.",
+    );
   }
-  const prereq = edgeNotes.find((note) => note.id === prereqId);
-  const dependent = edgeNotes.find((note) => note.id === dependentId);
+  const prereq = edgeFlashcards.find((flashcard) => flashcard.id === prereqId);
+  const dependent = edgeFlashcards.find(
+    (flashcard) => flashcard.id === dependentId,
+  );
   if (prereq?.deckId !== dependent?.deckId) {
-    throw new Error("Prerequisite edges can only connect cards in one deck.");
+    throw new Error(
+      "Prerequisite edges can only connect flashcards in one deck.",
+    );
   }
   await ctx.db
-    .insert(notePrereqs)
+    .insert(flashcardPrereqs)
     .values({ prereqId, dependentId })
     .onConflictDoNothing()
     .run();
   await refreshLockedAfterPrereqChange(ctx, dependentId);
-  await syncNoteScheduling(ctx, dependentId);
+  await syncFlashcardScheduling(ctx, dependentId);
 }
 
 export async function removePrereq(
@@ -398,16 +416,16 @@ export async function removePrereq(
   dependentId: string,
 ): Promise<void> {
   await ctx.db
-    .delete(notePrereqs)
+    .delete(flashcardPrereqs)
     .where(
       and(
-        eq(notePrereqs.prereqId, prereqId),
-        eq(notePrereqs.dependentId, dependentId),
+        eq(flashcardPrereqs.prereqId, prereqId),
+        eq(flashcardPrereqs.dependentId, dependentId),
       ),
     )
     .run();
   await refreshLockedAfterPrereqChange(ctx, dependentId);
-  await syncNoteScheduling(ctx, dependentId);
+  await syncFlashcardScheduling(ctx, dependentId);
 }
 
 export type DeckGraph = {
@@ -415,7 +433,7 @@ export type DeckGraph = {
     id: string;
     front: string;
     back: string;
-    type: CardType;
+    type: FlashcardType;
     state: number;
     locked: boolean;
     x: number | null;
@@ -429,25 +447,28 @@ export async function getDeckGraph(
   deckId: string,
 ): Promise<DeckGraph> {
   const db = ctx.db;
-  const deckNotes = await db
+  const deckFlashcards = await db
     .select()
-    .from(notes)
-    .where(eq(notes.deckId, deckId))
+    .from(flashcards)
+    .where(eq(flashcards.deckId, deckId))
     .all();
-  const ids = deckNotes.map((n) => n.id);
+  const ids = deckFlashcards.map((n) => n.id);
 
   const stateRows = ids.length
     ? await db
-        .select({ noteId: cards.noteId, state: cards.state })
-        .from(cards)
-        .where(inArray(cards.noteId, ids))
+        .select({
+          flashcardId: reviewUnits.flashcardId,
+          state: reviewUnits.state,
+        })
+        .from(reviewUnits)
+        .where(inArray(reviewUnits.flashcardId, ids))
         .all()
     : [];
-  const minStateByNote = new Map<string, number>();
+  const minStateByFlashcard = new Map<string, number>();
   for (const row of stateRows) {
-    const current = minStateByNote.get(row.noteId);
+    const current = minStateByFlashcard.get(row.flashcardId);
     if (current === undefined || row.state < current) {
-      minStateByNote.set(row.noteId, row.state);
+      minStateByFlashcard.set(row.flashcardId, row.state);
     }
   }
 
@@ -455,37 +476,41 @@ export async function getDeckGraph(
     ? (
         await db
           .select({
-            prereqId: notePrereqs.prereqId,
-            dependentId: notePrereqs.dependentId,
+            prereqId: flashcardPrereqs.prereqId,
+            dependentId: flashcardPrereqs.dependentId,
           })
-          .from(notePrereqs)
-          .where(inArray(notePrereqs.dependentId, ids))
+          .from(flashcardPrereqs)
+          .where(inArray(flashcardPrereqs.dependentId, ids))
           .all()
       ).filter((e) => ids.includes(e.prereqId))
     : [];
 
-  const nodes = deckNotes.map((note) => {
-    const { content, type } = parseStoredContent(note.type, note.content);
-    const display = noteDisplay(type, content);
+  const nodes = deckFlashcards.map((flashcard) => {
+    const { content, type } = parseStoredContent(
+      flashcard.type,
+      flashcard.content,
+    );
+    const display = flashcardDisplay(type, content);
     return {
-      id: note.id,
+      id: flashcard.id,
       front: display.front,
       back: display.back,
       type,
-      state: minStateByNote.get(note.id) ?? 0,
-      locked: note.locked,
-      x: note.posX,
-      y: note.posY,
+      state: minStateByFlashcard.get(flashcard.id) ?? 0,
+      locked: flashcard.locked,
+      x: flashcard.posX,
+      y: flashcard.posY,
     };
   });
   return { nodes, edges };
 }
 
-export type NodePlacement = { noteId: string; x: number; y: number };
+export type NodePlacement = { flashcardId: string; x: number; y: number };
 
 /**
- * Persist canvas positions for a deck's notes. Only the supplied notes are
- * touched, so callers can save a single dragged node or the whole layout.
+ * Persist canvas positions for a deck's flashcards. Only the supplied
+ * flashcards are touched, so callers can save a single dragged node or the
+ * whole layout.
  */
 export async function saveLayout(
   ctx: ServiceContext,
@@ -493,20 +518,20 @@ export async function saveLayout(
   placements: NodePlacement[],
 ): Promise<void> {
   if (placements.length === 0) return;
-  const ids = placements.map((p) => p.noteId);
+  const ids = placements.map((p) => p.flashcardId);
   const owned = await ctx.db
-    .select({ id: notes.id })
-    .from(notes)
-    .where(and(eq(notes.deckId, deckId), inArray(notes.id, ids)))
+    .select({ id: flashcards.id })
+    .from(flashcards)
+    .where(and(eq(flashcards.deckId, deckId), inArray(flashcards.id, ids)))
     .all();
   const ownedIds = new Set(owned.map((n) => n.id));
-  const toWrite = placements.filter((p) => ownedIds.has(p.noteId));
+  const toWrite = placements.filter((p) => ownedIds.has(p.flashcardId));
   if (toWrite.length === 0) return;
   await ctx.db.transaction((tx) => {
     for (const p of toWrite) {
-      tx.update(notes)
+      tx.update(flashcards)
         .set({ posX: p.x, posY: p.y })
-        .where(eq(notes.id, p.noteId))
+        .where(eq(flashcards.id, p.flashcardId))
         .run();
     }
   });

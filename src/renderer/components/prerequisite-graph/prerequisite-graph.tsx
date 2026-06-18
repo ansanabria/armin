@@ -42,16 +42,16 @@ import {
 import { layoutGraph } from "@/lib/graph-layout";
 import { cn } from "@/lib/utils";
 import { FloatingEdge } from "./floating-edge";
-import { CardNode, type CardFlowNode, type CardNodeData } from "./card-node";
+import { FlashcardNode, type CardFlowNode, type CardNodeData } from "./flashcard-node";
 import { GraphContextMenu } from "./graph-context-menu";
 
-const nodeTypes = { card: CardNode };
+const nodeTypes = { card: FlashcardNode };
 const edgeTypes = { floating: FloatingEdge };
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
 
-type NodePlacement = { noteId: string; x: number; y: number };
+type NodePlacement = { flashcardId: string; x: number; y: number };
 
 type MenuState = { kind: "node"; x: number; y: number; nodeId: string } | null;
 type ConnectMenuState = {
@@ -346,7 +346,7 @@ function PrerequisiteGraphCanvas({
     (flowNodes: CardFlowNode[]) => {
       onPersistLayout?.(
         flowNodes.map((node) => ({
-          noteId: node.id,
+          flashcardId: node.id,
           x: node.position.x,
           y: node.position.y,
         })),
@@ -401,7 +401,7 @@ function PrerequisiteGraphCanvas({
       if (!source || !target) return;
 
       if (source === target) {
-        onConnectError?.("A card can't depend on itself.");
+        onConnectError?.("A flashcard can’t depend on itself.");
         return;
       }
 
@@ -516,12 +516,12 @@ function PrerequisiteGraphCanvas({
     menu?.kind === "node"
       ? [
           {
-            label: "Edit card",
+            label: "Edit flashcard",
             icon: <Pencil className="h-4 w-4" />,
             onClick: () => onEditCardRequest?.(menu.nodeId),
           },
           {
-            label: "Delete card",
+            label: "Delete flashcard",
             icon: <Trash2 className="h-4 w-4" />,
             variant: "destructive" as const,
             onClick: () => deleteNode(menu.nodeId),
@@ -532,7 +532,7 @@ function PrerequisiteGraphCanvas({
   const connectMenuItems = connectMenu
     ? [
         {
-          label: "Add connected card",
+          label: "Add connected flashcard",
           icon: <Plus className="h-4 w-4" />,
           onClick: () =>
             onCreateCardRequest?.(connectMenu.flow, connectMenu.sourceId),

@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Layers, Pencil, Trash2, EllipsisVertical } from "lucide-react";
+import { Layers, Pencil, Trash2, EllipsisVertical, Archive, ArchiveRestore } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,16 +15,16 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { StateBadge } from "@/components/ui/badge";
-import { CardTypeBadge } from "@/components/card-type-badge";
+import { StateBadge, Badge } from "@/components/ui/badge";
+import { FlashcardTypeBadge } from "@/components/flashcard-type-badge";
 import { Dialog } from "@/components/ui/dialog";
-import type { UiCard } from "@/types/view-models";
+import type { UiFlashcard } from "@/types/view-models";
 import {
-  CARD_TILE_EXIT_MS,
-  clearCardTileFlipStyles,
-  liftCardTileFromGrid,
-  resetLiftedCardTile,
-} from "@/lib/card-tile-exit";
+  FLASHCARD_TILE_EXIT_MS,
+  clearFlashcardTileFlipStyles,
+  liftFlashcardTileFromGrid,
+  resetLiftedFlashcardTile,
+} from "@/lib/flashcard-tile-exit";
 import { stripMarkdownForPreview } from "@/lib/markdown-preview";
 import { cn } from "@/lib/utils";
 
@@ -32,12 +32,16 @@ function CardActionItems({
   onOpen,
   onDelete,
   onGoToDeck,
+  onArchiveToggle,
+  archived,
   Item,
   Separator,
 }: {
   onOpen: () => void;
   onDelete: () => void;
   onGoToDeck?: () => void;
+  onArchiveToggle?: () => void;
+  archived?: boolean;
   Item: typeof DropdownMenuItem;
   Separator: typeof DropdownMenuSeparator;
 }) {
@@ -45,7 +49,7 @@ function CardActionItems({
     <>
       <Item onClick={onOpen}>
         <Pencil className="h-4 w-4" />
-        Edit card
+        Edit flashcard
       </Item>
       {onGoToDeck && (
         <Item onClick={onGoToDeck}>
@@ -53,10 +57,20 @@ function CardActionItems({
           Go to deck
         </Item>
       )}
+      {onArchiveToggle && (
+        <Item onClick={onArchiveToggle}>
+          {archived ? (
+            <ArchiveRestore className="h-4 w-4" />
+          ) : (
+            <Archive className="h-4 w-4" />
+          )}
+          {archived ? "Unarchive" : "Archive"}
+        </Item>
+      )}
       <Separator />
       <Item variant="destructive" onClick={onDelete}>
         <Trash2 className="h-4 w-4" />
-        Delete card
+        Delete flashcard
       </Item>
     </>
   );
@@ -73,7 +87,7 @@ function CardPreviewText({
   return <p className={className}>{text || "\u00a0"}</p>;
 }
 
-function showDueLabel(card: UiCard) {
+function showDueLabel(card: UiFlashcard) {
   return card.dueLabel !== "New" && card.dueLabel !== "Locked";
 }
 
@@ -81,10 +95,14 @@ function CardActionsMenu({
   onOpen,
   onDelete,
   onGoToDeck,
+  onArchiveToggle,
+  archived,
 }: {
   onOpen: () => void;
   onDelete: () => void;
   onGoToDeck?: () => void;
+  onArchiveToggle?: () => void;
+  archived?: boolean;
 }) {
   return (
     <div className="pointer-events-auto shrink-0">
@@ -94,7 +112,7 @@ function CardActionsMenu({
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="Card actions"
+              aria-label="Flashcard actions"
               className="shrink-0"
             />
           }
@@ -106,6 +124,8 @@ function CardActionsMenu({
             onOpen={onOpen}
             onDelete={onDelete}
             onGoToDeck={onGoToDeck}
+            onArchiveToggle={onArchiveToggle}
+            archived={archived}
             Item={DropdownMenuItem}
             Separator={DropdownMenuSeparator}
           />
@@ -115,18 +135,21 @@ function CardActionsMenu({
   );
 }
 
-export const CardTile = memo(function CardTile({
+export const FlashcardTile = memo(function FlashcardTile({
   card,
   onOpen,
   onDelete,
   onGoToDeck,
+  onArchiveToggle,
   deckName,
 }: {
-  card: UiCard;
+  card: UiFlashcard;
   onOpen: () => void;
   onDelete: () => void | Promise<void>;
   /** When set (e.g. on Browse), adds a menu item to open the card's deck. */
   onGoToDeck?: () => void;
+  /** Toggle archive state for this card. */
+  onArchiveToggle?: () => void | Promise<void>;
   /** When set (e.g. on the Browse grid), shows the card's deck for context. */
   deckName?: string;
 }) {
@@ -145,8 +168,8 @@ export const CardTile = memo(function CardTile({
   }, [onDelete]);
 
   const revertExit = (tile: HTMLLIElement | null) => {
-    resetLiftedCardTile(tile);
-    clearCardTileFlipStyles(flippedSiblingsRef.current);
+    resetLiftedFlashcardTile(tile);
+    clearFlashcardTileFlipStyles(flippedSiblingsRef.current);
     flippedSiblingsRef.current = [];
     setExiting(false);
   };
@@ -160,7 +183,7 @@ export const CardTile = memo(function CardTile({
     if (exiting) return;
     const tile = tileRef.current;
     if (!tile) return;
-    flippedSiblingsRef.current = liftCardTileFromGrid(tile);
+    flippedSiblingsRef.current = liftFlashcardTileFromGrid(tile);
     setExiting(true);
   };
 
@@ -184,7 +207,7 @@ export const CardTile = memo(function CardTile({
         revertExit(tile);
         return;
       }
-      clearCardTileFlipStyles(flippedSiblingsRef.current);
+      clearFlashcardTileFlipStyles(flippedSiblingsRef.current);
       flippedSiblingsRef.current = [];
     };
 
@@ -196,7 +219,7 @@ export const CardTile = memo(function CardTile({
     tile?.addEventListener("transitionend", onTransitionEnd);
     const fallback = window.setTimeout(
       () => void finish(),
-      CARD_TILE_EXIT_MS + 50,
+      FLASHCARD_TILE_EXIT_MS + 50,
     );
 
     return () => {
@@ -223,7 +246,7 @@ export const CardTile = memo(function CardTile({
           <button
             type="button"
             onClick={onOpen}
-            aria-label={`View and edit card: ${card.front}`}
+            aria-label={`View and edit flashcard: ${card.front}`}
             className="absolute inset-0 z-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
           />
           <div className="pointer-events-none relative z-10 flex min-h-0 flex-1 flex-col">
@@ -237,6 +260,12 @@ export const CardTile = memo(function CardTile({
                   onOpen={onOpen}
                   onDelete={openDeleteConfirm}
                   onGoToDeck={onGoToDeck}
+                  onArchiveToggle={
+                    onArchiveToggle
+                      ? () => void onArchiveToggle()
+                      : undefined
+                  }
+                  archived={card.archived}
                 />
               </div>
             ) : null}
@@ -253,13 +282,25 @@ export const CardTile = memo(function CardTile({
                   locked={card.locked}
                   className="min-w-0 shrink-0"
                 />
-                <CardTypeBadge type={card.type} />
+                {card.archived && (
+                  <Badge className="min-w-0 shrink-0 bg-surface-sunken text-muted">
+                    <Archive className="h-3 w-3" aria-hidden />
+                    Archived
+                  </Badge>
+                )}
+                <FlashcardTypeBadge type={card.type} />
               </div>
               {!deckName && (
                 <CardActionsMenu
                   onOpen={onOpen}
                   onDelete={openDeleteConfirm}
                   onGoToDeck={onGoToDeck}
+                  onArchiveToggle={
+                    onArchiveToggle
+                      ? () => void onArchiveToggle()
+                      : undefined
+                  }
+                  archived={card.archived}
                 />
               )}
             </div>
@@ -319,6 +360,10 @@ export const CardTile = memo(function CardTile({
             onOpen={onOpen}
             onDelete={openDeleteConfirm}
             onGoToDeck={onGoToDeck}
+            onArchiveToggle={
+              onArchiveToggle ? () => void onArchiveToggle() : undefined
+            }
+            archived={card.archived}
             Item={ContextMenuItem}
             Separator={ContextMenuSeparator}
           />
@@ -328,7 +373,7 @@ export const CardTile = memo(function CardTile({
       <Dialog
         open={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}
-        title="Delete card?"
+        title="Delete flashcard?"
         description={
           cardPreview
             ? `“${
@@ -336,7 +381,7 @@ export const CardTile = memo(function CardTile({
                   ? `${cardPreview.slice(0, 100)}…`
                   : cardPreview
               }” will be permanently removed.`
-            : "This card will be permanently removed."
+            : "This flashcard will be permanently removed."
         }
       >
         <div className="flex justify-end gap-2 pt-1">
@@ -348,7 +393,7 @@ export const CardTile = memo(function CardTile({
             disabled={exiting}
             onClick={confirmDelete}
           >
-            Delete card
+            Delete flashcard
           </Button>
         </div>
       </Dialog>

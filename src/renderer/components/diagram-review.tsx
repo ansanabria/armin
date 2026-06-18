@@ -1,4 +1,4 @@
-import type { DiagramContent } from "../../main/services/card-types";
+import type { DiagramContent } from "../../main/services/flashcard-types";
 import { cn } from "@/lib/utils";
 
 /**

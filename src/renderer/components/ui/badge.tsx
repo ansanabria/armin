@@ -3,7 +3,7 @@ import { Lock, Plus, RotateCcw, Check, GraduationCap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** FSRS card states: 0=New, 1=Learning, 2=Review, 3=Relearning. */
-export type CardState = 0 | 1 | 2 | 3;
+export type ReviewState = 0 | 1 | 2 | 3;
 
 export function Badge({
   className,
@@ -21,7 +21,7 @@ export function Badge({
 }
 
 const STATE_CONFIG: Record<
-  CardState,
+  ReviewState,
   { label: string; cls: string; Icon: typeof Plus }
 > = {
   0: { label: "New", cls: "bg-new-bg text-new", Icon: Plus },
@@ -47,7 +47,7 @@ export function StateBadge({
   locked = false,
   className,
 }: {
-  state: CardState;
+  state: ReviewState;
   locked?: boolean;
   className?: string;
 }) {

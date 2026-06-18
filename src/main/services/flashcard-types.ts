@@ -1,18 +1,18 @@
 import { z } from "zod";
 
 /**
- * Card-type domain module.
+ * Flashcard-type domain module.
  *
- * A "note" is the authored unit; it carries a `type` and a type-specific
- * `content` object. Each note generates one or more review items (rows in the
- * `cards` table), keyed by a stable `subKey` so edits preserve FSRS history for
- * the parts that did not change.
+ * A "flashcard" is the authored unit; it carries a `type` and a type-specific
+ * `content` object. Each flashcard generates one or more review units (rows in
+ * the `review_units` table), keyed by a stable `subKey` so edits preserve FSRS
+ * history for the parts that did not change.
  *
  * This module only depends on `zod` so it can be imported from the main process,
  * the renderer, and the MCP server alike.
  */
 
-export const CARD_TYPES = [
+export const FLASHCARD_TYPES = [
   "basic",
   "basic_reversed",
   "cloze",
@@ -20,10 +20,10 @@ export const CARD_TYPES = [
   "diagram",
 ] as const;
 
-export type CardType = (typeof CARD_TYPES)[number];
+export type FlashcardType = (typeof FLASHCARD_TYPES)[number];
 
-export function isCardType(value: string): value is CardType {
-  return (CARD_TYPES as readonly string[]).includes(value);
+export function isFlashcardType(value: string): value is FlashcardType {
+  return (FLASHCARD_TYPES as readonly string[]).includes(value);
 }
 
 // --- Per-type content schemas ---
@@ -67,7 +67,7 @@ export type TypeAnswerContent = z.infer<typeof typeAnswerContentSchema>;
 export type DiagramRegion = z.infer<typeof diagramRegionSchema>;
 export type DiagramContent = z.infer<typeof diagramContentSchema>;
 
-export type CardContentByType = {
+export type FlashcardContentByType = {
   basic: BasicContent;
   basic_reversed: BasicContent;
   cloze: ClozeContent;
@@ -75,14 +75,14 @@ export type CardContentByType = {
   diagram: DiagramContent;
 };
 
-export type CardContent = CardContentByType[CardType];
+export type FlashcardContent = FlashcardContentByType[FlashcardType];
 
 /** A `{ type, content }` pair, validated as a discriminated union. */
-export type TypedNoteContent = {
-  [K in CardType]: { type: K; content: CardContentByType[K] };
-}[CardType];
+export type TypedFlashcardContent = {
+  [K in FlashcardType]: { type: K; content: FlashcardContentByType[K] };
+}[FlashcardType];
 
-export const typedNoteContentSchema = z.discriminatedUnion("type", [
+export const typedFlashcardContentSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("basic"), content: basicContentSchema }),
   z.object({ type: z.literal("basic_reversed"), content: basicContentSchema }),
   z.object({ type: z.literal("cloze"), content: clozeContentSchema }),
@@ -102,26 +102,26 @@ const contentSchemaByType = {
 } as const;
 
 /** Validate and normalize a content object for the given type. */
-export function validateContent<T extends CardType>(
+export function validateContent<T extends FlashcardType>(
   type: T,
   content: unknown,
-): CardContentByType[T] {
-  return contentSchemaByType[type].parse(content) as CardContentByType[T];
+): FlashcardContentByType[T] {
+  return contentSchemaByType[type].parse(content) as FlashcardContentByType[T];
 }
 
 /** Parse a stored JSON content string into a validated content object. */
 export function parseStoredContent(
   type: string,
   raw: string,
-): { type: CardType; content: CardContent } {
-  if (!isCardType(type)) {
-    throw new Error(`Unknown card type: ${type}`);
+): { type: FlashcardType; content: FlashcardContent } {
+  if (!isFlashcardType(type)) {
+    throw new Error(`Unknown flashcard type: ${type}`);
   }
   const parsed = JSON.parse(raw) as unknown;
   return { type, content: validateContent(type, parsed) };
 }
 
-export function serializeContent(content: CardContent): string {
+export function serializeContent(content: FlashcardContent): string {
   return JSON.stringify(content);
 }
 
@@ -133,13 +133,13 @@ export function serializeContent(content: CardContent): string {
 //   {{N::answer::hint}}    — cluster N with a hint shown inside the blank
 // A leading run of digits before the first `::` is read as the cluster number.
 // Bare forms are still accepted as a fallback (e.g. hand-typed or agent-authored
-// notes) and are auto-numbered in document order, starting one above the highest
-// explicit cluster:
+// flashcards) and are auto-numbered in document order, starting one above the
+// highest explicit cluster:
 //   {{answer}}             — bare; cluster auto-assigned by position
 //   {{answer::hint}}       — bare with a hint
 //
-// Explicit numbers are what keep a deletion's identity (and its generated card's
-// FSRS history) stable across edits, so the editor never emits a bare form.
+// Explicit numbers are what keep a deletion's identity (and its generated review
+// unit's FSRS history) stable across edits, so the editor never emits a bare form.
 
 /** Matches any `{{…}}` wrapper; the body is parsed separately. */
 const CLOZE_RE = /\{\{([\s\S]+?)\}\}/g;
@@ -245,19 +245,19 @@ function renderAllClozesBlanked(text: string): string {
   return replaceClozes(text, (d) => clozeBlank(d.hint));
 }
 
-// --- Review-item generation ---
+// --- Review-unit generation ---
 
-export type ReviewItem = {
+export type ReviewUnitSpec = {
   subKey: string;
   front: string;
   back: string;
 };
 
-/** Generate the review items (cached display strings) a note produces. */
-export function generateReviewItems(
-  type: CardType,
-  content: CardContent,
-): ReviewItem[] {
+/** Generate the review units (cached display strings) a flashcard produces. */
+export function generateReviewUnits(
+  type: FlashcardType,
+  content: FlashcardContent,
+): ReviewUnitSpec[] {
   switch (type) {
     case "basic": {
       const c = content as BasicContent;
@@ -296,9 +296,9 @@ export function generateReviewItems(
 }
 
 /** Representative front/back for list tiles and graph nodes. */
-export function noteDisplay(
-  type: CardType,
-  content: CardContent,
+export function flashcardDisplay(
+  type: FlashcardType,
+  content: FlashcardContent,
 ): { front: string; back: string } {
   switch (type) {
     case "basic":
@@ -346,6 +346,6 @@ export function matchesTypeAnswer(
 }
 
 /** Convenience for the simple two-field create paths (Anki / Markdown import). */
-export function basicNote(front: string, back: string): TypedNoteContent {
+export function basicFlashcard(front: string, back: string): TypedFlashcardContent {
   return { type: "basic", content: { front, back } };
 }

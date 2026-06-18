@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { count, eq } from "drizzle-orm";
 import { schema } from "../db";
-import { getOnlyCard, makeContext, securePrereq, useTestDb } from "../test/db";
+import { getOnlyReviewUnit, makeContext, securePrereq, useTestDb } from "../test/db";
 import * as browse from "./browse";
-import * as notes from "./notes";
+import * as notes from "./flashcards";
 import * as decks from "./decks";
 import * as graph from "./graph";
 import * as review from "./review";
@@ -20,7 +20,7 @@ function basic(
   back: string,
   tags?: string[],
 ) {
-  return notes.createNote({
+  return notes.createFlashcard({
     ctx,
     deckId,
     type: "basic",
@@ -44,7 +44,7 @@ describe("core services", () => {
     const ctx = await makeContext("tags");
     const deck = await decks.createDeck(ctx, { name: "TypeScript" });
 
-    const card = await notes.createNote({
+    const card = await notes.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "basic",
@@ -54,12 +54,12 @@ describe("core services", () => {
 
     expect(card.tags).toEqual(["narrowing", "types"]);
 
-    const updated = await notes.updateNote(ctx, card.id, {
+    const updated = await notes.updateFlashcard(ctx, card.id, {
       tags: ["safety", "Safety"],
     });
 
     expect(updated?.tags).toEqual(["safety"]);
-    expect((await notes.listNotes(ctx, deck.id))[0].tags).toEqual(["safety"]);
+    expect((await notes.listFlashcards(ctx, deck.id))[0].tags).toEqual(["safety"]);
   });
 
   it("excludes locked dependents from the review queue", async () => {
@@ -75,14 +75,14 @@ describe("core services", () => {
 
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
-    const dependentCard = await getOnlyCard(ctx, dependent.id);
+    const dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
     expect(isPendingSchedule(dependentCard)).toBe(true);
     expect(dependentCard.due).toEqual(PENDING_DUE);
 
     const queue = await review.getQueue(ctx, deck.id);
     const [stats] = await decks.listDecks(ctx);
 
-    expect(queue.map((item) => item.noteId)).toEqual([prereq.id]);
+    expect(queue.map((item) => item.flashcardId)).toEqual([prereq.id]);
     expect(stats).toMatchObject({
       total: 2,
       due: 1,
@@ -100,9 +100,9 @@ describe("core services", () => {
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
     await ctx.db
-      .update(schema.cards)
+      .update(schema.reviewUnits)
       .set({ state: State.Review, stability: 1.2 })
-      .where(eq(schema.cards.noteId, prereq.id))
+      .where(eq(schema.reviewUnits.flashcardId, prereq.id))
       .run();
 
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
@@ -111,7 +111,7 @@ describe("core services", () => {
     await graph.activateUnlockedDependents(ctx, prereq.id);
 
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
-    const dependentCard = await getOnlyCard(ctx, dependent.id);
+    const dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
     expect(isPendingSchedule(dependentCard)).toBe(false);
   });
 
@@ -121,19 +121,19 @@ describe("core services", () => {
     const reviewNote = await basic(ctx, deck.id, "Review me", "Answer");
     const newNote = await basic(ctx, deck.id, "New card", "Answer");
 
-    const reviewCard = await getOnlyCard(ctx, reviewNote.id);
-    await review.rateCard(ctx, reviewCard.id, 3);
+    const reviewCard = await getOnlyReviewUnit(ctx, reviewNote.id);
+    await review.rateReviewUnit(ctx, reviewCard.id, 3);
     await ctx.db
-      .update(schema.cards)
+      .update(schema.reviewUnits)
       .set({ due: new Date() })
-      .where(eq(schema.cards.id, reviewCard.id))
+      .where(eq(schema.reviewUnits.id, reviewCard.id))
       .run();
 
     const queue = await review.getQueue(ctx, deck.id);
     const reviewIndex = queue.findIndex(
-      (item) => item.noteId === reviewNote.id,
+      (item) => item.flashcardId === reviewNote.id,
     );
-    const newIndex = queue.findIndex((item) => item.noteId === newNote.id);
+    const newIndex = queue.findIndex((item) => item.flashcardId === newNote.id);
 
     expect(reviewIndex).toBeGreaterThanOrEqual(0);
     expect(newIndex).toBeGreaterThanOrEqual(0);
@@ -143,7 +143,7 @@ describe("core services", () => {
   it("caps frontier new cards per day", async () => {
     const ctx = await makeContext("new-cap");
     const deck = await decks.createDeck(ctx, { name: "Cap" });
-    await settings.updateSettings(ctx, { newCardsPerDay: 1 });
+    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
 
     await basic(ctx, deck.id, "New 1", "A");
     await basic(ctx, deck.id, "New 2", "B");
@@ -177,10 +177,10 @@ describe("core services", () => {
     const ctx = await makeContext("review");
     const deck = await decks.createDeck(ctx, { name: "Review" });
     const note = await basic(ctx, deck.id, "Prompt", "Answer");
-    const card = await getOnlyCard(ctx, note.id);
+    const card = await getOnlyReviewUnit(ctx, note.id);
 
-    await review.rateCard(ctx, card.id, 3);
-    const rated = await getOnlyCard(ctx, note.id);
+    await review.rateReviewUnit(ctx, card.id, 3);
+    const rated = await getOnlyReviewUnit(ctx, note.id);
     const logCount = await ctx.db
       .select({ value: count() })
       .from(schema.reviewLogs)
@@ -202,7 +202,7 @@ describe("core services", () => {
     await graph.activateUnlockedDependents(ctx, prereq.id);
 
     const queue = await review.getQueue(ctx, deck.id);
-    expect(queue.map((item) => item.noteId).sort()).toEqual(
+    expect(queue.map((item) => item.flashcardId).sort()).toEqual(
       [prereq.id, dependent.id].sort(),
     );
   });
@@ -225,9 +225,9 @@ describe("core services", () => {
     });
     expect(firstPage.libraryTotal).toBe(2);
     expect(firstPage.filteredTotal).toBe(2);
-    expect(firstPage.cards).toHaveLength(1);
-    expect(firstPage.cards[0].id).toBe(newer.id);
-    expect(firstPage.cards[0].tags).toEqual(["beta-only"]);
+    expect(firstPage.flashcards).toHaveLength(1);
+    expect(firstPage.flashcards[0].id).toBe(newer.id);
+    expect(firstPage.flashcards[0].tags).toEqual(["beta-only"]);
 
     const deckFiltered = await browse.listBrowsePage(ctx, {
       offset: 0,
@@ -236,8 +236,8 @@ describe("core services", () => {
       deckId: alpha.id,
     });
     expect(deckFiltered.filteredTotal).toBe(1);
-    expect(deckFiltered.cards[0].id).toBe(older.id);
-    expect(deckFiltered.cards[0].deckName).toBe("Alpha");
+    expect(deckFiltered.flashcards[0].id).toBe(older.id);
+    expect(deckFiltered.flashcards[0].deckName).toBe("Alpha");
 
     const tagFiltered = await browse.listBrowsePage(ctx, {
       offset: 0,
@@ -246,7 +246,7 @@ describe("core services", () => {
       tags: ["shared"],
     });
     expect(tagFiltered.filteredTotal).toBe(1);
-    expect(tagFiltered.cards[0].id).toBe(older.id);
+    expect(tagFiltered.flashcards[0].id).toBe(older.id);
 
     const multiTagFiltered = await browse.listBrowsePage(ctx, {
       offset: 0,
@@ -263,35 +263,35 @@ describe("core services", () => {
     const prereq = await basic(ctx, deck.id, "Foundation", "Base");
     const dependent = await basic(ctx, deck.id, "Advanced", "Top");
 
-    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(false);
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
 
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
-    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(true);
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
 
     await securePrereq(ctx, prereq.id);
     await graph.refreshLockedAfterPrereqSecured(ctx, prereq.id);
 
-    expect((await notes.getNote(ctx, dependent.id))?.locked).toBe(false);
+    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
   });
   it("seeds and persists scheduling settings", async () => {
     const ctx = await makeContext("settings");
 
     expect((await settings.getSettings(ctx)).requestRetention).toBe(0.9);
     expect((await settings.getSettings(ctx)).prereqStabilityFloor).toBe(2);
-    expect((await settings.getSettings(ctx)).newCardsPerDay).toBe(10);
+    expect((await settings.getSettings(ctx)).newReviewUnitsPerDay).toBe(10);
 
     await settings.updateSettings(ctx, {
       requestRetention: 0.86,
       maximumInterval: 1000,
       prereqStabilityFloor: 3,
-      newCardsPerDay: 15,
+      newReviewUnitsPerDay: 15,
     });
 
     const saved = await settings.getSettings(ctx);
     expect(saved.requestRetention).toBe(0.86);
     expect(saved.maximumInterval).toBe(1000);
     expect(saved.prereqStabilityFloor).toBe(3);
-    expect(saved.newCardsPerDay).toBe(15);
+    expect(saved.newReviewUnitsPerDay).toBe(15);
   });
 });
