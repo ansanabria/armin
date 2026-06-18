@@ -2,6 +2,7 @@ import type { ReviewUnit, Deck, Flashcard, Settings } from "../../main/db/schema
 import type { DeckWithStats } from "../../main/services/decks";
 import type {
   BrowseFlashcard,
+  FlashcardDeleteConsequences,
   FlashcardWithMeta,
 } from "../../main/services/flashcards";
 import type { FlashcardType, FlashcardContent } from "../../main/services/flashcard-types";
@@ -65,6 +66,7 @@ export interface ArminApi {
     listTags(): Promise<string[]>;
     listDeckTags(deckId: string): Promise<string[]>;
     get(id: string): Promise<FlashcardWithMeta | undefined>;
+    deleteConsequences(id: string): Promise<FlashcardDeleteConsequences>;
     create(input: {
       deckId: string;
       type: FlashcardType;
@@ -147,6 +149,7 @@ export type {
   Settings,
   DeckWithStats,
   FlashcardWithMeta,
+  FlashcardDeleteConsequences,
   BrowseFlashcard,
   FlashcardType,
   FlashcardContent,

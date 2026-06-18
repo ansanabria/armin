@@ -71,6 +71,7 @@ type PrerequisiteGraphProps = {
     connectFromNodeId?: string,
   ) => void;
   onEditCardRequest?: (nodeId: string) => void;
+  onDeleteCardRequest?: (nodeId: string) => void;
   onPersistLayout?: (placements: NodePlacement[]) => void;
   initialViewport?: Viewport;
   onViewportChange?: (viewport: Viewport) => void;
@@ -203,6 +204,7 @@ function PrerequisiteGraphCanvas({
   nodePlacements,
   onCreateCardRequest,
   onEditCardRequest,
+  onDeleteCardRequest,
   onPersistLayout,
   initialViewport,
   onViewportChange,
@@ -524,7 +526,7 @@ function PrerequisiteGraphCanvas({
             label: "Delete flashcard",
             icon: <Trash2 className="h-4 w-4" />,
             variant: "destructive" as const,
-            onClick: () => deleteNode(menu.nodeId),
+            onClick: () => onDeleteCardRequest?.(menu.nodeId) ?? deleteNode(menu.nodeId),
           },
         ]
       : [];
@@ -576,7 +578,7 @@ function PrerequisiteGraphCanvas({
         nodesDraggable
         nodesConnectable
         elementsSelectable
-        deleteKeyCode={["Backspace", "Delete"]}
+        deleteKeyCode={null}
         proOptions={{ hideAttribution: true }}
         connectionLineStyle={{
           stroke: "var(--color-accent)",

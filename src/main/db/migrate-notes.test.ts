@@ -71,6 +71,15 @@ function applyNotesMigration() {
   for (const statement of statements) client.exec(statement);
 }
 
+function applyMigrationFile(fileName: string) {
+  const sql = fs.readFileSync(path.join(process.cwd(), "drizzle", fileName), "utf8");
+  const statements = sql
+    .split("--> statement-breakpoint")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  for (const statement of statements) client.exec(statement);
+}
+
 describe("0005 notes backfill", () => {
   it("splits existing cards into notes while preserving relationships", () => {
     createPreSplitSchema();
@@ -158,5 +167,144 @@ describe("0005 notes backfill", () => {
       unknown
     >[];
     expect(cardCols.map((r) => r.name)).not.toContain("type");
+  });
+});
+
+describe("0010 basic_reversed forward subKey backfill", () => {
+  it("renames fwd review units to the canonical empty forward subKey", () => {
+    client.pragma("foreign_keys = ON");
+    client.exec(`CREATE TABLE flashcards (
+      id text PRIMARY KEY NOT NULL, deck_id text NOT NULL, type text NOT NULL,
+      content text NOT NULL, created_at integer NOT NULL, updated_at integer NOT NULL
+    );`);
+    client.exec(`CREATE TABLE review_units (
+      id text PRIMARY KEY NOT NULL, flashcard_id text NOT NULL, deck_id text NOT NULL,
+      sub_key text DEFAULT '' NOT NULL, front text NOT NULL, back text NOT NULL,
+      due integer NOT NULL, stability real DEFAULT 0 NOT NULL,
+      difficulty real DEFAULT 0 NOT NULL, elapsed_days real DEFAULT 0 NOT NULL,
+      scheduled_days real DEFAULT 0 NOT NULL, learning_steps integer DEFAULT 0 NOT NULL,
+      reps integer DEFAULT 0 NOT NULL, lapses integer DEFAULT 0 NOT NULL,
+      state integer DEFAULT 0 NOT NULL, last_review integer,
+      locked integer DEFAULT 0 NOT NULL, archived integer DEFAULT 0 NOT NULL,
+      created_at integer NOT NULL, updated_at integer NOT NULL
+    );`);
+    const now = Date.now();
+    const reversedId = randomUUID();
+    const basicId = randomUUID();
+    const reversedFwdId = randomUUID();
+
+    client
+      .prepare(
+        `INSERT INTO flashcards (id, deck_id, type, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(reversedId, "deck", "basic_reversed", "{}", now, now);
+    client
+      .prepare(
+        `INSERT INTO flashcards (id, deck_id, type, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(basicId, "deck", "basic", "{}", now, now);
+    for (const [id, flashcardId, subKey, reps, state] of [
+      [reversedFwdId, reversedId, "fwd", 7, 2],
+      [randomUUID(), reversedId, "rev", 1, 1],
+      [randomUUID(), basicId, "fwd", 3, 2],
+    ] as const) {
+      client
+        .prepare(
+          `INSERT INTO review_units (id, flashcard_id, deck_id, sub_key, front, back, due, reps, state, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(id, flashcardId, "deck", subKey, "F", "B", now, reps, state, now, now);
+    }
+
+    applyMigrationFile("0010_basic_reversed_forward_subkey.sql");
+
+    const migrated = client
+      .prepare("SELECT id, sub_key, reps, state FROM review_units WHERE id = ?")
+      .get(reversedFwdId) as Record<string, unknown>;
+    expect(migrated).toMatchObject({
+      id: reversedFwdId,
+      sub_key: "",
+      reps: 7,
+      state: 2,
+    });
+
+    const unchanged = client
+      .prepare(
+        "SELECT sub_key FROM review_units WHERE flashcard_id = ? ORDER BY sub_key",
+      )
+      .all(basicId) as Record<string, unknown>[];
+    expect(unchanged.map((row) => row.sub_key)).toEqual(["fwd"]);
+  });
+});
+
+describe("0011 image occlusion card type migration", () => {
+  it("rewrites diagram flashcards without changing review unit history", () => {
+    client.exec(`CREATE TABLE flashcards (
+      id text PRIMARY KEY NOT NULL, deck_id text NOT NULL, type text NOT NULL,
+      content text NOT NULL, created_at integer NOT NULL, updated_at integer NOT NULL
+    );`);
+    client.exec(`CREATE TABLE review_units (
+      id text PRIMARY KEY NOT NULL, flashcard_id text NOT NULL, deck_id text NOT NULL,
+      sub_key text DEFAULT '' NOT NULL, front text NOT NULL, back text NOT NULL,
+      due integer NOT NULL, stability real DEFAULT 0 NOT NULL,
+      difficulty real DEFAULT 0 NOT NULL, elapsed_days real DEFAULT 0 NOT NULL,
+      scheduled_days real DEFAULT 0 NOT NULL, learning_steps integer DEFAULT 0 NOT NULL,
+      reps integer DEFAULT 0 NOT NULL, lapses integer DEFAULT 0 NOT NULL,
+      state integer DEFAULT 0 NOT NULL, last_review integer,
+      locked integer DEFAULT 0 NOT NULL, archived integer DEFAULT 0 NOT NULL,
+      created_at integer NOT NULL, updated_at integer NOT NULL
+    );`);
+    const now = Date.now();
+    const flashcardId = randomUUID();
+    const reviewUnitId = randomUUID();
+    const legacyContent = {
+      image: "data:image/png;base64,AAAA",
+      regions: [
+        { id: "m1", x: 0.1, y: 0.2, w: 0.3, h: 0.4, label: "A" },
+        { id: "m2", x: 0.5, y: 0.6, w: 0.7, h: 0.8, label: "B", hint: "Bee" },
+      ],
+    };
+
+    client
+      .prepare(
+        `INSERT INTO flashcards (id, deck_id, type, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(flashcardId, "deck", "diagram", JSON.stringify(legacyContent), now, now);
+    client
+      .prepare(
+        `INSERT INTO review_units (id, flashcard_id, deck_id, sub_key, front, back, due, reps, state, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(reviewUnitId, flashcardId, "deck", "m1", "F", "A", now, 9, 2, now, now);
+
+    applyMigrationFile("0011_image_occlusion_card_type.sql");
+
+    const migrated = client
+      .prepare("SELECT type, content FROM flashcards WHERE id = ?")
+      .get(flashcardId) as Record<string, unknown>;
+    expect(migrated.type).toBe("image_occlusion");
+    expect(JSON.parse(migrated.content as string)).toEqual({
+      baseImage: "data:image/png;base64,AAAA",
+      masks: [
+        { id: "m1", geometry: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 }, label: "A" },
+        {
+          id: "m2",
+          geometry: { x: 0.5, y: 0.6, w: 0.7, h: 0.8 },
+          label: "B",
+          hint: "Bee",
+        },
+      ],
+      revealMode: "hide_all",
+    });
+
+    const reviewUnit = client
+      .prepare("SELECT id, sub_key, reps, state FROM review_units WHERE id = ?")
+      .get(reviewUnitId) as Record<string, unknown>;
+    expect(reviewUnit).toMatchObject({
+      id: reviewUnitId,
+      sub_key: "m1",
+      reps: 9,
+      state: 2,
+    });
   });
 });

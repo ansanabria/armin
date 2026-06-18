@@ -27,6 +27,23 @@ import {
 } from "@/lib/flashcard-tile-exit";
 import { stripMarkdownForPreview } from "@/lib/markdown-preview";
 import { cn } from "@/lib/utils";
+import type { FlashcardDeleteConsequences } from "@/types/window";
+
+function plural(count: number, singular: string, pluralForm = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
+}
+
+function formatReviewHistory(consequences: FlashcardDeleteConsequences | null) {
+  if (!consequences) return "Loading review history…";
+  if (consequences.reviewLogCount === 0) {
+    return `No review history will be destroyed across ${plural(consequences.reviewUnitCount, "review unit")}.`;
+  }
+
+  const first = consequences.firstReviewAt?.toLocaleDateString();
+  const last = consequences.lastReviewAt?.toLocaleDateString();
+  const span = first && last ? ` from ${first} to ${last}` : "";
+  return `${plural(consequences.reviewLogCount, "review log")} across ${plural(consequences.reviewUnitCount, "review unit")} will be destroyed${span}.`;
+}
 
 function CardActionItems({
   onOpen,
@@ -141,6 +158,7 @@ export const FlashcardTile = memo(function FlashcardTile({
   onDelete,
   onGoToDeck,
   onArchiveToggle,
+  loadDeleteConsequences,
   deckName,
 }: {
   card: UiFlashcard;
@@ -150,6 +168,9 @@ export const FlashcardTile = memo(function FlashcardTile({
   onGoToDeck?: () => void;
   /** Toggle archive state for this card. */
   onArchiveToggle?: () => void | Promise<void>;
+  loadDeleteConsequences?: (
+    flashcardId: string,
+  ) => Promise<FlashcardDeleteConsequences>;
   /** When set (e.g. on the Browse grid), shows the card's deck for context. */
   deckName?: string;
 }) {
@@ -158,6 +179,9 @@ export const FlashcardTile = memo(function FlashcardTile({
   const flippedSiblingsRef = useRef<HTMLElement[]>([]);
   const [exiting, setExiting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConsequences, setDeleteConsequences] =
+    useState<FlashcardDeleteConsequences | null>(null);
+  const [deleteConsequencesError, setDeleteConsequencesError] = useState(false);
   const cardPreview = useMemo(
     () => stripMarkdownForPreview(card.front),
     [card.front],
@@ -176,7 +200,20 @@ export const FlashcardTile = memo(function FlashcardTile({
 
   const openDeleteConfirm = () => {
     if (exiting) return;
+    setDeleteConsequences(null);
+    setDeleteConsequencesError(false);
     setDeleteConfirmOpen(true);
+    if (loadDeleteConsequences) {
+      void loadDeleteConsequences(card.id)
+        .then((summary) => setDeleteConsequences(summary))
+        .catch(() => setDeleteConsequencesError(true));
+    }
+  };
+
+  const archiveInstead = async () => {
+    if (!onArchiveToggle) return;
+    setDeleteConfirmOpen(false);
+    await Promise.resolve(onArchiveToggle());
   };
 
   const startExitAnimation = () => {
@@ -380,17 +417,45 @@ export const FlashcardTile = memo(function FlashcardTile({
                 cardPreview.length > 100
                   ? `${cardPreview.slice(0, 100)}…`
                   : cardPreview
-              }” will be permanently removed.`
-            : "This flashcard will be permanently removed."
+              }” will be permanently hard-deleted.`
+            : "This flashcard will be permanently hard-deleted."
         }
       >
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="space-y-3 text-sm text-muted">
+          <p>
+            Archive is the reversible way to set this aside. Delete removes the
+            flashcard, its review units, and its review history permanently.
+          </p>
+          <ul className="space-y-1 rounded-md border border-border bg-surface-sunken p-3">
+            <li>
+              {deleteConsequencesError || !loadDeleteConsequences
+                ? "Dependent count could not be loaded."
+                : deleteConsequences
+                  ? `${plural(deleteConsequences.dependentCount, "dependent")} will be unlocked or recomputed.`
+                  : "Loading dependent count…"}
+            </li>
+            <li>
+              {deleteConsequencesError || !loadDeleteConsequences
+                ? "Review history could not be loaded."
+                : formatReviewHistory(deleteConsequences)}
+            </li>
+          </ul>
+        </div>
+        <div className="mt-5 flex flex-wrap justify-end gap-2 pt-1">
           <Button variant="ghost" onClick={() => setDeleteConfirmOpen(false)}>
             Cancel
           </Button>
+          {onArchiveToggle && !card.archived && (
+            <Button onClick={() => void archiveInstead()} disabled={exiting}>
+              Archive instead
+            </Button>
+          )}
           <Button
             variant="destructive"
-            disabled={exiting}
+            disabled={
+              exiting ||
+              Boolean(loadDeleteConsequences && !deleteConsequences)
+            }
             onClick={confirmDelete}
           >
             Delete flashcard

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { asc, eq } from "drizzle-orm";
+import { Rating } from "ts-fsrs";
 import { schema } from "../db";
 import { makeContext, useTestDb } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
 import * as notes from "./flashcards";
+import * as review from "./review";
 import { State } from "./scheduler";
 
 useTestDb();
@@ -50,7 +52,8 @@ describe("note → card generation", () => {
     });
 
     const cards = await cardsForNote(ctx, note.id);
-    expect(cards.map((c) => c.subKey)).toEqual(["fwd", "rev"]);
+    expect(cards.map((c) => c.subKey)).toEqual(["", "rev"]);
+    expect(cards.find((c) => c.subKey === "")?.front).toBe("F");
     expect(cards.find((c) => c.subKey === "rev")?.front).toBe("B");
   });
 
@@ -120,6 +123,104 @@ describe("updateFlashcard reconciliation", () => {
 
     const after = await cardsForNote(ctx, note.id);
     expect(after.map((c) => c.subKey)).toEqual(["c1"]);
+  });
+
+  it("preserves image occlusion mask history across mask add and remove", async () => {
+    const ctx = await makeContext("reconcile-image-occlusion");
+    const deck = await decks.createDeck(ctx, { name: "Images" });
+    const note = await notes.createFlashcard({
+      ctx,
+      deckId: deck.id,
+      type: "image_occlusion",
+      content: {
+        baseImage: "data:image/png;base64,AAAA",
+        revealMode: "hide_one",
+        masks: [
+          { id: "m1", geometry: { x: 0, y: 0, w: 0.4, h: 0.4 }, label: "One" },
+          { id: "m2", geometry: { x: 0.5, y: 0, w: 0.4, h: 0.4 }, label: "Two" },
+        ],
+      },
+    });
+
+    const m1 = (await cardsForNote(ctx, note.id)).find(
+      (c) => c.subKey === "m1",
+    )!;
+    await secureCard(ctx, m1.id);
+
+    await notes.updateFlashcard(ctx, note.id, {
+      content: {
+        baseImage: "data:image/png;base64,BBBB",
+        revealMode: "hide_all",
+        masks: [
+          { id: "m1", geometry: { x: 0.1, y: 0, w: 0.4, h: 0.4 }, label: "One" },
+          { id: "m3", geometry: { x: 0.5, y: 0, w: 0.4, h: 0.4 }, label: "Three" },
+        ],
+      },
+    });
+
+    const after = await cardsForNote(ctx, note.id);
+    expect(after.map((c) => c.subKey)).toEqual(["m1", "m3"]);
+    const m1After = after.find((c) => c.subKey === "m1")!;
+    const m3After = after.find((c) => c.subKey === "m3")!;
+    expect(m1After.id).toBe(m1.id);
+    expect(m1After.reps).toBe(2);
+    expect(m1After.state).toBe(State.Review);
+    expect(m3After.reps).toBe(0);
+    expect(m3After.state).toBe(State.New);
+  });
+
+  it("preserves forward history when converting basic to basic_reversed and back", async () => {
+    const ctx = await makeContext("reconcile-basic-reversed");
+    const deck = await decks.createDeck(ctx, { name: "Convert" });
+    const note = await notes.createFlashcard({
+      ctx,
+      deckId: deck.id,
+      type: "basic",
+      content: { front: "F", back: "B" },
+    });
+
+    const [forward] = await cardsForNote(ctx, note.id);
+    await review.rateReviewUnit(ctx, forward.id, Rating.Good);
+    const reviewedForward = (await cardsForNote(ctx, note.id))[0];
+    const logsBefore = await ctx.db
+      .select()
+      .from(schema.reviewLogs)
+      .where(eq(schema.reviewLogs.reviewUnitId, forward.id))
+      .all();
+
+    await notes.updateFlashcard(ctx, note.id, {
+      type: "basic_reversed",
+      content: { front: "F", back: "B" },
+    });
+
+    const reversed = await cardsForNote(ctx, note.id);
+    expect(reversed.map((c) => c.subKey)).toEqual(["", "rev"]);
+    const forwardAfterAdd = reversed.find((c) => c.subKey === "")!;
+    const reverseAfterAdd = reversed.find((c) => c.subKey === "rev")!;
+    expect(forwardAfterAdd.id).toBe(forward.id);
+    expect(forwardAfterAdd.reps).toBe(reviewedForward.reps);
+    expect(forwardAfterAdd.state).toBe(reviewedForward.state);
+    expect(reverseAfterAdd.reps).toBe(0);
+    expect(reverseAfterAdd.state).toBe(State.New);
+
+    const logsAfterAdd = await ctx.db
+      .select()
+      .from(schema.reviewLogs)
+      .where(eq(schema.reviewLogs.reviewUnitId, forward.id))
+      .all();
+    expect(logsAfterAdd).toHaveLength(logsBefore.length);
+
+    await notes.updateFlashcard(ctx, note.id, {
+      type: "basic",
+      content: { front: "F", back: "B" },
+    });
+
+    const basicAgain = await cardsForNote(ctx, note.id);
+    expect(basicAgain.map((c) => c.subKey)).toEqual([""]);
+    expect(basicAgain[0].id).toBe(forward.id);
+    expect(basicAgain[0].reps).toBe(reviewedForward.reps);
+    expect(basicAgain[0].state).toBe(reviewedForward.state);
+    expect(basicAgain.some((c) => c.id === reverseAfterAdd.id)).toBe(false);
   });
 });
 

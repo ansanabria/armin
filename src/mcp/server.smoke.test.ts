@@ -12,7 +12,13 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { eq } from "drizzle-orm";
+import { Rating } from "ts-fsrs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { closeDb, getDb, initDb, schema } from "../main/db";
+import { runMigrations } from "../main/db/migrate";
+import type { ServiceContext } from "../main/services/context";
+import * as review from "../main/services/review";
 import { createArminMcpServer } from "./app";
 
 let dataDir: string;
@@ -20,6 +26,7 @@ let transport: StdioClientTransport | null = null;
 let client: Client | null = null;
 let httpServer: Server | null = null;
 let httpTransports: WebStandardStreamableHTTPServerTransport[] = [];
+let previousArminDataDir: string | undefined;
 
 // callTool returns a union that includes legacy `toolResult` shapes, so dig
 // the text content out defensively instead of typing the whole union.
@@ -76,8 +83,34 @@ async function writeWebResponse(res: ServerResponse, response: Response) {
   res.end();
 }
 
+async function testServiceContext(): Promise<ServiceContext> {
+  await initDb("mcp-smoke");
+  await runMigrations("mcp-smoke");
+  return { profileId: "mcp-smoke", db: getDb("mcp-smoke") };
+}
+
+async function reviewUnitsFor(flashcardId: string) {
+  const ctx = await testServiceContext();
+  return ctx.db
+    .select()
+    .from(schema.reviewUnits)
+    .where(eq(schema.reviewUnits.flashcardId, flashcardId))
+    .all();
+}
+
+async function reviewLogsFor(reviewUnitId: string) {
+  const ctx = await testServiceContext();
+  return ctx.db
+    .select()
+    .from(schema.reviewLogs)
+    .where(eq(schema.reviewLogs.reviewUnitId, reviewUnitId))
+    .all();
+}
+
 beforeEach(async () => {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "armin-mcp-"));
+  previousArminDataDir = process.env.ARMIN_DATA_DIR;
+  process.env.ARMIN_DATA_DIR = dataDir;
   transport = new StdioClientTransport({
     command: "npx",
     args: ["tsx", "src/mcp/server.ts"],
@@ -109,7 +142,14 @@ afterEach(async () => {
     httpTransports.map((httpTransport) => httpTransport.close()),
   );
   httpTransports = [];
+  closeDb();
   fs.rmSync(dataDir, { recursive: true, force: true });
+  if (previousArminDataDir === undefined) {
+    delete process.env.ARMIN_DATA_DIR;
+  } else {
+    process.env.ARMIN_DATA_DIR = previousArminDataDir;
+  }
+  previousArminDataDir = undefined;
 });
 
 describe("MCP stdio server", () => {
@@ -118,15 +158,19 @@ describe("MCP stdio server", () => {
     const names = tools.tools.map((tool) => tool.name).sort();
     expect(names).toEqual([
       "add_prerequisite",
+      "archive_card",
       "create_deck",
       "create_flashcard",
+      "delete_card",
       "get_deck_graph",
       "get_flashcard",
       "import_flashcard_hierarchy",
       "list_decks",
       "list_flashcards",
       "list_open_profiles",
+      "remove_prerequisite",
       "select_profile",
+      "update_card",
     ]);
 
     const profiles = parseToolText(
@@ -159,6 +203,44 @@ describe("MCP stdio server", () => {
       }),
     );
     const reviewUnitId = (createdCard.flashcard as { id: string }).id;
+
+    const createdDependent = parseToolText(
+      await client!.callTool({
+        name: "create_flashcard",
+        arguments: {
+          deckId,
+          front: "What depends on MCP?",
+          back: "An MCP client workflow",
+        },
+      }),
+    );
+    const dependentCardId = (createdDependent.flashcard as { id: string }).id;
+
+    await client!.callTool({
+      name: "add_prerequisite",
+      arguments: { prereqId: reviewUnitId, dependentId: dependentCardId },
+    });
+    const lockedDependent = parseToolText(
+      await client!.callTool({
+        name: "get_flashcard",
+        arguments: { id: dependentCardId },
+      }),
+    );
+    expect((lockedDependent.flashcard as { locked: boolean }).locked).toBe(true);
+
+    await client!.callTool({
+      name: "remove_prerequisite",
+      arguments: { prereqId: reviewUnitId, dependentId: dependentCardId },
+    });
+    const unlockedDependent = parseToolText(
+      await client!.callTool({
+        name: "get_flashcard",
+        arguments: { id: dependentCardId },
+      }),
+    );
+    expect((unlockedDependent.flashcard as { locked: boolean }).locked).toBe(
+      false,
+    );
 
     const imported = parseToolText(
       await client!.callTool({
@@ -219,6 +301,123 @@ describe("MCP stdio server", () => {
       await client!.callTool({ name: "list_decks", arguments: {} }),
     );
     expect((allDecks.decks as unknown[]).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("updates, archives, and deletes cards through MCP mutation tools", async () => {
+    const createdDeck = parseToolText(
+      await client!.callTool({
+        name: "create_deck",
+        arguments: { name: "Mutation Deck" },
+      }),
+    );
+    const deckId = (createdDeck.deck as { id: string }).id;
+
+    const createdCard = parseToolText(
+      await client!.callTool({
+        name: "create_flashcard",
+        arguments: { deckId, front: "Forward", back: "Back" },
+      }),
+    );
+    const cardId = (createdCard.flashcard as { id: string }).id;
+    const [forwardBefore] = await reviewUnitsFor(cardId);
+    await review.rateReviewUnit(
+      await testServiceContext(),
+      forwardBefore.id,
+      Rating.Good,
+    );
+    const [reviewedForward] = await reviewUnitsFor(cardId);
+
+    const updated = parseToolText(
+      await client!.callTool({
+        name: "update_card",
+        arguments: {
+          id: cardId,
+          type: "basic_reversed",
+          content: { front: "Forward edited", back: "Back edited" },
+        },
+      }),
+    );
+    expect((updated.flashcard as { type: string; front: string }).type).toBe(
+      "basic_reversed",
+    );
+    expect((updated.flashcard as { type: string; front: string }).front).toBe(
+      "Forward edited",
+    );
+
+    const afterUpdate = await reviewUnitsFor(cardId);
+    expect(afterUpdate.map((unit) => unit.subKey).sort()).toEqual(["", "rev"]);
+    const forwardAfter = afterUpdate.find((unit) => unit.subKey === "")!;
+    expect(forwardAfter.id).toBe(forwardBefore.id);
+    expect(forwardAfter.reps).toBe(reviewedForward.reps);
+    expect(forwardAfter.state).toBe(reviewedForward.state);
+    expect(await reviewLogsFor(forwardBefore.id)).toHaveLength(1);
+
+    const dependent = parseToolText(
+      await client!.callTool({
+        name: "create_flashcard",
+        arguments: { deckId, front: "Dependent", back: "Depends" },
+      }),
+    );
+    const dependentId = (dependent.flashcard as { id: string }).id;
+    await client!.callTool({
+      name: "add_prerequisite",
+      arguments: { prereqId: cardId, dependentId },
+    });
+    expect(
+      (parseToolText(
+        await client!.callTool({
+          name: "get_flashcard",
+          arguments: { id: dependentId },
+        }),
+      ).flashcard as { locked: boolean }).locked,
+    ).toBe(true);
+
+    const archived = parseToolText(
+      await client!.callTool({
+        name: "archive_card",
+        arguments: { id: cardId, archived: true },
+      }),
+    );
+    expect((archived.flashcard as { archived: boolean }).archived).toBe(true);
+    expect((await reviewUnitsFor(cardId)).every((unit) => unit.archived)).toBe(
+      true,
+    );
+    expect(
+      (parseToolText(
+        await client!.callTool({
+          name: "get_flashcard",
+          arguments: { id: dependentId },
+        }),
+      ).flashcard as { locked: boolean }).locked,
+    ).toBe(false);
+
+    const unarchived = parseToolText(
+      await client!.callTool({
+        name: "archive_card",
+        arguments: { id: cardId, archived: false },
+      }),
+    );
+    expect((unarchived.flashcard as { archived: boolean }).archived).toBe(false);
+    expect(
+      (parseToolText(
+        await client!.callTool({
+          name: "get_flashcard",
+          arguments: { id: dependentId },
+        }),
+      ).flashcard as { locked: boolean }).locked,
+    ).toBe(true);
+
+    await client!.callTool({ name: "delete_card", arguments: { id: cardId } });
+    expect(await reviewUnitsFor(cardId)).toHaveLength(0);
+    expect(await reviewLogsFor(forwardBefore.id)).toHaveLength(0);
+    expect(
+      (parseToolText(
+        await client!.callTool({
+          name: "get_flashcard",
+          arguments: { id: dependentId },
+        }),
+      ).flashcard as { locked: boolean }).locked,
+    ).toBe(false);
   });
 
   it("supports streamable HTTP transport for the embedded app server", async () => {

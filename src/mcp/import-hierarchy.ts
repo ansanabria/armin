@@ -2,16 +2,13 @@ import { eq } from "drizzle-orm";
 import type { Deck, Flashcard } from "../main/db/schema";
 import { schema } from "../main/db";
 import {
-  generateReviewUnits,
   isFlashcardType,
-  serializeContent,
-  validateContent,
   type FlashcardType,
 } from "../main/services/flashcard-types";
 import { getDeck } from "../main/services/decks";
 import { getDeckGraph, refreshLockedForDeck } from "../main/services/graph";
 import type { ServiceContext } from "../main/services/context";
-import { newReviewUnitFields } from "../main/services/scheduler";
+import { createFlashcardRecord } from "../main/services/flashcards";
 
 export type HierarchyFlashcardInput = {
   clientId: string;
@@ -100,10 +97,10 @@ function resolveTypedContent(flashcard: HierarchyFlashcardInput) {
     );
   }
   const type: FlashcardType = rawType;
-  const raw =
-    flashcard.content ??
-    ({ front: flashcard.front, back: flashcard.back } as unknown);
-  const content = validateContent(type, raw);
+  const content = flashcard.content ?? {
+    front: flashcard.front,
+    back: flashcard.back,
+  };
   return { type, content };
 }
 
@@ -151,32 +148,14 @@ export async function importFlashcardHierarchy(
     const createdFlashcards: Array<Flashcard & { clientId: string }> = [];
 
     for (const { flashcard, type, content } of resolved) {
-      const created = tx
-        .insert(schema.flashcards)
-        .values({
-          deckId: deck.id,
-          type,
-          content: serializeContent(content),
-          locked: false,
-        })
-        .returning()
-        .get();
+      const created = createFlashcardRecord(tx, {
+        deckId: deck.id,
+        type,
+        content,
+      });
 
-      for (const spec of generateReviewUnits(type, content)) {
-        tx.insert(schema.reviewUnits)
-          .values({
-            flashcardId: created!.id,
-            deckId: deck.id,
-            subKey: spec.subKey,
-            front: spec.front,
-            back: spec.back,
-            ...newReviewUnitFields(),
-          })
-          .run();
-      }
-
-      flashcardsByClientId.set(flashcard.clientId, created!);
-      createdFlashcards.push({ ...created!, clientId: flashcard.clientId });
+      flashcardsByClientId.set(flashcard.clientId, created);
+      createdFlashcards.push({ ...created, clientId: flashcard.clientId });
     }
 
     const edges: ImportedHierarchy["edges"] = [];

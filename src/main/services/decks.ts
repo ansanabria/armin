@@ -34,7 +34,7 @@ async function withStats(
       )
       .all(),
   ]);
-  const due = (await buildSessionQueue(ctx, deckReviewUnits, deck.id)).length;
+  const due = (await buildSessionQueue(ctx, deckReviewUnits)).length;
   const learning = deckReviewUnits.filter(
     (reviewUnit) =>
       reviewUnit.state === State.Learning ||

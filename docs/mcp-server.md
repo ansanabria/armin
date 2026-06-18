@@ -14,7 +14,11 @@ Available tools:
 - `list_decks`
 - `create_deck`
 - `create_flashcard`
+- `update_card`
+- `archive_card`
+- `delete_card`
 - `add_prerequisite`
+- `remove_prerequisite`
 - `import_flashcard_hierarchy`
 - `get_deck_graph`
 - `list_flashcards`

@@ -43,7 +43,7 @@ export const flashcards = sqliteTable(
     deckId: text("deck_id")
       .notNull()
       .references(() => decks.id, { onDelete: "cascade" }),
-    /** One of FlashcardType: basic | basic_reversed | cloze | type_answer | diagram. */
+    /** One of FlashcardType: basic | basic_reversed | cloze | type_answer | image_occlusion. */
     type: text("type").notNull().default("basic"),
     /** Type-specific content, serialized as JSON. */
     content: text("content").notNull(),
@@ -81,7 +81,7 @@ export const reviewUnits = sqliteTable(
     deckId: text("deck_id")
       .notNull()
       .references(() => decks.id, { onDelete: "cascade" }),
-    /** Stable per-flashcard key identifying which review unit this is (e.g. "", "fwd", "c1"). */
+    /** Stable per-flashcard key identifying which review unit this is (e.g. "", "rev", "c1"). */
     subKey: text("sub_key").notNull().default(""),
     front: text("front").notNull(),
     back: text("back").notNull(),
@@ -200,6 +200,12 @@ export const settings = sqliteTable("settings", {
   newReviewUnitsPerDay: integer("new_review_units_per_day")
     .notNull()
     .default(10),
+  /** Admit all eligible new review units for a flashcard together. */
+  keepSiblingReviewUnitsTogether: integer("keep_sibling_review_units_together", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(true),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .default(sql`(unixepoch() * 1000)`),

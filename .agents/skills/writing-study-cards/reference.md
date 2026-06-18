@@ -1,6 +1,6 @@
 # Knowledge-type playbook
 
-How to decompose each kind of knowledge into cards, with worked examples. Examples use a chicken-stock recipe. Map every `Q./A.` to an Armin card type (`basic`, `basic_reversed`, `cloze`, `type_answer`, `diagram`).
+How to decompose each kind of knowledge into cards, with worked examples. Examples use a chicken-stock recipe. Map every `Q./A.` to an Armin card type (`basic`, `basic_reversed`, `cloze`, `type_answer`, `image_occlusion`).
 
 ## Factual knowledge
 
@@ -63,7 +63,7 @@ Q. How long must chicken stock simmer?
 A. 90 minutes.
 ```
 
-For procedures, capture **conditions/heuristics for moving between steps** (when to lower heat, how long), not obvious verbs. Add "heads-up" cards (how long heating takes) and explanation cards ("why low heat?" → "brighter, cleaner flavor"). Branching procedures: capture the predicates; if complex, use a `diagram`. Phrase uncertain answers tentatively and record the source.
+For procedures, capture **conditions/heuristics for moving between steps** (when to lower heat, how long), not obvious verbs. Add "heads-up" cards (how long heating takes) and explanation cards ("why low heat?" → "brighter, cleaner flavor"). Branching procedures: capture the predicates; if complex, use `image_occlusion`. Phrase uncertain answers tentatively and record the source.
 
 ## Conceptual knowledge -> the five lenses
 

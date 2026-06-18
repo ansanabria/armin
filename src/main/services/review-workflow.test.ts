@@ -28,6 +28,33 @@ function basic(
   });
 }
 
+function basicReversed(
+  ctx: Awaited<ReturnType<typeof makeContext>>,
+  deckId: string,
+  front: string,
+  back: string,
+) {
+  return notes.createFlashcard({
+    ctx,
+    deckId,
+    type: "basic_reversed",
+    content: { front, back },
+  });
+}
+
+function cloze(
+  ctx: Awaited<ReturnType<typeof makeContext>>,
+  deckId: string,
+  text: string,
+) {
+  return notes.createFlashcard({
+    ctx,
+    deckId,
+    type: "cloze",
+    content: { text },
+  });
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(FIXED_NOW);
@@ -87,6 +114,49 @@ describe("review workflow", () => {
     expect(queue).toHaveLength(1);
   });
 
+  it("introduces all eligible siblings for a reversed flashcard together", async () => {
+    const ctx = await makeContext("reversed-siblings");
+    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
+    const deck = await decks.createDeck(ctx, { name: "Reversed" });
+    const note = await basicReversed(ctx, deck.id, "F", "B");
+
+    const queue = await review.getQueue(ctx, deck.id);
+
+    expect(queue).toHaveLength(2);
+    expect(new Set(queue.map((item) => item.flashcardId))).toEqual(
+      new Set([note.id]),
+    );
+  });
+
+  it("introduces all eligible cloze siblings together", async () => {
+    const ctx = await makeContext("cloze-siblings");
+    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
+    const deck = await decks.createDeck(ctx, { name: "Cloze" });
+    const note = await cloze(ctx, deck.id, "{{1::A}} then {{2::B}}");
+
+    const queue = await review.getQueue(ctx, deck.id);
+
+    expect(queue).toHaveLength(2);
+    expect(new Set(queue.map((item) => item.flashcardId))).toEqual(
+      new Set([note.id]),
+    );
+  });
+
+  it("slices sibling review units individually when sibling grouping is disabled", async () => {
+    const ctx = await makeContext("sibling-toggle-off");
+    await settings.updateSettings(ctx, {
+      newReviewUnitsPerDay: 1,
+      keepSiblingReviewUnitsTogether: false,
+    });
+    const deck = await decks.createDeck(ctx, { name: "Toggle" });
+    const note = await basicReversed(ctx, deck.id, "F", "B");
+
+    const queue = await review.getQueue(ctx, deck.id);
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0].flashcardId).toBe(note.id);
+  });
+
   it("previewReviewUnit offers four graded outcomes without committing", async () => {
     const ctx = await makeContext("preview");
     await settings.updateSettings(ctx, { enableFuzz: false });
@@ -117,8 +187,8 @@ describe("review workflow", () => {
     expect(untouched.state).toBe(State.New);
   });
 
-  it("scopes the daily new-card count per deck for deck queues", async () => {
-    const ctx = await makeContext("per-deck-cap");
+  it("shares one daily new-card cap between deck queues and the global queue", async () => {
+    const ctx = await makeContext("shared-cap");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
 
     const deckA = await decks.createDeck(ctx, { name: "A" });
@@ -129,13 +199,58 @@ describe("review workflow", () => {
     const cardA = await getOnlyReviewUnit(ctx, noteA.id);
     await review.rateReviewUnit(ctx, cardA.id, Rating.Good);
 
-    expect(await review.countNewReviewUnitsIntroducedToday(ctx, deckA.id)).toBe(1);
-    expect(await review.countNewReviewUnitsIntroducedToday(ctx, deckB.id)).toBe(0);
     expect(await review.countNewReviewUnitsIntroducedToday(ctx)).toBe(1);
 
-    // Deck B's own allowance is untouched by deck A's introduction.
     const queueB = await review.getQueue(ctx, deckB.id);
-    expect(queueB.filter((item) => item.deckId === deckB.id)).toHaveLength(1);
+    expect(queueB.filter((item) => item.deckId === deckB.id)).toHaveLength(0);
+
+    const globalQueue = await review.getGlobalQueue(ctx);
+    expect(globalQueue.filter((item) => item.deckId === deckB.id)).toHaveLength(0);
+  });
+
+  it("global queue introductions consume the same daily cap used by deck queues", async () => {
+    const ctx = await makeContext("global-to-deck-cap");
+    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
+
+    const deckA = await decks.createDeck(ctx, { name: "A" });
+    const deckB = await decks.createDeck(ctx, { name: "B" });
+    await basic(ctx, deckA.id, "A1", "A");
+    await basic(ctx, deckB.id, "B1", "B");
+
+    const [introduced] = await review.getGlobalQueue(ctx);
+    expect(introduced).toBeDefined();
+    await review.rateReviewUnit(ctx, introduced.reviewUnitId, Rating.Good);
+
+    expect(await review.countNewReviewUnitsIntroducedToday(ctx)).toBe(1);
+
+    const otherDeckId = introduced.deckId === deckA.id ? deckB.id : deckA.id;
+    const otherDeckQueue = await review.getQueue(ctx, otherDeckId);
+    expect(otherDeckQueue.filter((item) => item.deckId === otherDeckId)).toHaveLength(
+      0,
+    );
+  });
+
+  it("does not introduce more than ten new cards total through deck queues", async () => {
+    const ctx = await makeContext("ten-card-global-cap");
+    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 10 });
+
+    const deckIds: string[] = [];
+    for (let i = 0; i < 11; i += 1) {
+      const deck = await decks.createDeck(ctx, { name: `Deck ${i + 1}` });
+      deckIds.push(deck.id);
+      await basic(ctx, deck.id, `Q${i + 1}`, `A${i + 1}`);
+    }
+
+    for (const deckId of deckIds.slice(0, 10)) {
+      const [item] = await review.getQueue(ctx, deckId);
+      expect(item).toBeDefined();
+      await review.rateReviewUnit(ctx, item.reviewUnitId, Rating.Good);
+    }
+
+    expect(await review.countNewReviewUnitsIntroducedToday(ctx)).toBe(10);
+
+    const eleventhDeckQueue = await review.getQueue(ctx, deckIds[10]);
+    expect(eleventhDeckQueue).toHaveLength(0);
   });
 
   it("labels global queue items with their deck name", async () => {

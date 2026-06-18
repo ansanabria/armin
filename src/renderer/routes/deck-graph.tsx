@@ -6,15 +6,36 @@ import type { Viewport, XYPosition } from "@xyflow/react";
 import { FlashcardFormDialog } from "@/components/flashcard-form-dialog";
 import { PrerequisiteGraph } from "@/components/prerequisite-graph/prerequisite-graph";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { deckKeys, graphKeys, invalidateCoreData } from "@/lib/armin-query";
 import { toUiDeckGraph, type UiDeckGraph } from "@/types/view-models";
 import type { CardFormValues } from "@/components/flashcard-form-dialog";
-import type { FlashcardContent, FlashcardType } from "@/types/window";
+import type {
+  FlashcardContent,
+  FlashcardDeleteConsequences,
+  FlashcardType,
+} from "@/types/window";
 import { cn } from "@/lib/utils";
 
 const viewportStorageKey = (deckId: string) => `armin:graph-viewport:${deckId}`;
+
+function plural(count: number, singular: string, pluralForm = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
+}
+
+function formatReviewHistory(consequences: FlashcardDeleteConsequences | null) {
+  if (!consequences) return "Loading review history…";
+  if (consequences.reviewLogCount === 0) {
+    return `No review history will be destroyed across ${plural(consequences.reviewUnitCount, "review unit")}.`;
+  }
+
+  const first = consequences.firstReviewAt?.toLocaleDateString();
+  const last = consequences.lastReviewAt?.toLocaleDateString();
+  const span = first && last ? ` from ${first} to ${last}` : "";
+  return `${plural(consequences.reviewLogCount, "review log")} across ${plural(consequences.reviewUnitCount, "review unit")} will be destroyed${span}.`;
+}
 
 function readSavedViewport(deckId: string): Viewport | undefined {
   try {
@@ -80,6 +101,10 @@ export default function DeckGraphPage() {
   const [pendingConnectFrom, setPendingConnectFrom] = useState<string | null>(
     null,
   );
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteConsequences, setDeleteConsequences] =
+    useState<FlashcardDeleteConsequences | null>(null);
+  const [deleteConsequencesError, setDeleteConsequencesError] = useState(false);
   const [nodePlacements, setNodePlacements] = useState<
     Record<string, XYPosition>
   >({});
@@ -139,6 +164,16 @@ export default function DeckGraphPage() {
     setEditingType(note?.type ?? node.type);
     setEditingContent(note?.content ?? null);
     setOpen(true);
+  };
+
+  const openDelete = (nodeId: string) => {
+    setDeleteId(nodeId);
+    setDeleteConsequences(null);
+    setDeleteConsequencesError(false);
+    void window.armin.flashcards
+      .deleteConsequences(nodeId)
+      .then((summary) => setDeleteConsequences(summary))
+      .catch(() => setDeleteConsequencesError(true));
   };
 
   const createCard = useMutation({
@@ -247,6 +282,18 @@ export default function DeckGraphPage() {
     }
   };
 
+  const confirmGraphDelete = async () => {
+    if (!deleteId) return;
+    await deleteCard.mutateAsync(deleteId);
+    setGraph((current) => ({
+      nodes: current.nodes.filter((node) => node.id !== deleteId),
+      edges: current.edges.filter(
+        (edge) => edge.prereqId !== deleteId && edge.dependentId !== deleteId,
+      ),
+    }));
+    setDeleteId(null);
+  };
+
   if (!deckQuery.isLoading && !deckQuery.isError && !deckQuery.data) {
     return (
       <div>
@@ -335,6 +382,7 @@ export default function DeckGraphPage() {
           nodePlacements={nodePlacements}
           onCreateCardRequest={openCreate}
           onEditCardRequest={openEdit}
+          onDeleteCardRequest={openDelete}
           onPersistLayout={(placements) => saveLayout.mutate(placements)}
           initialViewport={initialViewport}
           onViewportChange={persistViewport}
@@ -353,6 +401,46 @@ export default function DeckGraphPage() {
         initialContent={editingId ? editingContent : null}
         onSubmit={saveCard}
       />
+      <Dialog
+        open={Boolean(deleteId)}
+        onClose={() => setDeleteId(null)}
+        title="Delete flashcard?"
+        description="This flashcard will be permanently hard-deleted."
+      >
+        <div className="space-y-3 text-sm text-muted">
+          <p>
+            Archive from the deck or browse view if you want a reversible way to
+            set this aside. Delete removes the flashcard, its review units, and
+            its review history permanently.
+          </p>
+          <ul className="space-y-1 rounded-md border border-border bg-surface-sunken p-3">
+            <li>
+              {deleteConsequencesError
+                ? "Dependent count could not be loaded."
+                : deleteConsequences
+                  ? `${plural(deleteConsequences.dependentCount, "dependent")} will be unlocked or recomputed.`
+                  : "Loading dependent count…"}
+            </li>
+            <li>
+              {deleteConsequencesError
+                ? "Review history could not be loaded."
+                : formatReviewHistory(deleteConsequences)}
+            </li>
+          </ul>
+        </div>
+        <div className="mt-5 flex flex-wrap justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={() => setDeleteId(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={deleteCard.isPending || !deleteConsequences}
+            onClick={() => void confirmGraphDelete()}
+          >
+            Delete flashcard
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

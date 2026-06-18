@@ -34,6 +34,7 @@ export type SettingsUpdate = Partial<
     | "weights"
     | "prereqStabilityFloor"
     | "newReviewUnitsPerDay"
+    | "keepSiblingReviewUnitsTogether"
   >
 >;
 

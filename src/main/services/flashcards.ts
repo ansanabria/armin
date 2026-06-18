@@ -1,4 +1,4 @@
-import { eq, inArray, sql } from "drizzle-orm";
+import { count, eq, inArray, min, max, sql } from "drizzle-orm";
 import { schema } from "../db";
 import type { ReviewUnit, Flashcard } from "../db/schema";
 import {
@@ -22,7 +22,7 @@ import {
   syncFlashcardScheduling,
 } from "./graph";
 
-const { reviewUnits, flashcards, flashcardTags, tags } = schema;
+const { reviewUnits, reviewLogs, flashcards, flashcardTags, tags } = schema;
 
 /**
  * A flashcard plus the derived data the UI needs: tags, lock state, a
@@ -50,6 +50,14 @@ export type FlashcardWithMeta = {
 
 export type BrowseFlashcard = FlashcardWithMeta & {
   deckName: string;
+};
+
+export type FlashcardDeleteConsequences = {
+  dependentCount: number;
+  reviewUnitCount: number;
+  reviewLogCount: number;
+  firstReviewAt: Date | null;
+  lastReviewAt: Date | null;
 };
 
 function normalizeTag(tag: string) {
@@ -229,6 +237,8 @@ type ReconcileDb = Pick<
   "select" | "insert" | "update" | "delete"
 >;
 
+type CreateFlashcardDb = ReconcileDb;
+
 /**
  * Bring a flashcard's generated review units in sync with its content: keep the
  * units whose `subKey` still exists (preserving FSRS state), insert new ones,
@@ -298,6 +308,32 @@ function reconcileReviewUnits(
   }
 }
 
+export function createFlashcardRecord(
+  db: CreateFlashcardDb,
+  input: {
+    deckId: string;
+    type: FlashcardType;
+    content: unknown;
+    tags?: string[];
+  },
+): Flashcard {
+  const content = validateContent(input.type, input.content);
+  const created = db
+    .insert(flashcards)
+    .values({
+      deckId: input.deckId,
+      type: input.type,
+      content: serializeContent(content),
+      locked: false,
+    })
+    .returning()
+    .get();
+
+  reconcileReviewUnits(db, created!, input.type, content);
+  replaceFlashcardTags(db, created!.id, input.tags ?? []);
+  return created!;
+}
+
 export async function listFlashcards(
   ctx: ServiceContext,
   deckId: string,
@@ -345,6 +381,38 @@ export async function getFlashcard(
   return flashcard ? withFlashcardMeta(ctx, flashcard) : undefined;
 }
 
+export async function getDeleteConsequences(
+  ctx: ServiceContext,
+  id: string,
+): Promise<FlashcardDeleteConsequences> {
+  const [dependentIds, reviewUnitSummary, reviewLogSummary] = await Promise.all([
+    getDependentIds(ctx, id),
+    ctx.db
+      .select({ value: count() })
+      .from(reviewUnits)
+      .where(eq(reviewUnits.flashcardId, id))
+      .get(),
+    ctx.db
+      .select({
+        count: count(),
+        firstReviewAt: min(reviewLogs.review),
+        lastReviewAt: max(reviewLogs.review),
+      })
+      .from(reviewLogs)
+      .innerJoin(reviewUnits, eq(reviewLogs.reviewUnitId, reviewUnits.id))
+      .where(eq(reviewUnits.flashcardId, id))
+      .get(),
+  ]);
+
+  return {
+    dependentCount: dependentIds.length,
+    reviewUnitCount: reviewUnitSummary?.value ?? 0,
+    reviewLogCount: reviewLogSummary?.count ?? 0,
+    firstReviewAt: reviewLogSummary?.firstReviewAt ?? null,
+    lastReviewAt: reviewLogSummary?.lastReviewAt ?? null,
+  };
+}
+
 export async function createFlashcard(input: {
   ctx: ServiceContext;
   deckId: string;
@@ -353,24 +421,9 @@ export async function createFlashcard(input: {
   tags?: string[];
 }): Promise<FlashcardWithMeta> {
   const { ctx } = input;
-  const content = validateContent(input.type, input.content);
-
-  const flashcard = await ctx.db.transaction((tx) => {
-    const created = tx
-      .insert(flashcards)
-      .values({
-        deckId: input.deckId,
-        type: input.type,
-        content: serializeContent(content),
-        locked: false,
-      })
-      .returning()
-      .get();
-
-    reconcileReviewUnits(tx, created!, input.type, content);
-    replaceFlashcardTags(tx, created!.id, input.tags ?? []);
-    return created!;
-  });
+  const flashcard = await ctx.db.transaction((tx) =>
+    createFlashcardRecord(tx, input),
+  );
 
   return withFlashcardMeta(ctx, flashcard);
 }

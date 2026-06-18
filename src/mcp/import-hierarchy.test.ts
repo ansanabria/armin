@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { asc, count, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { schema } from "../main/db";
 import * as notes from "../main/services/flashcards";
@@ -7,6 +7,31 @@ import { makeContext, useTestDb } from "../main/test/db";
 import { importFlashcardHierarchy, readDeckGraph } from "./import-hierarchy";
 
 useTestDb();
+
+async function storedFlashcardShape(
+  ctx: Awaited<ReturnType<typeof makeContext>>,
+  flashcardId: string,
+) {
+  const flashcard = await ctx.db
+    .select({ type: schema.flashcards.type, content: schema.flashcards.content })
+    .from(schema.flashcards)
+    .where(eq(schema.flashcards.id, flashcardId))
+    .get();
+  const reviewUnits = await ctx.db
+    .select({
+      subKey: schema.reviewUnits.subKey,
+      front: schema.reviewUnits.front,
+      back: schema.reviewUnits.back,
+      locked: schema.reviewUnits.locked,
+      archived: schema.reviewUnits.archived,
+    })
+    .from(schema.reviewUnits)
+    .where(eq(schema.reviewUnits.flashcardId, flashcardId))
+    .orderBy(asc(schema.reviewUnits.subKey))
+    .all();
+
+  return { flashcard, reviewUnits };
+}
 
 describe("importFlashcardHierarchy", () => {
   it("creates a deck and hierarchy from deckName", async () => {
@@ -96,6 +121,35 @@ describe("importFlashcardHierarchy", () => {
       .where(eq(schema.reviewUnits.flashcardId, cloze.id))
       .all();
     expect(clozeCards.map((card) => card.subKey).sort()).toEqual(["c1", "c2"]);
+  });
+
+  it("stores the same normalized shape as UI creation", async () => {
+    const ctx = await makeContext("import-shared-create-path");
+    const deck = await decks.createDeck(ctx, { name: "Shared" });
+    const content = { text: "The {{mitochondria}} powers the {{cell::unit}}." };
+
+    const uiCreated = await notes.createFlashcard({
+      ctx,
+      deckId: deck.id,
+      type: "cloze",
+      content,
+    });
+    const imported = await importFlashcardHierarchy(ctx, {
+      deckId: deck.id,
+      flashcards: [{ clientId: "agent", type: "cloze", content }],
+    });
+    const agentCreated = imported.flashcards[0];
+
+    await expect(
+      storedFlashcardShape(ctx, agentCreated.id),
+    ).resolves.toEqual(await storedFlashcardShape(ctx, uiCreated.id));
+    expect(
+      (await storedFlashcardShape(ctx, uiCreated.id)).flashcard?.content,
+    ).toBe(
+      JSON.stringify({
+        text: "The {{1::mitochondria}} powers the {{2::cell::unit}}.",
+      }),
+    );
   });
 
   it("rejects unknown card types before writing anything", async () => {

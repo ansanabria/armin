@@ -12,14 +12,12 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
-import { DiagramEditor } from "@/components/diagram-editor";
 import { cn } from "@/lib/utils";
 import {
   clozeClusters,
   parseClozes,
   type FlashcardContent,
   type FlashcardType,
-  type DiagramContent,
 } from "../../main/services/flashcard-types";
 
 export type CardFormValues = {
@@ -45,10 +43,7 @@ const TYPE_OPTIONS: { value: FlashcardType; label: string }[] = [
   { value: "basic_reversed", label: "Reversed" },
   { value: "cloze", label: "Cloze" },
   { value: "type_answer", label: "Type answer" },
-  { value: "diagram", label: "Diagram" },
 ];
-
-const EMPTY_DIAGRAM: DiagramContent = { image: "", regions: [] };
 
 export function FlashcardFormDialog({
   open,
@@ -68,7 +63,9 @@ export function FlashcardFormDialog({
   const [prompt, setPrompt] = useState("");
   const [answer, setAnswer] = useState("");
   const [acceptedAnswers, setAcceptedAnswers] = useState<string[]>([]);
-  const [diagram, setDiagram] = useState<DiagramContent>(EMPTY_DIAGRAM);
+  const [imageOcclusion, setImageOcclusion] = useState<FlashcardContent | null>(
+    null,
+  );
   const [tags, setTags] = useState<string[]>(initialTags);
 
   const [displaySession, setDisplaySession] = useState({
@@ -87,7 +84,7 @@ export function FlashcardFormDialog({
     setPrompt("");
     setAnswer("");
     setAcceptedAnswers([]);
-    setDiagram(EMPTY_DIAGRAM);
+    setImageOcclusion(null);
   };
 
   const hydrateFrom = (t: FlashcardType, content: FlashcardContent | null) => {
@@ -109,8 +106,8 @@ export function FlashcardFormDialog({
       setPrompt(c.prompt);
       setAnswer(c.answer);
       setAcceptedAnswers(c.acceptedAnswers ?? []);
-    } else if (t === "diagram") {
-      setDiagram(content as DiagramContent);
+    } else if (t === "image_occlusion") {
+      setImageOcclusion(content);
     }
   };
 
@@ -146,10 +143,8 @@ export function FlashcardFormDialog({
           acceptedAnswers,
         };
       }
-      case "diagram": {
-        const regions = diagram.regions.filter((r) => r.label.trim());
-        if (!diagram.image || regions.length === 0) return null;
-        return { image: diagram.image, regions };
+      case "image_occlusion": {
+        return imageOcclusion;
       }
     }
   };
@@ -294,13 +289,12 @@ export function FlashcardFormDialog({
           </>
         )}
 
-        {type === "diagram" && (
-          <Field label="Diagram" hint="Upload an image and label its regions.">
-            <DiagramEditor
-              key={`diagram-${editorKey}`}
-              value={diagram}
-              onChange={setDiagram}
-            />
+        {type === "image_occlusion" && (
+          <Field label="Image occlusion">
+            <div className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-muted">
+              Image occlusion authoring is not available in this editor yet.
+              Existing masks are preserved when saving tags or other metadata.
+            </div>
           </Field>
         )}
 

@@ -380,6 +380,7 @@ export const settings = {
   relearningSteps: "10m",
   prereqStabilityFloor: 2,
   newReviewUnitsPerDay: 10,
+  keepSiblingReviewUnitsTogether: true,
   theme: "system" as "flexoki-light" | "flexoki-dark" | "system",
 };
 

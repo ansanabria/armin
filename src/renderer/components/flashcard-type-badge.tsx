@@ -6,7 +6,7 @@ export const CARD_TYPE_LABELS: Record<FlashcardType, string> = {
   basic_reversed: "Reversed",
   cloze: "Cloze",
   type_answer: "Type answer",
-  diagram: "Diagram",
+  image_occlusion: "Image occlusion",
 };
 
 /** Small chip showing a note's card type. Hidden for plain basic cards. */

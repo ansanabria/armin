@@ -137,6 +137,9 @@ export default function ReviewsPage() {
       onDeleteFlashcard={(flashcardId) =>
         deleteCard.mutateAsync(flashcardId).then(() => undefined)
       }
+      loadDeleteConsequences={(flashcardId) =>
+        window.armin.flashcards.deleteConsequences(flashcardId)
+      }
       deckSelector={
         <Select
           value={selectedDeckId}

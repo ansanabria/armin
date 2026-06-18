@@ -30,6 +30,9 @@ import {
   serializeContent,
   type FlashcardContent,
   type FlashcardType,
+  type ImageOcclusionContent,
+  type ImageOcclusionGeometry,
+  type ImageOcclusionMask,
 } from "../flashcard-types";
 import type { ServiceContext } from "../context";
 import { newReviewUnitFields, type FsrsFields } from "../scheduler";
@@ -54,10 +57,24 @@ type ParsedNote = {
 
 type ParsedPackage = {
   notes: ParsedNote[];
+  importedTypes: ImportTypeCount[];
+  skippedNotes: SkippedAnkiNote[];
   decks: { name: string; cardCount: number }[];
   imageCount: number;
   hasScheduling: boolean;
   warnings: string[];
+};
+
+export type ImportTypeCount = {
+  type: FlashcardType;
+  count: number;
+};
+
+export type SkippedAnkiNote = {
+  noteId: number;
+  noteType: string;
+  cardCount: number;
+  reason: string;
 };
 
 /** The serializable summary returned to the renderer after analysis. */
@@ -65,8 +82,10 @@ export type AnkiAnalysis = {
   importId: string;
   suggestedName: string;
   totalCards: number;
+  importedTypes: ImportTypeCount[];
   /** Cards left out because they could not be mapped to an Armin card type. */
   skippedCount: number;
+  skippedNotes: SkippedAnkiNote[];
   decks: { name: string; cardCount: number }[];
   imageCount: number;
   hasScheduling: boolean;
@@ -76,6 +95,9 @@ export type AnkiAnalysis = {
 export type AnkiImportResult = {
   deckCount: number;
   cardCount: number;
+  importedTypes: ImportTypeCount[];
+  skippedCount: number;
+  skippedNotes: SkippedAnkiNote[];
   firstDeckId: string | null;
 };
 
@@ -482,13 +504,16 @@ function buildBasicLikeNote(
   const fieldMap = buildFieldMap(noteType, note.fields);
   const frontField = fieldMap.Front ?? note.fields[0];
   const backField = fieldMap.Back ?? note.fields[1];
+
+  if (!isBasicLikeNoteType(noteType, fieldMap)) return null;
+
   if (rows.length >= 2 && frontField && backField) {
     const toMd = (html: string) => ankiHtmlToMarkdown(html, { resolveMedia });
     const schedules = new Map<string, FsrsFields>();
     const sortedRows = [...rows].sort((a, b) => a.ord - b.ord);
     const fwd = mapSchedule(sortedRows[0], crt);
     const rev = mapSchedule(sortedRows[1], crt);
-    if (fwd) schedules.set("fwd", fwd);
+    if (fwd) schedules.set("", fwd);
     if (rev) schedules.set("rev", rev);
     return {
       type: "basic_reversed",
@@ -531,7 +556,7 @@ function buildBasicLikeNote(
       const schedules = new Map<string, FsrsFields>();
       const fwd = mapSchedule(a.card, crt);
       const rev = mapSchedule(b.card, crt);
-      if (fwd) schedules.set("fwd", fwd);
+      if (fwd) schedules.set("", fwd);
       if (rev) schedules.set("rev", rev);
       return {
         type: "basic_reversed",
@@ -551,6 +576,14 @@ function buildBasicLikeNote(
     deckName,
     schedules: schedule ? new Map([["", schedule]]) : new Map(),
   };
+}
+
+function isBasicLikeNoteType(
+  noteType: NoteType,
+  fieldMap: Record<string, string>,
+): boolean {
+  if (!fieldMap.Front || !fieldMap.Back) return false;
+  return /^basic\b/i.test(noteType.name);
 }
 
 function buildClozeNote(
@@ -635,7 +668,190 @@ function fieldByName(
   return null;
 }
 
-function buildDiagramNote(
+function fieldNameIndex(noteType: NoteType, names: string[]): number {
+  const lowerNames = names.map((name) => name.toLocaleLowerCase());
+  return noteType.fieldNames.findIndex((field) =>
+    lowerNames.includes(field.toLocaleLowerCase()),
+  );
+}
+
+function isNativeImageOcclusionNote(
+  note: Note,
+  noteType: NoteType,
+): boolean {
+  const hasNativeFields =
+    fieldNameIndex(noteType, ["occlusions"]) !== -1 &&
+    fieldNameIndex(noteType, ["image"]) !== -1;
+  return (
+    /image\s+occlusion/i.test(noteType.name) ||
+    hasNativeFields ||
+    note.fields.some((field) => /image-occlusion:/i.test(field))
+  );
+}
+
+function isLegacyImageOcclusionEnhancedNote(noteType: NoteType): boolean {
+  const names = noteType.fieldNames.map((name) => name.toLocaleLowerCase());
+  const hasLegacyMasks = ["question mask", "answer mask", "original mask"].some(
+    (name) => names.includes(name),
+  );
+  return /image\s+occlusion\s+enhanced/i.test(noteType.name) || hasLegacyMasks;
+}
+
+function markdownImageUrl(markdown: string): string | null {
+  return markdown.match(/!\[[^\]]*\]\(([^)]+)\)/)?.[1] ?? null;
+}
+
+function imageDimensionsFromDataUrl(
+  dataUrl: string,
+): { width: number; height: number } | null {
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  const mime = match[1].toLocaleLowerCase();
+  const bytes = Buffer.from(match[2], "base64");
+  if (mime === "image/png" && bytes.length >= 24) {
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  }
+  if (mime === "image/jpeg") {
+    let offset = 2;
+    while (offset + 9 < bytes.length) {
+      if (bytes[offset] !== 0xff) return null;
+      const marker = bytes[offset + 1];
+      const length = bytes.readUInt16BE(offset + 2);
+      if (marker >= 0xc0 && marker <= 0xc3) {
+        return {
+          height: bytes.readUInt16BE(offset + 5),
+          width: bytes.readUInt16BE(offset + 7),
+        };
+      }
+      offset += 2 + length;
+    }
+  }
+  return null;
+}
+
+function splitUnescapedColon(value: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let escaped = false;
+  for (const char of value) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+    } else if (char === "\\") {
+      escaped = true;
+    } else if (char === ":") {
+      parts.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  parts.push(current);
+  return parts;
+}
+
+type NativeIoShape = {
+  ordinal: number;
+  type: string;
+  props: Record<string, string>;
+};
+
+function parseNativeImageOcclusionShapes(occlusions: string): NativeIoShape[] {
+  const shapes: NativeIoShape[] = [];
+  const re = /\{\{c(\d+)::image-occlusion:([\s\S]*?)\}\}/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(occlusions)) !== null) {
+    const ordinal = Number(match[1]);
+    const parts = splitUnescapedColon(match[2].trim());
+    const type = parts.shift()?.trim().toLocaleLowerCase() ?? "";
+    const props: Record<string, string> = {};
+    for (const part of parts) {
+      const eq = part.indexOf("=");
+      if (eq === -1) continue;
+      props[part.slice(0, eq).trim().toLocaleLowerCase()] = part.slice(eq + 1);
+    }
+    if (Number.isInteger(ordinal) && ordinal > 0 && type) {
+      shapes.push({ ordinal, type, props });
+    }
+  }
+  return shapes;
+}
+
+function numberProp(
+  props: Record<string, string>,
+  name: string,
+): number | null {
+  const value = Number.parseFloat(props[name] ?? "");
+  return Number.isFinite(value) ? value : null;
+}
+
+function boundingBoxFromPoints(points: string): ImageOcclusionGeometry | null {
+  const parsed = points
+    .trim()
+    .split(/\s+/)
+    .map((point) => {
+      const [x, y] = point.split(",").map((n) => Number.parseFloat(n));
+      return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+    })
+    .filter((point): point is { x: number; y: number } => point !== null);
+  if (parsed.length === 0) return null;
+  const xs = parsed.map((point) => point.x);
+  const ys = parsed.map((point) => point.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return {
+    x,
+    y,
+    w: Math.max(...xs) - x,
+    h: Math.max(...ys) - y,
+  };
+}
+
+function nativeShapeGeometry(shape: NativeIoShape): ImageOcclusionGeometry | null {
+  const left = numberProp(shape.props, "left");
+  const top = numberProp(shape.props, "top");
+  const width = numberProp(shape.props, "width");
+  const height = numberProp(shape.props, "height");
+  if (shape.type === "polygon") {
+    const fromPoints = shape.props.points
+      ? boundingBoxFromPoints(shape.props.points)
+      : null;
+    if (fromPoints) return fromPoints;
+  }
+  if (left == null || top == null) return null;
+  if (width != null && height != null) return { x: left, y: top, w: width, h: height };
+  if (shape.type === "ellipse") {
+    const rx = numberProp(shape.props, "rx");
+    const ry = numberProp(shape.props, "ry");
+    if (rx != null && ry != null) return { x: left, y: top, w: rx * 2, h: ry * 2 };
+  }
+  return null;
+}
+
+function normalizeGeometry(
+  geometry: ImageOcclusionGeometry,
+  dimensions: { width: number; height: number } | null,
+): ImageOcclusionGeometry {
+  if (!dimensions || dimensions.width <= 0 || dimensions.height <= 0) {
+    return geometry;
+  }
+  return {
+    x: geometry.x / dimensions.width,
+    y: geometry.y / dimensions.height,
+    w: geometry.w / dimensions.width,
+    h: geometry.h / dimensions.height,
+  };
+}
+
+function unionGeometry(geometries: ImageOcclusionGeometry[]): ImageOcclusionGeometry {
+  const x1 = Math.min(...geometries.map((g) => g.x));
+  const y1 = Math.min(...geometries.map((g) => g.y));
+  const x2 = Math.max(...geometries.map((g) => g.x + g.w));
+  const y2 = Math.max(...geometries.map((g) => g.y + g.h));
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
+
+function buildNativeImageOcclusionNote(
   rows: CardRow[],
   note: Note,
   noteType: NoteType,
@@ -643,6 +859,101 @@ function buildDiagramNote(
   crt: number,
   resolveMedia: (name: string) => string | undefined,
 ): ParsedNote | null {
+  const imageHtml = fieldByName(note, noteType, ["image"]);
+  const occlusions = fieldByName(note, noteType, ["occlusions", "occlusion"]);
+  if (!imageHtml || !occlusions || !/image-occlusion:/i.test(occlusions)) {
+    return null;
+  }
+
+  const image = markdownImageUrl(ankiHtmlToMarkdown(imageHtml, { resolveMedia }));
+  if (!image) return null;
+
+  const dimensions = imageDimensionsFromDataUrl(image);
+  if (!dimensions) return null;
+  const shapes = parseNativeImageOcclusionShapes(occlusions);
+  const supportedShapes = shapes.filter((shape) =>
+    ["rect", "ellipse", "polygon"].includes(shape.type),
+  );
+  if (supportedShapes.length !== shapes.length || supportedShapes.length === 0) {
+    return null;
+  }
+
+  const byOrdinal = new Map<number, ImageOcclusionGeometry[]>();
+  for (const shape of supportedShapes) {
+    const geometry = nativeShapeGeometry(shape);
+    if (!geometry) return null;
+    const list = byOrdinal.get(shape.ordinal) ?? [];
+    list.push(normalizeGeometry(geometry, dimensions));
+    byOrdinal.set(shape.ordinal, list);
+  }
+
+  const masks: ImageOcclusionMask[] = [...byOrdinal.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([ordinal, geometries]) => ({
+      id: `c${ordinal}`,
+      geometry: unionGeometry(geometries),
+    }));
+  if (masks.length === 0) return null;
+
+  const header = ankiHtmlToMarkdown(
+    fieldByName(note, noteType, ["header"]) ?? "",
+    { resolveMedia },
+  ).trim();
+  const extraParts = [
+    fieldByName(note, noteType, ["back extra", "back_extra"]),
+    fieldByName(note, noteType, ["comments"]),
+  ]
+    .map((field) => ankiHtmlToMarkdown(field ?? "", { resolveMedia }).trim())
+    .filter(Boolean);
+
+  const schedules = new Map<string, FsrsFields>();
+  for (const row of rows) {
+    const id = `c${row.ord + 1}`;
+    if (!masks.some((mask) => mask.id === id)) continue;
+    const schedule = mapSchedule(row, crt);
+    if (schedule) schedules.set(id, schedule);
+  }
+
+  const revealMode = supportedShapes.some(
+    (shape) => shape.props.oi === "1" || shape.props.occludeinactive === "1",
+  )
+    ? "hide_all"
+    : "hide_one";
+  const content: ImageOcclusionContent = {
+    baseImage: image,
+    masks,
+    revealMode,
+    ...(header ? { header } : {}),
+    ...(extraParts.length > 0 ? { extra: extraParts.join("\n\n") } : {}),
+  };
+
+  return {
+    type: "image_occlusion",
+    content,
+    tags: note.tags,
+    deckName: deckNames.get(rows[0]?.did) ?? "Imported",
+    schedules,
+  };
+}
+
+function buildImageOcclusionNote(
+  rows: CardRow[],
+  note: Note,
+  noteType: NoteType,
+  deckNames: Map<number, string>,
+  crt: number,
+  resolveMedia: (name: string) => string | undefined,
+): ParsedNote | null {
+  const native = buildNativeImageOcclusionNote(
+    rows,
+    note,
+    noteType,
+    deckNames,
+    crt,
+    resolveMedia,
+  );
+  if (native) return native;
+
   const imageHtml = fieldByName(note, noteType, [
     "image",
     "picture",
@@ -664,17 +975,43 @@ function buildDiagramNote(
   )?.[1];
   if (!image) return null;
 
+  const masks = regions.map((region, index) => {
+    const raw = region as {
+      id?: unknown;
+      x?: unknown;
+      y?: unknown;
+      w?: unknown;
+      h?: unknown;
+      label?: unknown;
+      hint?: unknown;
+    };
+    return {
+      id: typeof raw.id === "string" ? raw.id : `r${index + 1}`,
+      geometry: {
+        x: typeof raw.x === "number" ? raw.x : 0,
+        y: typeof raw.y === "number" ? raw.y : 0,
+        w: typeof raw.w === "number" ? raw.w : 0,
+        h: typeof raw.h === "number" ? raw.h : 0,
+      },
+      ...(typeof raw.label === "string" && raw.label.trim()
+        ? { label: raw.label }
+        : {}),
+      ...(typeof raw.hint === "string" && raw.hint.trim()
+        ? { hint: raw.hint }
+        : {}),
+    };
+  });
+
   const schedules = new Map<string, FsrsFields>();
   rows.forEach((row, index) => {
-    const region = regions[index] as { id?: unknown } | undefined;
-    const id = typeof region?.id === "string" ? region.id : `r${index + 1}`;
+    const id = masks[index]?.id ?? `r${index + 1}`;
     const schedule = mapSchedule(row, crt);
     if (schedule) schedules.set(id, schedule);
   });
 
   return {
-    type: "diagram",
-    content: { image, regions } as FlashcardContent,
+    type: "image_occlusion",
+    content: { baseImage: image, masks, revealMode: "hide_all" } as FlashcardContent,
     tags: note.tags,
     deckName: deckNames.get(rows[0]?.did) ?? "Imported",
     schedules,
@@ -689,14 +1026,42 @@ function buildParsedNote(
   crt: number,
   resolveMedia: (name: string) => string | undefined,
 ): ParsedNote | null {
+  const imageOcclusion = buildImageOcclusionNote(
+    rows,
+    note,
+    noteType,
+    deckNames,
+    crt,
+    resolveMedia,
+  );
+  if (imageOcclusion) return imageOcclusion;
+  if (
+    isNativeImageOcclusionNote(note, noteType) ||
+    isLegacyImageOcclusionEnhancedNote(noteType)
+  ) {
+    return null;
+  }
   if (noteType.isCloze || hasClozeMarkers(note.fields.join(" "))) {
     return buildClozeNote(rows, note, noteType, deckNames, crt, resolveMedia);
   }
   return (
-    buildDiagramNote(rows, note, noteType, deckNames, crt, resolveMedia) ??
     buildTypeAnswerNote(rows, note, noteType, deckNames, crt, resolveMedia) ??
     buildBasicLikeNote(rows, note, noteType, deckNames, crt, resolveMedia)
   );
+}
+
+function skipReasonFor(note: Note, noteType: NoteType): string {
+  if (isLegacyImageOcclusionEnhancedNote(noteType)) {
+    return "Legacy Image Occlusion Enhanced masks are not safely parseable and were skipped.";
+  }
+  if (isNativeImageOcclusionNote(note, noteType)) {
+    return "Native Anki Image Occlusion note could not be parsed safely.";
+  }
+  if (noteType.isCloze) return "Cloze note has no cloze deletions.";
+  if (noteType.templates === null) {
+    return "Anki note layout was unavailable and fields did not match a supported Armin type.";
+  }
+  return "Anki note type does not map to a supported Armin flashcard type.";
 }
 
 // --- scheduling mapping ------------------------------------------------------
@@ -795,6 +1160,8 @@ export async function analyzeAnkiPackage(
 
     const notes: ParsedNote[] = [];
     const deckCounts = new Map<string, number>();
+    const importedTypeCounts = new Map<FlashcardType, number>();
+    const skippedNotes: SkippedAnkiNote[] = [];
     let skippedUnsupported = 0;
     let droppedAudio = false;
     let hasScheduling = false;
@@ -836,10 +1203,20 @@ export async function analyzeAnkiPackage(
       );
       if (!parsed) {
         skippedUnsupported += rows.length;
+        skippedNotes.push({
+          noteId: nid,
+          noteType: noteType.name,
+          cardCount: rows.length,
+          reason: skipReasonFor(note, noteType),
+        });
         continue;
       }
 
       const cardCount = parsedCardCount(parsed);
+      importedTypeCounts.set(
+        parsed.type,
+        (importedTypeCounts.get(parsed.type) ?? 0) + cardCount,
+      );
       deckCounts.set(
         parsed.deckName,
         (deckCounts.get(parsed.deckName) ?? 0) + cardCount,
@@ -851,7 +1228,7 @@ export async function analyzeAnkiPackage(
     if (notes.length === 0) {
       throw new Error(
         skippedUnsupported > 0
-          ? "This package has no supported cards. Armin imports basic, reversed, cloze, type-answer, and diagram notes."
+          ? "This package has no supported cards. Armin imports basic, reversed, cloze, type-answer, and image-occlusion notes."
           : "No cards were found in this Anki package.",
       );
     }
@@ -880,8 +1257,14 @@ export async function analyzeAnkiPackage(
         "Anki review history maps approximately onto Armin's FSRS scheduler.",
       );
 
+    const importedTypes = [...importedTypeCounts.entries()]
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type));
+
     const pkg: ParsedPackage = {
       notes,
+      importedTypes,
+      skippedNotes,
       decks,
       imageCount,
       hasScheduling,
@@ -893,7 +1276,9 @@ export async function analyzeAnkiPackage(
       importId,
       suggestedName: suggestedDeckName(decks, fileName),
       totalCards: notes.reduce((sum, note) => sum + parsedCardCount(note), 0),
+      importedTypes,
       skippedCount: skippedUnsupported,
+      skippedNotes,
       decks,
       imageCount,
       hasScheduling,
@@ -984,7 +1369,14 @@ export async function commitAnkiImport(
   }
 
   parseCache.delete(input.importId);
-  return { deckCount: groups.size, cardCount, firstDeckId };
+  return {
+    deckCount: groups.size,
+    cardCount,
+    importedTypes: pkg.importedTypes,
+    skippedCount: pkg.skippedNotes.reduce((sum, note) => sum + note.cardCount, 0),
+    skippedNotes: pkg.skippedNotes,
+    firstDeckId,
+  };
 }
 
 const CARD_CHUNK = 200;
