@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { PRESET_VALUES } from "../../shared/scheduling-presets";
 import { schema } from "../db";
 import type { Settings } from "../db/schema";
 import type { ServiceContext } from "./context";
@@ -13,7 +14,14 @@ export async function getSettings(ctx: ServiceContext): Promise<Settings> {
     .where(eq(schema.settings.id, 1))
     .get();
   if (existing) return existing;
-  await db.insert(schema.settings).values({ id: 1 }).run();
+  await db
+    .insert(schema.settings)
+    .values({
+      id: 1,
+      ...PRESET_VALUES.balanced,
+      schedulingPreset: "balanced",
+    })
+    .run();
   const seeded = await db
     .select()
     .from(schema.settings)

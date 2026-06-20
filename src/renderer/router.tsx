@@ -4,7 +4,6 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
-import { resolveViewTransitionTypes } from "@/lib/view-transitions";
 import RootLayout from "./routes/__root";
 import DecksPage from "./routes/decks";
 import BrowsePage from "./routes/browse";
@@ -71,18 +70,10 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
 ]);
 
-const viewTransitionsEnabled =
-  typeof window === "undefined" || window.__ARMIN_E2E__ !== true;
-
 export const router = createRouter({
   routeTree,
   history: createHashHistory(),
   scrollRestoration: true,
-  defaultViewTransition: viewTransitionsEnabled
-    ? {
-        types: resolveViewTransitionTypes,
-      }
-    : false,
 });
 
 declare module "@tanstack/react-router" {

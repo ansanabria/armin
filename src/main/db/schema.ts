@@ -189,8 +189,8 @@ export const settings = sqliteTable("settings", {
   enableShortTerm: integer("enable_short_term", { mode: "boolean" })
     .notNull()
     .default(true),
-  // Comma-separated step units, e.g. "1m,10m".
-  learningSteps: text("learning_steps").notNull().default("1m,10m"),
+  // Comma-separated step units, e.g. "10m".
+  learningSteps: text("learning_steps").notNull().default("10m"),
   relearningSteps: text("relearning_steps").notNull().default("10m"),
   // JSON array of FSRS weights; null = library defaults.
   weights: text("weights"),
