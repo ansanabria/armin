@@ -9,10 +9,13 @@ import * as flashcards from "../services/flashcards";
 import * as browse from "../services/browse";
 import { FLASHCARD_TYPES } from "../services/flashcard-types";
 import { BROWSE_SORT_KEYS } from "../../shared/browse";
+import { SCHEDULING_PRESET_VALUES } from "../../shared/scheduling-presets";
 import * as review from "../services/review";
 import * as graph from "../services/graph";
 import * as settings from "../services/settings";
 import * as mcp from "../services/mcp";
+import { getAppSettings, setMcpEnabled } from "../services/app-settings";
+import { startEmbeddedMcpServer, stopEmbeddedMcpServer } from "../mcp-http";
 import * as profiles from "../services/profiles";
 import { analyzeAnkiPackage, commitAnkiImport } from "../services/anki/import";
 import {
@@ -107,9 +110,7 @@ export function registerIpc() {
   });
   register("profiles:delete", id, async ({ id }) => {
     if (isProfileOpen(id)) {
-      throw new Error(
-        "Close this profile's window before deleting it.",
-      );
+      throw new Error("Close this profile's window before deleting it.");
     }
     deleteProfileData(id);
     profiles.deleteProfile(id);
@@ -274,7 +275,10 @@ export function registerIpc() {
   );
   registerForProfile(
     "review:rate",
-    z.object({ reviewUnitId: z.string(), rating: z.number().int().min(1).max(4) }),
+    z.object({
+      reviewUnitId: z.string(),
+      rating: z.number().int().min(1).max(4),
+    }),
     (ctx, { reviewUnitId, rating }) =>
       review.rateReviewUnit(ctx, reviewUnitId, rating as 1 | 2 | 3 | 4),
   );
@@ -329,6 +333,24 @@ export function registerIpc() {
   registerForProfile("mcp:getSetup", z.void().optional(), (ctx) =>
     mcp.getMcpSetup(ctx.profileId),
   );
+  register(
+    "mcp:getEnabled",
+    z.void().optional(),
+    () => getAppSettings().mcpEnabled,
+  );
+  register(
+    "mcp:setEnabled",
+    z.object({ enabled: z.boolean() }),
+    async ({ enabled }) => {
+      // Apply the server change first, then persist — so a failed bind (e.g.
+      // the port is in use) never leaves mcpEnabled=true on disk, which would
+      // make the next launch try to start a server the user couldn't enable.
+      if (enabled) await startEmbeddedMcpServer();
+      else stopEmbeddedMcpServer();
+      setMcpEnabled(enabled);
+      return { enabled };
+    },
+  );
 
   // --- settings ---
   registerForProfile("settings:get", z.void().optional(), (ctx) =>
@@ -347,6 +369,7 @@ export function registerIpc() {
       prereqStabilityFloor: z.number().optional(),
       newReviewUnitsPerDay: z.number().int().min(0).optional(),
       keepSiblingReviewUnitsTogether: z.boolean().optional(),
+      schedulingPreset: z.enum(SCHEDULING_PRESET_VALUES).optional(),
     }),
     (ctx, patch) => settings.updateSettings(ctx, patch),
   );

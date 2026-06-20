@@ -85,6 +85,13 @@
       "when": 1781900000000,
       "tag": "0011_image_occlusion_card_type",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1782000000000,
+      "tag": "0012_scheduling_preset_column",
+      "breakpoints": true
     }
   ]
 }

@@ -206,6 +206,8 @@ export const settings = sqliteTable("settings", {
   })
     .notNull()
     .default(true),
+  /** Selected scheduling preset: balanced | aggressive | relaxed | custom. */
+  schedulingPreset: text("scheduling_preset").notNull().default("balanced"),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
