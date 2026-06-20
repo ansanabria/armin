@@ -35,11 +35,12 @@ export const PRESET_FIELDS = [
 ] as const satisfies readonly (keyof PresetValues)[];
 
 /**
- * Balanced is the optimized default and mirrors the schema column defaults.
- * Aggressive and relaxed adjust only the dials that change study intensity:
- * desired retention (review frequency), the prerequisite stability floor (how
- * solid a prereq must be before it unlocks dependents), and how many new
- * review units enter per day.
+ * Balanced follows FSRS/Anki's broadly recommended defaults: 90% desired
+ * retention, long maximum interval, fuzzing, short-term scheduling, and a
+ * minimal same-day learning step. Aggressive and relaxed adjust only the dials
+ * that change study intensity: desired retention (review frequency), the
+ * prerequisite stability floor (how solid a prereq must be before it unlocks
+ * dependents), and how many new review units enter per day.
  */
 export const PRESET_VALUES: Record<
   Exclude<SchedulingPreset, "custom">,
@@ -50,7 +51,7 @@ export const PRESET_VALUES: Record<
     maximumInterval: 36500,
     enableFuzz: true,
     enableShortTerm: true,
-    learningSteps: "1m,10m",
+    learningSteps: "10m",
     relearningSteps: "10m",
     prereqStabilityFloor: 2,
     newReviewUnitsPerDay: 10,
@@ -61,7 +62,7 @@ export const PRESET_VALUES: Record<
     maximumInterval: 36500,
     enableFuzz: true,
     enableShortTerm: true,
-    learningSteps: "1m,10m",
+    learningSteps: "10m",
     relearningSteps: "10m",
     prereqStabilityFloor: 4,
     newReviewUnitsPerDay: 20,
@@ -72,7 +73,7 @@ export const PRESET_VALUES: Record<
     maximumInterval: 36500,
     enableFuzz: true,
     enableShortTerm: true,
-    learningSteps: "1m,10m",
+    learningSteps: "30m",
     relearningSteps: "10m",
     prereqStabilityFloor: 1,
     newReviewUnitsPerDay: 5,

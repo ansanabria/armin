@@ -19,7 +19,7 @@ function referenceScheduler() {
     maximum_interval: 36500,
     enable_fuzz: false,
     enable_short_term: true,
-    learning_steps: ["1m", "10m"],
+    learning_steps: ["10m"],
     relearning_steps: ["10m"],
   });
 }

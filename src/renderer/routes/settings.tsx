@@ -32,10 +32,8 @@ import {
 import { THEME_OPTIONS, type ThemePreference } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/theme/theme-provider";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Settings } from "@/types/window";
-
-const BAR_EXIT_MS = 320;
 
 type SettingsState = Pick<
   Settings,
@@ -50,6 +48,13 @@ type SettingsState = Pick<
   | "newReviewUnitsPerDay"
   | "keepSiblingReviewUnitsTogether"
 > & { schedulingPreset: SchedulingPreset };
+
+type NamedSchedulingPreset = Exclude<SchedulingPreset, "custom">;
+
+const NAMED_PRESET_OPTIONS = PRESET_OPTIONS.filter(
+  (option): option is { value: NamedSchedulingPreset; label: string } =>
+    option.value !== "custom",
+);
 
 const initial: SettingsState = {
   ...PRESET_VALUES.balanced,
@@ -85,37 +90,75 @@ export default function SettingsPage() {
   const { preference: themePreference, setPreference: setThemePreference } =
     useTheme();
   const [s, setS] = useState(initial);
-  const [saved, setSaved] = useState(initial);
-  const set = <K extends keyof typeof s>(key: K, value: (typeof s)[K]) =>
-    setS((prev) => ({ ...prev, [key]: value }));
+  const currentRef = useRef(initial);
+  const settingsLoadedRef = useRef(false);
+  const queuedSaveRef = useRef<SettingsState | null>(null);
+  const savingRef = useRef(false);
 
   const settingsQuery = useQuery({
     queryKey: settingsKeys.current,
     queryFn: () => window.armin.settings.get(),
   });
 
-  useEffect(() => {
-    if (!settingsQuery.data) return;
-    const next = toSettingsState(settingsQuery.data);
-    setS(next);
-    setSaved(next);
-  }, [settingsQuery.data]);
-
-  const isDirty = useMemo(() => !settingsEqual(s, saved), [s, saved]);
-
   const updateSettings = useMutation({
     mutationFn: (patch: SettingsState) => window.armin.settings.update(patch),
-    onSuccess: (settings) => {
-      const next = toSettingsState(settings);
-      setS(next);
-      setSaved(next);
-      void queryClient.invalidateQueries({ queryKey: settingsKeys.current });
-      toast({ tone: "success", title: "Settings saved" });
-    },
     onError: () => toast({ tone: "error", title: "Couldn’t save settings" }),
   });
 
-  const save = () => updateSettings.mutate(s);
+  const replaceSettingsState = (next: SettingsState) => {
+    currentRef.current = next;
+    setS(next);
+  };
+
+  const flushSaveQueue = () => {
+    if (savingRef.current) return;
+
+    const next = queuedSaveRef.current;
+    if (!next) return;
+
+    queuedSaveRef.current = null;
+    savingRef.current = true;
+    updateSettings.mutate(next, {
+      onSettled: () => {
+        savingRef.current = false;
+        if (queuedSaveRef.current) {
+          flushSaveQueue();
+          return;
+        }
+        void queryClient.invalidateQueries({ queryKey: settingsKeys.current });
+      },
+    });
+  };
+
+  const saveAutomatically = (next: SettingsState) => {
+    if (!settingsLoadedRef.current) return;
+    queuedSaveRef.current = next;
+    flushSaveQueue();
+  };
+
+  const applySettingsState = (
+    updater: (current: SettingsState) => SettingsState,
+  ) => {
+    const current = currentRef.current;
+    const next = updater(current);
+    if (settingsEqual(next, current)) return;
+    replaceSettingsState(next);
+    saveAutomatically(next);
+  };
+
+  const set = <K extends keyof SettingsState>(
+    key: K,
+    value: SettingsState[K],
+  ) => applySettingsState((current) => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    if (!settingsQuery.data || savingRef.current || queuedSaveRef.current) {
+      return;
+    }
+    const next = toSettingsState(settingsQuery.data);
+    replaceSettingsState(next);
+    settingsLoadedRef.current = true;
+  }, [settingsQuery.data]);
 
   const preset = s.schedulingPreset;
 
@@ -124,8 +167,8 @@ export default function SettingsPage() {
       set("schedulingPreset", "custom");
       return;
     }
-    setS((prev) => ({
-      ...prev,
+    applySettingsState((current) => ({
+      ...current,
       ...PRESET_VALUES[next],
       schedulingPreset: next,
     }));
@@ -133,10 +176,18 @@ export default function SettingsPage() {
 
   const resetToPreset = () => {
     if (preset === "custom") return;
-    setS((prev) => ({
-      ...prev,
+    applySettingsState((current) => ({
+      ...current,
       ...PRESET_VALUES[preset],
       schedulingPreset: preset,
+    }));
+  };
+
+  const fillCustomFromPreset = (source: NamedSchedulingPreset) => {
+    applySettingsState((current) => ({
+      ...current,
+      ...PRESET_VALUES[source],
+      schedulingPreset: "custom",
     }));
   };
 
@@ -174,19 +225,35 @@ export default function SettingsPage() {
 
       <div className="space-y-10">
         <Section
-          title="Scheduling"
-          description="Pick a preset for a tuned set of spaced-repetition settings, or choose Custom and adjust each value yourself."
+          title="Scheduling profile"
+          description="Pick a profile for a tuned set of spaced-repetition settings, or use Custom and fill it from a preset."
           action={
-            preset !== "custom" && hasPresetOverrides ? (
-              <Button variant="outline" size="sm" onClick={resetToPreset}>
-                Reset to {presetLabel(preset)} default settings
-              </Button>
+            preset === "custom" ? (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted">
+                  Fill fields from
+                </p>
+                <div className="grid gap-1.5">
+                  {NAMED_PRESET_OPTIONS.map((option) => (
+                    <Button
+                      key={option.value}
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-center"
+                      onClick={() => fillCustomFromPreset(option.value)}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             ) : undefined
           }
         >
           <Row
             label="Preset"
-            hint="Balanced suits most learners. Aggressive reviews more often; Relaxed reviews less."
+            hint="Balanced suits most learners. Aggressive reviews more often. Relaxed reviews less."
+            last
           >
             <Select
               value={preset}
@@ -207,6 +274,12 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
           </Row>
+        </Section>
+
+        <Section
+          title="Scheduling"
+          description="Tune how FSRS schedules reviews for the selected profile."
+        >
           <Row
             label="Desired retention"
             hint="Target recall probability. Higher means more frequent reviews."
@@ -307,6 +380,17 @@ export default function SettingsPage() {
           </Row>
         </Section>
 
+        {preset !== "custom" && hasPresetOverrides && (
+          <div className="flex justify-end">
+            <Button variant="outline" size="sm" onClick={resetToPreset}>
+              <RotateCcw className="h-4 w-4" />
+              Reset to {presetLabel(preset)} default settings
+            </Button>
+          </div>
+        )}
+
+        <SettingsSeparator />
+
         <Section
           title="AI flashcard creation"
           description="Connect a coding agent to Armin's local MCP server so it can generate flashcards."
@@ -344,88 +428,16 @@ export default function SettingsPage() {
           </Row>
         </Section>
       </div>
-
-      <UnsavedChangesBar
-        open={isDirty}
-        saving={updateSettings.isPending}
-        onSave={save}
-      />
     </div>
   );
 }
 
-function UnsavedChangesBar({
-  open,
-  saving,
-  onSave,
-}: {
-  open: boolean;
-  saving: boolean;
-  onSave: () => void;
-}) {
-  const barRef = useRef<HTMLDivElement>(null);
-  const [present, setPresent] = useState(open);
-  const [closing, setClosing] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setPresent(true);
-      setClosing(false);
-    } else if (present) {
-      setClosing(true);
-    }
-  }, [open, present]);
-
-  useEffect(() => {
-    if (!closing) return;
-
-    let finished = false;
-    const finishClose = () => {
-      if (finished) return;
-      finished = true;
-      setPresent(false);
-      setClosing(false);
-    };
-
-    const bar = barRef.current;
-    const onEnd = (event: AnimationEvent) => {
-      if (event.target !== bar) return;
-      finishClose();
-    };
-
-    bar?.addEventListener("animationend", onEnd);
-    const fallback = window.setTimeout(finishClose, BAR_EXIT_MS + 50);
-
-    return () => {
-      bar?.removeEventListener("animationend", onEnd);
-      window.clearTimeout(fallback);
-    };
-  }, [closing]);
-
-  if (!present) return null;
-
+function SettingsSeparator() {
   return (
-    <div
-      className={cn(
-        "fixed inset-x-0 bottom-4 z-50 flex justify-center px-4",
-        closing ? "animate-fade-out" : "animate-fade-in",
-      )}
-      role="status"
-      aria-live="polite"
-    >
-      <div
-        ref={barRef}
-        className={cn(
-          "flex flex-wrap items-center justify-center gap-3 border border-border bg-surface px-4 py-3 shadow-overlay sm:gap-4",
-          closing ? "animate-bar-out" : "animate-bar-in",
-        )}
-      >
-        <p className="text-sm text-ink">You have unsaved changes.</p>
-        <Button size="sm" disabled={saving} onClick={onSave}>
-          {saving ? "Saving…" : "Save changes"}
-        </Button>
-      </div>
-    </div>
+    <hr
+      className="border-0 border-t-2 border-border-strong"
+      aria-hidden="true"
+    />
   );
 }
 

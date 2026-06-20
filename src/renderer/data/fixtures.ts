@@ -376,7 +376,7 @@ export const settings = {
   maximumInterval: 36500,
   enableFuzz: true,
   enableShortTerm: true,
-  learningSteps: "1m, 10m",
+  learningSteps: "10m",
   relearningSteps: "10m",
   prereqStabilityFloor: 2,
   newReviewUnitsPerDay: 10,

@@ -1,5 +1,7 @@
-import { Link, Outlet } from "@tanstack/react-router";
+import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { Layers, Library, Settings, Share2 } from "lucide-react";
+import { useEffect, useState, type KeyboardEvent } from "react";
+import { flushSync } from "react-dom";
 import { ProfileSwitcher } from "@/components/profile-switcher";
 import { ReviewNavLink } from "@/components/review-nav-link";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -14,6 +16,40 @@ const navLinkActive =
 const platform = window.arminShell?.platform ?? "linux";
 
 export default function RootLayout() {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const [optimisticPathname, setOptimisticPathname] = useState<string | null>(
+    null,
+  );
+  const activePathname = optimisticPathname ?? pathname;
+
+  useEffect(() => {
+    if (optimisticPathname === pathname) {
+      setOptimisticPathname(null);
+    }
+  }, [optimisticPathname, pathname]);
+
+  const navClass = (path: string, exact = false) => {
+    const active = exact
+      ? activePathname === path
+      : activePathname === path || activePathname.startsWith(`${path}/`);
+    return active ? navLinkActive : navLink;
+  };
+
+  const activateNav = (path: string) => {
+    flushSync(() => setOptimisticPathname(path));
+  };
+
+  const activateNavFromKeyboard = (
+    event: KeyboardEvent<HTMLAnchorElement>,
+    path: string,
+  ) => {
+    if (event.key === "Enter" || event.key === " ") {
+      activateNav(path);
+    }
+  };
+
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <header className="titlebar-drag z-30 grid h-14 w-full shrink-0 grid-cols-[1fr_auto_1fr] items-stretch border-b border-border bg-bg">
@@ -30,17 +66,22 @@ export default function RootLayout() {
         <nav className="flex items-stretch justify-self-center">
           <Link
             to="/"
-            className={navLink}
-            activeProps={{ className: navLinkActive }}
-            activeOptions={{ exact: true }}
+            className={navClass("/", true)}
+            onPointerDown={(event) => {
+              if (event.button === 0) activateNav("/");
+            }}
+            onKeyDown={(event) => activateNavFromKeyboard(event, "/")}
           >
             <Layers className="h-4 w-4" strokeWidth={1.5} />
             Decks
           </Link>
           <Link
             to="/browse"
-            className={navLink}
-            activeProps={{ className: navLinkActive }}
+            className={navClass("/browse")}
+            onPointerDown={(event) => {
+              if (event.button === 0) activateNav("/browse");
+            }}
+            onKeyDown={(event) => activateNavFromKeyboard(event, "/browse")}
           >
             <Library className="h-4 w-4" strokeWidth={1.5} />
             Browse
@@ -48,16 +89,22 @@ export default function RootLayout() {
           <Link
             to="/graph"
             search={{ focus: undefined }}
-            className={navLink}
-            activeProps={{ className: navLinkActive }}
+            className={navClass("/graph")}
+            onPointerDown={(event) => {
+              if (event.button === 0) activateNav("/graph");
+            }}
+            onKeyDown={(event) => activateNavFromKeyboard(event, "/graph")}
           >
             <Share2 className="h-4 w-4" strokeWidth={1.5} />
             Graph
           </Link>
           <Link
             to="/settings"
-            className={navLink}
-            activeProps={{ className: navLinkActive }}
+            className={navClass("/settings")}
+            onPointerDown={(event) => {
+              if (event.button === 0) activateNav("/settings");
+            }}
+            onKeyDown={(event) => activateNavFromKeyboard(event, "/settings")}
           >
             <Settings className="h-4 w-4" strokeWidth={1.5} />
             Settings

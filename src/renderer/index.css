@@ -302,16 +302,10 @@
       var(--notebook-cell) 100%;
   }
 
-  /* Same-document route transitions (TanStack Router + View Transitions API). */
-  .route-view {
-    view-transition-name: route-content;
-  }
-
   /* A full-bleed route (e.g. the prerequisite graph) opts out of the centered
      page box and page scroll by rendering an element marked `data-fullbleed`.
-     Keying off the rendered content—rather than the router pathname—keeps the
-     layout in lockstep with <Outlet/>, so the previous page never reflows to
-     full width during the navigation transition. */
+     Keying off the rendered content, rather than the router pathname, keeps the
+     layout in lockstep with <Outlet/>. */
   .route-scroll:has([data-fullbleed]) {
     overflow: hidden;
   }
@@ -320,119 +314,6 @@
     max-width: none;
     margin: 0;
     padding: 0;
-  }
-
-  @keyframes vt-fade-out {
-    to {
-      opacity: 0;
-    }
-  }
-
-  @keyframes vt-fade-in {
-    from {
-      opacity: 0;
-    }
-  }
-
-  @keyframes vt-slide-out-left {
-    to {
-      opacity: 0;
-      transform: translateX(-1.25rem);
-    }
-  }
-
-  @keyframes vt-slide-in-left {
-    from {
-      opacity: 0;
-      transform: translateX(1.25rem);
-    }
-  }
-
-  @keyframes vt-slide-out-right {
-    to {
-      opacity: 0;
-      transform: translateX(1.25rem);
-    }
-  }
-
-  @keyframes vt-slide-in-right {
-    from {
-      opacity: 0;
-      transform: translateX(-1.25rem);
-    }
-  }
-
-  @keyframes vt-slide-out-forward {
-    to {
-      opacity: 0;
-      transform: translateX(-0.75rem) scale(0.99);
-    }
-  }
-
-  @keyframes vt-slide-in-forward {
-    from {
-      opacity: 0;
-      transform: translateX(0.75rem) scale(0.99);
-    }
-  }
-
-  @keyframes vt-slide-out-back {
-    to {
-      opacity: 0;
-      transform: translateX(0.75rem) scale(0.99);
-    }
-  }
-
-  @keyframes vt-slide-in-back {
-    from {
-      opacity: 0;
-      transform: translateX(-0.75rem) scale(0.99);
-    }
-  }
-
-  html:active-view-transition-type(fade) {
-    &::view-transition-old(route-content) {
-      animation: 220ms var(--ease-out-quart) both vt-fade-out;
-    }
-    &::view-transition-new(route-content) {
-      animation: 260ms var(--ease-out-quart) both vt-fade-in;
-    }
-  }
-
-  html:active-view-transition-type(slide-left) {
-    &::view-transition-old(route-content) {
-      animation: 280ms var(--ease-out-quart) both vt-slide-out-left;
-    }
-    &::view-transition-new(route-content) {
-      animation: 280ms var(--ease-out-quart) both vt-slide-in-left;
-    }
-  }
-
-  html:active-view-transition-type(slide-right) {
-    &::view-transition-old(route-content) {
-      animation: 280ms var(--ease-out-quart) both vt-slide-out-right;
-    }
-    &::view-transition-new(route-content) {
-      animation: 280ms var(--ease-out-quart) both vt-slide-in-right;
-    }
-  }
-
-  html:active-view-transition-type(slide-forward) {
-    &::view-transition-old(route-content) {
-      animation: 280ms var(--ease-out-quart) both vt-slide-out-forward;
-    }
-    &::view-transition-new(route-content) {
-      animation: 280ms var(--ease-out-quart) both vt-slide-in-forward;
-    }
-  }
-
-  html:active-view-transition-type(slide-back) {
-    &::view-transition-old(route-content) {
-      animation: 280ms var(--ease-out-quart) both vt-slide-out-back;
-    }
-    &::view-transition-new(route-content) {
-      animation: 280ms var(--ease-out-quart) both vt-slide-in-back;
-    }
   }
 
   /* Themed scrollbars for inputs and other in-app scroll regions. */
@@ -713,10 +594,6 @@
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
-  }
-  ::view-transition-old(*),
-  ::view-transition-new(*) {
-    animation: none !important;
   }
   .skeleton {
     animation: none;
