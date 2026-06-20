@@ -252,12 +252,8 @@ export default function DecksPage() {
 
       {!decksQuery.isLoading && !decksQuery.isError && decks.length > 0 && (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {sortedDecks.map((deck, i) => (
-            <li
-              key={deck.id}
-              className="animate-rise"
-              style={{ animationDelay: `${i * 35}ms` }}
-            >
+          {sortedDecks.map((deck) => (
+            <li key={deck.id}>
               <DeckTile
                 deck={deck}
                 onRename={() => {
