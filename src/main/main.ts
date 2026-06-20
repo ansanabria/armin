@@ -5,6 +5,7 @@ import { loadDevToolsExtensions } from "./devtools";
 import { applyLinuxDesktopEntry } from "./icon";
 import { registerIpc, openProfile } from "./ipc";
 import { startEmbeddedMcpServer, stopEmbeddedMcpServer } from "./mcp-http";
+import { getAppSettings } from "./services/app-settings";
 import * as profiles from "./services/profiles";
 import { openProfilePicker } from "./windows";
 
@@ -36,7 +37,9 @@ app.on("ready", async () => {
   applyLinuxDesktopEntry();
   session.defaultSession.setSpellCheckerEnabled(false);
   registerIpc();
-  await startEmbeddedMcpServer();
+  if (getAppSettings().mcpEnabled) {
+    await startEmbeddedMcpServer();
+  }
   await loadDevToolsExtensions();
   await openStartupProfile();
 });

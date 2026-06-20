@@ -37,6 +37,7 @@ export const settingsKeys = {
 
 export const mcpKeys = {
   setup: ["mcp", "setup"] as const,
+  enabled: ["mcp", "enabled"] as const,
 };
 
 export function invalidateCoreData(queryClient: QueryClient, deckId?: string) {
