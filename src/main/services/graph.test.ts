@@ -8,6 +8,7 @@ import {
 import * as decks from "./decks";
 import * as graph from "./graph";
 import * as notes from "./flashcards";
+import * as settings from "./settings";
 import { isPendingSchedule } from "./scheduler";
 
 useTestDb();
@@ -121,6 +122,33 @@ describe("prerequisite edges", () => {
 
     await securePrereq(ctx, b.id);
     await graph.refreshLockedAfterPrereqSecured(ctx, b.id);
+    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+  });
+
+  it("uses the dependent deck's prerequisite stability floor and refreshes on change", async () => {
+    const ctx = await makeContext("edge-deck-floor");
+    await settings.updateSettings(ctx, { prereqStabilityFloor: 2 });
+    const prereqDeck = await decks.createDeck(ctx, { name: "Prereqs" });
+    const dependentDeck = await decks.createDeck(ctx, { name: "Dependents" });
+    const prereq = await basic(ctx, prereqDeck.id, "P", "P");
+    const dependent = await basic(ctx, dependentDeck.id, "D", "D");
+
+    await graph.addPrereq(ctx, prereq.id, dependent.id);
+    await securePrereq(ctx, prereq.id);
+    await graph.refreshLockedAfterPrereqSecured(ctx, prereq.id);
+
+    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+
+    await settings.updateDeckSettings(ctx, dependentDeck.id, {
+      prereqStabilityFloor: 3,
+    });
+
+    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
+
+    await settings.updateDeckSettings(ctx, dependentDeck.id, {
+      prereqStabilityFloor: null,
+    });
+
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
   });
 

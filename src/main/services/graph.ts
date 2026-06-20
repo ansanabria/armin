@@ -12,7 +12,7 @@ import {
   newReviewUnitFields,
   pendingReviewUnitFields,
 } from "./scheduler";
-import { getSettings } from "./settings";
+import { getEffectiveSettingsForDeck } from "./settings";
 
 const { reviewUnits, flashcardPrereqs, flashcards } = schema;
 
@@ -40,23 +40,14 @@ export async function getDependentIds(
   return rows.map((r) => r.id);
 }
 
-async function getPrereqStabilityFloor(ctx: ServiceContext): Promise<number> {
-  return (await getSettings(ctx)).prereqStabilityFloor;
-}
-
-/**
- * A flashcard is "secured" only when every review unit it generated is secured
- * in FSRS (Review state with stability at or above the user floor).
- */
-async function getFlashcardsSecured(
+async function getReviewUnitsByFlashcardId(
   ctx: ServiceContext,
   flashcardIds: string[],
-): Promise<Map<string, boolean>> {
+): Promise<Map<string, { state: number; stability: number }[]>> {
   const uniqueIds = [...new Set(flashcardIds)];
-  const secured = new Map(uniqueIds.map((id) => [id, false]));
-  if (uniqueIds.length === 0) return secured;
+  const byFlashcard = new Map<string, { state: number; stability: number }[]>();
+  if (uniqueIds.length === 0) return byFlashcard;
 
-  const floor = await getPrereqStabilityFloor(ctx);
   const rows = await ctx.db
     .select({
       flashcardId: reviewUnits.flashcardId,
@@ -67,23 +58,12 @@ async function getFlashcardsSecured(
     .where(inArray(reviewUnits.flashcardId, uniqueIds))
     .all();
 
-  const byFlashcard = new Map<string, { state: number; stability: number }[]>();
   for (const row of rows) {
     const list = byFlashcard.get(row.flashcardId) ?? [];
     list.push(row);
     byFlashcard.set(row.flashcardId, list);
   }
-
-  for (const id of uniqueIds) {
-    const reviewUnitRows = byFlashcard.get(id) ?? [];
-    secured.set(
-      id,
-      reviewUnitRows.length > 0 &&
-        reviewUnitRows.every((row) => isPrereqSecured(row, floor)),
-    );
-  }
-
-  return secured;
+  return byFlashcard;
 }
 
 /**
@@ -133,35 +113,57 @@ async function computeLockedByFlashcardIds(
     .select({
       dependentId: flashcardPrereqs.dependentId,
       prereqId: flashcardPrereqs.prereqId,
+      dependentDeckId: flashcards.deckId,
     })
     .from(flashcardPrereqs)
-    .innerJoin(flashcards, eq(flashcardPrereqs.prereqId, flashcards.id))
-    .where(
-      and(
-        inArray(flashcardPrereqs.dependentId, uniqueIds),
-        eq(flashcards.archived, false),
-      ),
-    )
+    .innerJoin(flashcards, eq(flashcardPrereqs.dependentId, flashcards.id))
+    .where(inArray(flashcardPrereqs.dependentId, uniqueIds))
     .all();
 
   if (edges.length === 0) return locked;
 
   const prereqIds = [...new Set(edges.map((edge) => edge.prereqId))];
-  const securedByFlashcard = await getFlashcardsSecured(ctx, prereqIds);
+  const prereqReviewUnits = await getReviewUnitsByFlashcardId(ctx, prereqIds);
+  const prereqRows = await ctx.db
+    .select({ id: flashcards.id, archived: flashcards.archived })
+    .from(flashcards)
+    .where(inArray(flashcards.id, prereqIds))
+    .all();
+  const prereqArchived = new Map(
+    prereqRows.map((row) => [row.id, row.archived]),
+  );
+  const floorByDeckId = new Map<string, number>();
+  for (const deckId of new Set(edges.map((edge) => edge.dependentDeckId))) {
+    floorByDeckId.set(
+      deckId,
+      (await getEffectiveSettingsForDeck(ctx, deckId)).prereqStabilityFloor,
+    );
+  }
 
-  const prereqsByDependent = new Map<string, string[]>();
+  const prereqsByDependent = new Map<
+    string,
+    { prereqId: string; floor: number }[]
+  >();
   for (const edge of edges) {
     const list = prereqsByDependent.get(edge.dependentId) ?? [];
-    list.push(edge.prereqId);
+    if (prereqArchived.get(edge.prereqId)) continue;
+    list.push({
+      prereqId: edge.prereqId,
+      floor: floorByDeckId.get(edge.dependentDeckId) ?? 2,
+    });
     prereqsByDependent.set(edge.dependentId, list);
   }
 
   for (const id of uniqueIds) {
     const prereqList = prereqsByDependent.get(id) ?? [];
     if (prereqList.length === 0) continue;
-    const unlocked = prereqList.every((prereqId) =>
-      securedByFlashcard.get(prereqId),
-    );
+    const unlocked = prereqList.every(({ prereqId, floor }) => {
+      const reviewUnitRows = prereqReviewUnits.get(prereqId) ?? [];
+      return (
+        reviewUnitRows.length > 0 &&
+        reviewUnitRows.every((row) => isPrereqSecured(row, floor))
+      );
+    });
     locked.set(id, !unlocked);
   }
 

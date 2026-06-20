@@ -1,12 +1,17 @@
 import type { ReviewUnit, Deck, Flashcard, Settings } from "../../main/db/schema";
 import type { DeckWithStats } from "../../main/services/decks";
 import type {
+  DeckSettingsOverrides,
+  DeckSettingsUpdate,
+  SchedulingSettings,
+  SettingsUpdate,
+} from "../../main/services/settings";
+import type {
   BrowseFlashcard,
   FlashcardDeleteConsequences,
   FlashcardWithMeta,
 } from "../../main/services/flashcards";
 import type { FlashcardType, FlashcardContent } from "../../main/services/flashcard-types";
-import type { SettingsUpdate } from "../../main/services/settings";
 import type {
   PreviewOption,
   ReviewQueueItem,
@@ -103,6 +108,19 @@ export interface ArminApi {
   settings: {
     get(): Promise<Settings>;
     update(patch: SettingsUpdate): Promise<Settings>;
+    getDeck(deckId: string): Promise<{
+      global: SchedulingSettings;
+      overrides: DeckSettingsOverrides;
+      effective: SchedulingSettings;
+    }>;
+    updateDeck(
+      deckId: string,
+      patch: DeckSettingsUpdate,
+    ): Promise<{
+      global: SchedulingSettings;
+      overrides: DeckSettingsOverrides;
+      effective: SchedulingSettings;
+    }>;
   };
   mcp: {
     getSetup(): Promise<McpSetup>;

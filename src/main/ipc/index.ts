@@ -373,6 +373,30 @@ export function registerIpc() {
     }),
     (ctx, patch) => settings.updateSettings(ctx, patch),
   );
+  registerForProfile(
+    "settings:getDeck",
+    z.object({ deckId: z.string() }),
+    (ctx, { deckId }) => settings.getDeckSettings(ctx, deckId),
+  );
+  registerForProfile(
+    "settings:updateDeck",
+    z.object({
+      deckId: z.string(),
+      patch: z.object({
+        requestRetention: z.number().nullable().optional(),
+        maximumInterval: z.number().int().nullable().optional(),
+        enableFuzz: z.boolean().nullable().optional(),
+        enableShortTerm: z.boolean().nullable().optional(),
+        learningSteps: z.string().nullable().optional(),
+        relearningSteps: z.string().nullable().optional(),
+        weights: z.string().nullable().optional(),
+        prereqStabilityFloor: z.number().nullable().optional(),
+        newReviewUnitsPerDay: z.number().int().min(0).nullable().optional(),
+        keepSiblingReviewUnitsTogether: z.boolean().nullable().optional(),
+      }),
+    }),
+    (ctx, { deckId, patch }) => settings.updateDeckSettings(ctx, deckId, patch),
+  );
 
   // --- shell (custom title bar controls) ---
   register("shell:minimize", z.void().optional(), () => {

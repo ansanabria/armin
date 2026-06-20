@@ -6,8 +6,9 @@ import {
   type FSRS,
   type Steps,
 } from "ts-fsrs";
-import type { ReviewUnit as DbReviewUnit, Settings } from "../db/schema";
+import type { ReviewUnit as DbReviewUnit } from "../db/schema";
 import { getSettings } from "./settings";
+import type { SchedulingSettings } from "./settings";
 import type { ServiceContext } from "./context";
 
 /** Review units awaiting prerequisite unlock use a far-future due date. */
@@ -41,7 +42,7 @@ function parseSteps(csv: string): Steps {
 /** Build an FSRS scheduler from the user's saved parameters. */
 export async function buildScheduler(
   ctx: ServiceContext,
-  settings?: Settings,
+  settings?: SchedulingSettings,
 ): Promise<FSRS> {
   const s = settings ?? (await getSettings(ctx));
   return fsrs({

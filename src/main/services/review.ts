@@ -16,7 +16,10 @@ import {
   State,
   toFsrsCard,
 } from "./scheduler";
-import { getSettings } from "./settings";
+import {
+  getEffectiveSettingsForDeck,
+  type SchedulingSettings,
+} from "./settings";
 import { shuffle } from "./shuffle";
 
 const { reviewUnits, decks, flashcards, reviewLogs } = schema;
@@ -59,20 +62,23 @@ function startOfToday(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-/** First-time ratings logged today across all decks. */
+/** First-time ratings logged today, optionally scoped to one deck. */
 export async function countNewReviewUnitsIntroducedToday(
   ctx: ServiceContext,
+  deckId?: string,
 ): Promise<number> {
   const since = startOfToday();
   const conditions = [
     gte(reviewLogs.review, since),
     eq(reviewLogs.state, State.New),
   ];
-  const rows = await ctx.db
+  const query = ctx.db
     .select({ reviewUnitId: reviewLogs.reviewUnitId })
     .from(reviewLogs)
-    .where(and(...conditions))
-    .all();
+    .innerJoin(reviewUnits, eq(reviewLogs.reviewUnitId, reviewUnits.id));
+  const rows = deckId
+    ? await query.where(and(...conditions, eq(reviewUnits.deckId, deckId))).all()
+    : await query.where(and(...conditions)).all();
   return new Set(rows.map((row) => row.reviewUnitId)).size;
 }
 
@@ -86,8 +92,6 @@ export async function buildSessionQueue(
   deckReviewUnits: ReviewUnit[],
 ): Promise<ReviewUnit[]> {
   const now = new Date();
-  const { newReviewUnitsPerDay, keepSiblingReviewUnitsTogether } =
-    await getSettings(ctx);
   const unlocked = deckReviewUnits.filter(
     (reviewUnit) => !reviewUnit.locked && !reviewUnit.archived,
   );
@@ -107,13 +111,36 @@ export async function buildSessionQueue(
       reviewUnit.due <= now,
   );
 
-  const introducedToday = await countNewReviewUnitsIntroducedToday(ctx);
-  const remaining = Math.max(0, newReviewUnitsPerDay - introducedToday);
-  const cappedFrontier = keepSiblingReviewUnitsTogether
-    ? selectFrontierByFlashcard(frontier, remaining)
-    : shuffle([...frontier]).slice(0, remaining);
+  const cappedFrontier = await selectFrontierByDeck(ctx, frontier);
 
   return [...shuffle([...reviews]), ...cappedFrontier];
+}
+
+async function selectFrontierByDeck(
+  ctx: ServiceContext,
+  frontier: ReviewUnit[],
+): Promise<ReviewUnit[]> {
+  const byDeckId = new Map<string, ReviewUnit[]>();
+  for (const reviewUnit of frontier) {
+    const list = byDeckId.get(reviewUnit.deckId) ?? [];
+    list.push(reviewUnit);
+    byDeckId.set(reviewUnit.deckId, list);
+  }
+
+  const selected: ReviewUnit[] = [];
+  for (const [deckId, deckFrontier] of byDeckId) {
+    const settings = await getEffectiveSettingsForDeck(ctx, deckId);
+    const introducedToday = await countNewReviewUnitsIntroducedToday(ctx, deckId);
+    const remaining = Math.max(
+      0,
+      settings.newReviewUnitsPerDay - introducedToday,
+    );
+    const capped = settings.keepSiblingReviewUnitsTogether
+      ? selectFrontierByFlashcard(deckFrontier, remaining)
+      : shuffle([...deckFrontier]).slice(0, remaining);
+    selected.push(...capped);
+  }
+  return shuffle(selected);
 }
 
 function selectFrontierByFlashcard(
@@ -237,7 +264,7 @@ export async function previewReviewUnit(
     .get();
   if (!reviewUnit) throw new Error(`Review unit ${reviewUnitId} not found`);
   const now = new Date();
-  const scheduler = await buildScheduler(ctx);
+  const scheduler = await buildSchedulerForReviewUnit(ctx, reviewUnit);
   const preview = scheduler.repeat(toFsrsCard(reviewUnit), now);
   return GRADES.map((rating) => {
     const due = preview[rating].card.due;
@@ -252,14 +279,14 @@ export async function rateReviewUnit(
   rating: Grade,
 ): Promise<ReviewQueueItem> {
   const now = new Date();
-  const scheduler = await buildScheduler(ctx);
+  const reviewUnit = await ctx.db
+    .select()
+    .from(reviewUnits)
+    .where(eq(reviewUnits.id, reviewUnitId))
+    .get();
+  if (!reviewUnit) throw new Error(`Review unit ${reviewUnitId} not found`);
+  const scheduler = await buildSchedulerForReviewUnit(ctx, reviewUnit);
   const updated = await ctx.db.transaction((tx) => {
-    const reviewUnit = tx
-      .select()
-      .from(reviewUnits)
-      .where(eq(reviewUnits.id, reviewUnitId))
-      .get();
-    if (!reviewUnit) throw new Error(`Review unit ${reviewUnitId} not found`);
     const { card: next, log } = scheduler.next(
       toFsrsCard(reviewUnit),
       now,
@@ -317,7 +344,7 @@ export async function undoReview(
     .get();
   if (!logRow) return null;
 
-  const scheduler = await buildScheduler(ctx);
+  const scheduler = await buildSchedulerForReviewUnit(ctx, reviewUnit);
   const log = {
     rating: logRow.rating,
     state: logRow.state,
@@ -349,4 +376,15 @@ export async function undoReview(
   await activateUnlockedDependents(ctx, updated.flashcardId);
   const [item] = await toReviewQueueItems(ctx, [updated]);
   return item;
+}
+
+async function buildSchedulerForReviewUnit(
+  ctx: ServiceContext,
+  reviewUnit: Pick<ReviewUnit, "deckId">,
+) {
+  const settings: SchedulingSettings = await getEffectiveSettingsForDeck(
+    ctx,
+    reviewUnit.deckId,
+  );
+  return buildScheduler(ctx, settings);
 }

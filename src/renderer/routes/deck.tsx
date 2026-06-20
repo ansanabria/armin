@@ -15,9 +15,11 @@ import {
   AlertTriangle,
   Share2,
   Tag,
+  Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FlashcardFormDialog } from "@/components/flashcard-form-dialog";
+import { DeckSettingsDialog } from "@/components/deck-settings-dialog";
 import { FlashcardTile } from "@/components/flashcard-tile";
 import { SortControl } from "@/components/sort-control";
 import { SearchableMultiSelect } from "@/components/ui/combobox";
@@ -42,6 +44,7 @@ export default function DeckPage() {
   const toast = useToast();
 
   const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [editing, setEditing] = useState<UiFlashcard | null>(null);
   const [sort, setSort] = useState<FlashcardSortKey>("due-soon");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
@@ -290,6 +293,15 @@ export default function DeckPage() {
               <Share2 className="h-4 w-4" /> Graph
             </Button>
           </Link>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Deck settings"
+            title="Deck settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
           {dueCount > 0 && (
             <Link to="/deck/$deckId/review" params={{ deckId: deck.id }}>
               <Button>
@@ -427,6 +439,12 @@ export default function DeckPage() {
         initialContent={editing?.content ?? null}
         initialTags={editing?.tags ?? []}
         onSubmit={saveCard}
+      />
+      <DeckSettingsDialog
+        deckId={deck.id}
+        deckName={deck.name}
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
       />
     </div>
   );

@@ -154,10 +154,14 @@ export default function ReviewsPage() {
             <Layers className="h-3.5 w-3.5 shrink-0 text-muted" />
             <SelectValue />
           </SelectTrigger>
-          <SelectContent align="end" alignItemWithTrigger={false}>
+          <SelectContent
+            align="end"
+            alignItemWithTrigger={false}
+            className="w-72 max-w-[calc(100vw-2rem)]"
+          >
             <SelectGroup>
               {deckOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
+                <SelectItem key={opt.value} value={opt.value} title={opt.label}>
                   {opt.label}
                 </SelectItem>
               ))}

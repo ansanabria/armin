@@ -33,6 +33,7 @@ export const graphKeys = {
 
 export const settingsKeys = {
   current: ["settings"] as const,
+  deck: (deckId: string) => ["settings", "deck", deckId] as const,
 };
 
 export const mcpKeys = {
