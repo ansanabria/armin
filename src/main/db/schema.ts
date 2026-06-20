@@ -213,6 +213,28 @@ export const settings = sqliteTable("settings", {
     .default(sql`(unixepoch() * 1000)`),
 });
 
+/** Optional per-deck scheduling overrides; null columns inherit global settings. */
+export const deckSettings = sqliteTable("deck_settings", {
+  deckId: text("deck_id")
+    .primaryKey()
+    .references(() => decks.id, { onDelete: "cascade" }),
+  requestRetention: real("request_retention"),
+  maximumInterval: integer("maximum_interval"),
+  enableFuzz: integer("enable_fuzz", { mode: "boolean" }),
+  enableShortTerm: integer("enable_short_term", { mode: "boolean" }),
+  learningSteps: text("learning_steps"),
+  relearningSteps: text("relearning_steps"),
+  weights: text("weights"),
+  prereqStabilityFloor: real("prereq_stability_floor"),
+  newReviewUnitsPerDay: integer("new_review_units_per_day"),
+  keepSiblingReviewUnitsTogether: integer("keep_sibling_review_units_together", {
+    mode: "boolean",
+  }),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+});
+
 export type Deck = typeof decks.$inferSelect;
 export type NewDeck = typeof decks.$inferInsert;
 export type Flashcard = typeof flashcards.$inferSelect;
@@ -221,4 +243,5 @@ export type ReviewUnit = typeof reviewUnits.$inferSelect;
 export type NewReviewUnit = typeof reviewUnits.$inferInsert;
 export type ReviewLog = typeof reviewLogs.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
+export type DeckSettings = typeof deckSettings.$inferSelect;
 export type Tag = typeof tags.$inferSelect;

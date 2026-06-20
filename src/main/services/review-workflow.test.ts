@@ -100,7 +100,7 @@ describe("review workflow", () => {
     expect(queue.some((item) => item.reviewUnitId === card.id)).toBe(true);
   });
 
-  it("shares the daily new-card cap across decks in the global queue", async () => {
+  it("applies the daily new-card cap independently per deck in the global queue", async () => {
     const ctx = await makeContext("global-cap");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
 
@@ -111,7 +111,10 @@ describe("review workflow", () => {
     await basic(ctx, deckB.id, "B1", "B");
 
     const queue = await review.getGlobalQueue(ctx);
-    expect(queue).toHaveLength(1);
+    expect(queue).toHaveLength(2);
+    expect(new Set(queue.map((item) => item.deckId))).toEqual(
+      new Set([deckA.id, deckB.id]),
+    );
   });
 
   it("introduces all eligible siblings for a reversed flashcard together", async () => {
@@ -187,7 +190,25 @@ describe("review workflow", () => {
     expect(untouched.state).toBe(State.New);
   });
 
-  it("shares one daily new-card cap between deck queues and the global queue", async () => {
+  it("previews review outcomes with the review unit's deck settings", async () => {
+    const ctx = await makeContext("preview-deck-settings");
+    await settings.updateSettings(ctx, {
+      enableFuzz: false,
+      learningSteps: "10m",
+    });
+    const deck = await decks.createDeck(ctx, { name: "Preview override" });
+    await settings.updateDeckSettings(ctx, deck.id, { learningSteps: "30m" });
+    const note = await basic(ctx, deck.id, "Peek", "Answer");
+    const card = await getOnlyReviewUnit(ctx, note.id);
+
+    const options = await review.previewReviewUnit(ctx, card.id);
+
+    expect(options.find((option) => option.rating === Rating.Again)?.label).toBe(
+      "30m",
+    );
+  });
+
+  it("counts introduced review units against that deck's daily cap only", async () => {
     const ctx = await makeContext("shared-cap");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
 
@@ -200,15 +221,17 @@ describe("review workflow", () => {
     await review.rateReviewUnit(ctx, cardA.id, Rating.Good);
 
     expect(await review.countNewReviewUnitsIntroducedToday(ctx)).toBe(1);
+    expect(await review.countNewReviewUnitsIntroducedToday(ctx, deckA.id)).toBe(1);
+    expect(await review.countNewReviewUnitsIntroducedToday(ctx, deckB.id)).toBe(0);
 
     const queueB = await review.getQueue(ctx, deckB.id);
-    expect(queueB.filter((item) => item.deckId === deckB.id)).toHaveLength(0);
+    expect(queueB.filter((item) => item.deckId === deckB.id)).toHaveLength(1);
 
     const globalQueue = await review.getGlobalQueue(ctx);
-    expect(globalQueue.filter((item) => item.deckId === deckB.id)).toHaveLength(0);
+    expect(globalQueue.filter((item) => item.deckId === deckB.id)).toHaveLength(1);
   });
 
-  it("global queue introductions consume the same daily cap used by deck queues", async () => {
+  it("global queue introductions consume the same per-deck cap used by deck queues", async () => {
     const ctx = await makeContext("global-to-deck-cap");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
 
@@ -225,32 +248,41 @@ describe("review workflow", () => {
 
     const otherDeckId = introduced.deckId === deckA.id ? deckB.id : deckA.id;
     const otherDeckQueue = await review.getQueue(ctx, otherDeckId);
-    expect(otherDeckQueue.filter((item) => item.deckId === otherDeckId)).toHaveLength(
-      0,
-    );
+    expect(
+      otherDeckQueue.filter((item) => item.deckId === otherDeckId),
+    ).toHaveLength(1);
+
+    const introducedDeckQueue = await review.getQueue(ctx, introduced.deckId);
+    expect(
+      introducedDeckQueue.filter((item) => item.deckId === introduced.deckId),
+    ).toHaveLength(0);
   });
 
-  it("does not introduce more than ten new cards total through deck queues", async () => {
-    const ctx = await makeContext("ten-card-global-cap");
+  it("does not introduce more than ten new cards in one deck queue by default", async () => {
+    const ctx = await makeContext("ten-card-deck-cap");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 10 });
 
-    const deckIds: string[] = [];
+    const deck = await decks.createDeck(ctx, { name: "Deck" });
     for (let i = 0; i < 11; i += 1) {
-      const deck = await decks.createDeck(ctx, { name: `Deck ${i + 1}` });
-      deckIds.push(deck.id);
       await basic(ctx, deck.id, `Q${i + 1}`, `A${i + 1}`);
     }
 
-    for (const deckId of deckIds.slice(0, 10)) {
-      const [item] = await review.getQueue(ctx, deckId);
-      expect(item).toBeDefined();
-      await review.rateReviewUnit(ctx, item.reviewUnitId, Rating.Good);
+    const queue = await review.getQueue(ctx, deck.id);
+    expect(queue).toHaveLength(10);
+  });
+
+  it("uses a deck override for the daily new review-unit cap", async () => {
+    const ctx = await makeContext("deck-cap-override");
+    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 10 });
+    const deck = await decks.createDeck(ctx, { name: "Override" });
+    await settings.updateDeckSettings(ctx, deck.id, { newReviewUnitsPerDay: 2 });
+
+    for (let i = 0; i < 3; i += 1) {
+      await basic(ctx, deck.id, `Q${i + 1}`, `A${i + 1}`);
     }
 
-    expect(await review.countNewReviewUnitsIntroducedToday(ctx)).toBe(10);
-
-    const eleventhDeckQueue = await review.getQueue(ctx, deckIds[10]);
-    expect(eleventhDeckQueue).toHaveLength(0);
+    const queue = await review.getQueue(ctx, deck.id);
+    expect(queue).toHaveLength(2);
   });
 
   it("labels global queue items with their deck name", async () => {

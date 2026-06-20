@@ -60,6 +60,9 @@ const api = {
   settings: {
     get: () => invoke("settings:get"),
     update: (patch: unknown) => invoke("settings:update", patch),
+    getDeck: (deckId: string) => invoke("settings:getDeck", { deckId }),
+    updateDeck: (deckId: string, patch: unknown) =>
+      invoke("settings:updateDeck", { deckId, patch }),
   },
   mcp: {
     getSetup: () => invoke("mcp:getSetup"),
