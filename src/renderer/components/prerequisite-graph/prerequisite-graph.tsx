@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -17,17 +17,22 @@ import {
   type OnConnectEnd,
   type OnConnectStart,
   type OnEdgesDelete,
+  type OnSelectionChangeFunc,
   type Viewport,
   type XYPosition,
 } from "@xyflow/react";
 import {
+  Check,
   LayoutGrid,
+  Layers,
   Maximize,
   Minus,
   Pencil,
   Plus,
   RotateCcw,
+  Search,
   Trash2,
+  X,
 } from "lucide-react";
 import type { UiDeckGraph } from "@/types/view-models";
 import { wouldCreateCycle } from "@/lib/graph-cycle";
@@ -37,12 +42,18 @@ import {
   graphToFlowElements,
   makeFlowEdge,
   refreshNodeData,
+  styleEdgeForEmphasis,
   toFlowNode,
 } from "@/lib/graph-flow";
 import { layoutGraph } from "@/lib/graph-layout";
 import { cn } from "@/lib/utils";
 import { FloatingEdge } from "./floating-edge";
-import { FlashcardNode, type CardFlowNode, type CardNodeData } from "./flashcard-node";
+import {
+  FlashcardNode,
+  type CardFlowNode,
+  type CardNodeData,
+  type NodeEmphasis,
+} from "./flashcard-node";
 import { GraphContextMenu } from "./graph-context-menu";
 
 const nodeTypes = { card: FlashcardNode };
@@ -61,11 +72,15 @@ type ConnectMenuState = {
   sourceId: string;
 } | null;
 
+type DeckLensOption = { id: string; name: string; color: string };
+
 type PrerequisiteGraphProps = {
   graph: UiDeckGraph;
   onGraphChange: (graph: UiDeckGraph) => void;
   onConnectError?: (message: string) => void;
   nodePlacements?: Record<string, XYPosition>;
+  decks?: DeckLensOption[];
+  focusDeckId?: string | null;
   onCreateCardRequest?: (
     flowPosition: XYPosition,
     connectFromNodeId?: string,
@@ -77,6 +92,36 @@ type PrerequisiteGraphProps = {
   onViewportChange?: (viewport: Viewport) => void;
   onReady?: () => void;
 };
+
+/**
+ * Decide how each node reads against the current selection + deck/search lens.
+ * Selection wins: a selected card and its direct neighbors stay lit even when a
+ * deck filter or search would otherwise dim them, so connections are always
+ * legible. Otherwise a node is dimmed only when it falls outside an active
+ * filter.
+ */
+function nodeEmphasisFor(
+  node: UiDeckGraph["nodes"][number],
+  opts: {
+    selectedId: string | null;
+    neighborIds: Set<string>;
+    query: string;
+    focusedDeckIds: Set<string>;
+  },
+): NodeEmphasis {
+  const { selectedId, neighborIds, query, focusedDeckIds } = opts;
+  if (selectedId) {
+    if (node.id === selectedId) return "active";
+    if (neighborIds.has(node.id)) return "connected";
+    return "dimmed";
+  }
+  const inScope =
+    (focusedDeckIds.size === 0 || focusedDeckIds.has(node.deckId)) &&
+    (query === "" ||
+      `${node.front} ${node.back}`.toLowerCase().includes(query));
+  if (focusedDeckIds.size === 0 && query === "") return null;
+  return inScope ? null : "dimmed";
+}
 
 function savedPositionsOf(graph: UiDeckGraph): Map<string, XYPosition> {
   const map = new Map<string, XYPosition>();
@@ -202,6 +247,8 @@ function PrerequisiteGraphCanvas({
   onGraphChange,
   onConnectError,
   nodePlacements,
+  decks,
+  focusDeckId,
   onCreateCardRequest,
   onEditCardRequest,
   onDeleteCardRequest,
@@ -223,6 +270,24 @@ function PrerequisiteGraphCanvas({
   const [menu, setMenu] = useState<MenuState>(null);
   const [connectMenu, setConnectMenu] = useState<ConnectMenuState>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+
+  // Selection + deck/search lens. The selected card lights up itself, its edges,
+  // and its direct neighbors; the deck filter and search dim everything outside
+  // their scope.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [focusedDeckIds, setFocusedDeckIds] = useState<Set<string>>(() =>
+    focusDeckId ? new Set([focusDeckId]) : new Set(),
+  );
+  const [deckMenuOpen, setDeckMenuOpen] = useState(false);
+
+  // Mirror the URL's focused deck into the filter whenever it changes, so the
+  // sidebar Graph link (focus cleared) and deck-page links (focus set) can both
+  // update or clear the deck lens. Manual deck toggles don't touch focusDeckId,
+  // so they aren't clobbered by this effect.
+  useEffect(() => {
+    setFocusedDeckIds(focusDeckId ? new Set([focusDeckId]) : new Set());
+  }, [focusDeckId]);
 
   // Build the initial canvas once, synchronously, from the graph the parent
   // hands us (it gates mount until the deck has loaded). Computing this at mount
@@ -336,6 +401,9 @@ function PrerequisiteGraphCanvas({
               state: source.state,
               locked: source.locked,
               isIsolated: node.data.isIsolated,
+              deckName: source.deckName,
+              deckColor: source.deckColor,
+              emphasis: node.data.emphasis,
             },
           };
         }),
@@ -343,6 +411,89 @@ function PrerequisiteGraphCanvas({
       ),
     );
   }, [nodeContentKey, graph.edges, graph.nodes, setNodes]);
+
+  const nodeById = useMemo(
+    () => new Map(graph.nodes.map((n) => [n.id, n])),
+    [graph.nodes],
+  );
+  const query = search.trim().toLowerCase();
+
+  // Re-derive selection/filter emphasis for every node and edge whenever the
+  // selection or lens changes. Selected card + its incident edges + direct
+  // neighbors light up; out-of-scope elements dim.
+  useEffect(() => {
+    const neighborIds = new Set<string>();
+    if (selectedId) {
+      for (const e of graph.edges) {
+        if (e.prereqId === selectedId) neighborIds.add(e.dependentId);
+        if (e.dependentId === selectedId) neighborIds.add(e.prereqId);
+      }
+    }
+
+    setNodes((current) =>
+      current.map((node) => {
+        const source = nodeById.get(node.id);
+        if (!source) return node;
+        const emphasis = nodeEmphasisFor(source, {
+          selectedId,
+          neighborIds,
+          query,
+          focusedDeckIds,
+        });
+        if (node.data.emphasis === emphasis) return node;
+        return { ...node, data: { ...node.data, emphasis } };
+      }),
+    );
+
+    const lensActive = focusedDeckIds.size > 0 || query !== "";
+    const inScope = (id: string) => {
+      const n = nodeById.get(id);
+      return (
+        !!n &&
+        nodeEmphasisFor(n, {
+          selectedId: null,
+          neighborIds,
+          query,
+          focusedDeckIds,
+        }) === null
+      );
+    };
+    setEdges((current) =>
+      current.map((edge) => {
+        if (selectedId) {
+          return styleEdgeForEmphasis(
+            edge,
+            edge.source === selectedId || edge.target === selectedId
+              ? "active"
+              : "dimmed",
+          );
+        }
+        if (lensActive) {
+          return styleEdgeForEmphasis(
+            edge,
+            inScope(edge.source) && inScope(edge.target) ? null : "dimmed",
+          );
+        }
+        return styleEdgeForEmphasis(edge, null);
+      }),
+    );
+  }, [selectedId, query, focusedDeckIds, nodeById, graph.edges, setNodes, setEdges]);
+
+  const onSelectionChange: OnSelectionChangeFunc = useCallback(
+    ({ nodes: selectedNodes }) => {
+      setSelectedId(selectedNodes.length === 1 ? selectedNodes[0].id : null);
+    },
+    [],
+  );
+
+  const toggleDeckFocus = useCallback((deckId: string) => {
+    setFocusedDeckIds((current) => {
+      const next = new Set(current);
+      if (next.has(deckId)) next.delete(deckId);
+      else next.add(deckId);
+      return next;
+    });
+  }, []);
 
   const persistLayout = useCallback(
     (flowNodes: CardFlowNode[]) => {
@@ -560,6 +711,7 @@ function PrerequisiteGraphCanvas({
         onNodeContextMenu={onNodeContextMenu}
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeDragStop={onNodeDragStop}
+        onSelectionChange={onSelectionChange}
         onMoveEnd={(_, viewport) => onViewportChange?.(viewport)}
         onInit={() => {
           // The initial frame (fitView/defaultViewport) is applied during init;
@@ -598,6 +750,90 @@ function PrerequisiteGraphCanvas({
         />
         <Panel position="bottom-right">
           <ZoomControl />
+        </Panel>
+        <Panel position="top-left">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 items-center gap-1.5 border border-border bg-surface px-2 shadow-overlay focus-within:ring-2 focus-within:ring-accent">
+              <Search className="h-3.5 w-3.5 shrink-0 text-muted" />
+              <input
+                aria-label="Search flashcards"
+                placeholder="Search cards…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="w-40 bg-transparent text-xs text-ink outline-none placeholder:text-muted"
+              />
+              {search && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => setSearch("")}
+                  className="text-muted transition-colors hover:text-ink"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            {decks && decks.length > 0 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setDeckMenuOpen((open) => !open)}
+                  className={cn(
+                    "inline-flex h-8 items-center gap-1.5 border border-border bg-surface px-2.5 text-xs font-medium shadow-overlay transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                    focusedDeckIds.size > 0 ? "text-accent" : "text-ink",
+                  )}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  {focusedDeckIds.size > 0
+                    ? `${focusedDeckIds.size} deck${focusedDeckIds.size === 1 ? "" : "s"}`
+                    : "Decks"}
+                </button>
+                {deckMenuOpen && (
+                  <div className="absolute left-0 top-9 z-10 w-56 border border-border bg-surface p-1 shadow-overlay">
+                    <div className="flex items-center justify-between px-2 py-1.5">
+                      <span className="text-[0.625rem] font-medium uppercase tracking-wide text-muted">
+                        Focus decks
+                      </span>
+                      {focusedDeckIds.size > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setFocusedDeckIds(new Set())}
+                          className="text-[0.625rem] font-medium text-accent hover:text-accent-deep"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <ul className="max-h-64 overflow-y-auto">
+                      {decks.map((deck) => {
+                        const active = focusedDeckIds.has(deck.id);
+                        return (
+                          <li key={deck.id}>
+                            <button
+                              type="button"
+                              onClick={() => toggleDeckFocus(deck.id)}
+                              className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs text-ink transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+                            >
+                              <span
+                                aria-hidden
+                                className="h-2 w-2 shrink-0 rounded-full"
+                                style={{ backgroundColor: deck.color }}
+                              />
+                              <span className="flex-1 truncate">{deck.name}</span>
+                              {active && (
+                                <Check className="h-3.5 w-3.5 shrink-0 text-accent" />
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </Panel>
         <Panel position="top-right">
           <button

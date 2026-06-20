@@ -502,6 +502,72 @@ export async function getDeckGraph(
   return { nodes, edges };
 }
 
+export type GlobalGraphNode = DeckGraph["nodes"][number] & { deckId: string };
+
+export type GlobalGraph = {
+  nodes: GlobalGraphNode[];
+  edges: { prereqId: string; dependentId: string }[];
+};
+
+/**
+ * The whole prerequisite graph across every deck. Decks are carried on each node
+ * (as `deckId`) so the view can express them as a color/filter lens, but they no
+ * longer bound which flashcards or edges are returned.
+ */
+export async function getGlobalGraph(ctx: ServiceContext): Promise<GlobalGraph> {
+  const db = ctx.db;
+  const allFlashcards = await db.select().from(flashcards).all();
+  const ids = allFlashcards.map((n) => n.id);
+
+  const stateRows = ids.length
+    ? await db
+        .select({
+          flashcardId: reviewUnits.flashcardId,
+          state: reviewUnits.state,
+        })
+        .from(reviewUnits)
+        .where(inArray(reviewUnits.flashcardId, ids))
+        .all()
+    : [];
+  const minStateByFlashcard = new Map<string, number>();
+  for (const row of stateRows) {
+    const current = minStateByFlashcard.get(row.flashcardId);
+    if (current === undefined || row.state < current) {
+      minStateByFlashcard.set(row.flashcardId, row.state);
+    }
+  }
+
+  const edges = ids.length
+    ? await db
+        .select({
+          prereqId: flashcardPrereqs.prereqId,
+          dependentId: flashcardPrereqs.dependentId,
+        })
+        .from(flashcardPrereqs)
+        .all()
+    : [];
+
+  const nodes = allFlashcards.map((flashcard) => {
+    const { content, type } = parseStoredContent(
+      flashcard.type,
+      flashcard.content,
+    );
+    const display = flashcardDisplay(type, content);
+    return {
+      id: flashcard.id,
+      deckId: flashcard.deckId,
+      front: display.front,
+      back: display.back,
+      type,
+      state: minStateByFlashcard.get(flashcard.id) ?? 0,
+      locked: flashcard.locked,
+      x: flashcard.posX,
+      y: flashcard.posY,
+    };
+  });
+  return { nodes, edges };
+}
+
 export type NodePlacement = { flashcardId: string; x: number; y: number };
 
 /**
@@ -523,6 +589,35 @@ export async function saveLayout(
     .all();
   const ownedIds = new Set(owned.map((n) => n.id));
   const toWrite = placements.filter((p) => ownedIds.has(p.flashcardId));
+  if (toWrite.length === 0) return;
+  await ctx.db.transaction((tx) => {
+    for (const p of toWrite) {
+      tx.update(flashcards)
+        .set({ posX: p.x, posY: p.y })
+        .where(eq(flashcards.id, p.flashcardId))
+        .run();
+    }
+  });
+}
+
+/**
+ * Deck-agnostic layout persistence for the global graph. Positions live on the
+ * flashcard, so the only guard is that the flashcards exist — they may belong to
+ * any deck.
+ */
+export async function saveGlobalLayout(
+  ctx: ServiceContext,
+  placements: NodePlacement[],
+): Promise<void> {
+  if (placements.length === 0) return;
+  const ids = placements.map((p) => p.flashcardId);
+  const existing = await ctx.db
+    .select({ id: flashcards.id })
+    .from(flashcards)
+    .where(inArray(flashcards.id, ids))
+    .all();
+  const existingIds = new Set(existing.map((n) => n.id));
+  const toWrite = placements.filter((p) => existingIds.has(p.flashcardId));
   if (toWrite.length === 0) return;
   await ctx.db.transaction((tx) => {
     for (const p of toWrite) {

@@ -18,7 +18,7 @@ import {
   updateFlashcard,
 } from "../main/services/flashcards";
 import type { McpSessionProfile } from "../shared/mcp-session";
-import { importFlashcardHierarchy, readDeckGraph } from "./import-hierarchy";
+import { importFlashcardHierarchy, readGlobalGraph } from "./import-hierarchy";
 
 export type ArminMcpState = {
   activeProfileId: string | null;
@@ -451,18 +451,15 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
   );
 
   server.registerTool(
-    "get_deck_graph",
+    "get_graph",
     {
-      title: "Get Deck Graph",
-      description: "Read flashcards and prerequisite edges for a deck.",
-      inputSchema: z.object({
-        deckId: idSchema.describe("Deck ID to inspect."),
-      }),
+      title: "Get Graph",
+      description:
+        "Read the whole prerequisite graph across every deck. Each node carries its deckId; decks are a grouping lens, not a boundary, so edges can cross decks.",
+      inputSchema: z.object({}),
     },
-    async ({ deckId }) =>
-      withSelectedProfile(async () =>
-        jsonResult(await readDeckGraph(ctx(), deckId)),
-      ),
+    async () =>
+      withSelectedProfile(async () => jsonResult(await readGlobalGraph(ctx()))),
   );
 
   server.registerTool(

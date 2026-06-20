@@ -12,6 +12,14 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { MarkdownEditor } from "@/components/ui/markdown-editor";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   clozeClusters,
@@ -36,6 +44,14 @@ type CardFormDialogProps = {
   initialContent?: FlashcardContent | null;
   initialTags?: string[];
   onSubmit: (values: CardFormValues) => void | Promise<void>;
+  /**
+   * When the caller can't infer the deck (e.g. adding on the global graph's blank
+   * canvas), pass the deck list + selected deck to render a deck picker in create
+   * mode. Omit when the deck is already known (deck page, connected add).
+   */
+  decks?: { id: string; name: string }[];
+  deckId?: string | null;
+  onDeckChange?: (deckId: string) => void;
 };
 
 const TYPE_OPTIONS: { value: FlashcardType; label: string }[] = [
@@ -55,6 +71,9 @@ export function FlashcardFormDialog({
   initialContent = null,
   initialTags = [],
   onSubmit,
+  decks,
+  deckId,
+  onDeckChange,
 }: CardFormDialogProps) {
   const [type, setType] = useState<FlashcardType>(initialType);
   const [front, setFront] = useState("");
@@ -192,6 +211,28 @@ export function FlashcardFormDialog({
       className="max-w-[35rem]"
     >
       <div className="space-y-4">
+        {displayMode === "create" && decks && decks.length > 0 && onDeckChange && (
+          <Field label="Deck" hint="Which deck this card is filed under.">
+            <Select
+              value={deckId ?? undefined}
+              items={decks.map((deck) => ({ value: deck.id, label: deck.name }))}
+              onValueChange={(next) => onDeckChange(next as string)}
+            >
+              <SelectTrigger className="w-full" aria-label="Deck">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  {decks.map((deck) => (
+                    <SelectItem key={deck.id} value={deck.id}>
+                      {deck.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
         <Field label="Type">
           <div className="flex w-full gap-1.5">
             {TYPE_OPTIONS.map((option) => (

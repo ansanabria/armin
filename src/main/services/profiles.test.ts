@@ -93,7 +93,7 @@ describe("profiles service", () => {
   });
 
   it("deletes a profile and clears default when needed", () => {
-    const keep = createProfile("Keep");
+    createProfile("Keep");
     const remove = createProfile("Remove");
     setDefaultProfile(remove.id);
 

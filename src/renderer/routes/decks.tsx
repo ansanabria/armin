@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { AutoGrowTextarea } from "@/components/ui/auto-grow-textarea";
 import { Dialog } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -298,10 +298,12 @@ export default function DecksPage() {
               if (e.key === "Enter") create();
             }}
           />
-          <Textarea
+          <AutoGrowTextarea
             placeholder="What this deck covers (optional)"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            minHeight={100}
+            maxHeight={240}
           />
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setOpen(false)}>

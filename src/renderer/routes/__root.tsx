@@ -1,5 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { Layers, Library, Settings } from "lucide-react";
+import { Layers, Library, Settings, Share2 } from "lucide-react";
 import { ProfileSwitcher } from "@/components/profile-switcher";
 import { ReviewNavLink } from "@/components/review-nav-link";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -44,6 +44,15 @@ export default function RootLayout() {
           >
             <Library className="h-4 w-4" strokeWidth={1.5} />
             Browse
+          </Link>
+          <Link
+            to="/graph"
+            search={{ focus: undefined }}
+            className={navLink}
+            activeProps={{ className: navLinkActive }}
+          >
+            <Share2 className="h-4 w-4" strokeWidth={1.5} />
+            Graph
           </Link>
           <Link
             to="/settings"

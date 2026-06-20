@@ -21,6 +21,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { ThemeProvider } from "@/theme/theme-provider";
+import { useMenuCloseAction } from "@/lib/menu-close-action";
 import { cn } from "@/lib/utils";
 import type { Profile } from "@/types/window";
 
@@ -307,6 +308,7 @@ function PickerView({
   onDelete: (profile: Profile) => void;
 }) {
   const hasProfiles = profiles.length > 0;
+  const menuClose = useMenuCloseAction();
 
   return (
     <>
@@ -339,7 +341,9 @@ function PickerView({
                 const isDefault = profile.id === defaultId;
                 return (
                   <li key={profile.id}>
-                    <ContextMenu>
+                    <ContextMenu
+                      onOpenChangeComplete={menuClose.onOpenChangeComplete}
+                    >
                       <ContextMenuTrigger
                         render={
                           <button
@@ -390,8 +394,10 @@ function PickerView({
                       <ContextMenuContent className="min-w-48">
                         <ProfileActionItems
                           isDefault={isDefault}
-                          onSetDefault={() => onSetDefault(profile.id)}
-                          onClearDefault={onClearDefault}
+                          onSetDefault={menuClose.defer(() =>
+                            onSetDefault(profile.id),
+                          )}
+                          onClearDefault={menuClose.defer(onClearDefault)}
                           onDelete={() => onDelete(profile)}
                           Item={ContextMenuItem}
                           Separator={ContextMenuSeparator}

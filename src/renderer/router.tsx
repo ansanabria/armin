@@ -9,7 +9,7 @@ import RootLayout from "./routes/__root";
 import DecksPage from "./routes/decks";
 import BrowsePage from "./routes/browse";
 import DeckPage from "./routes/deck";
-import DeckGraphPage from "./routes/deck-graph";
+import GlobalGraphPage from "./routes/graph";
 import ReviewPage from "./routes/review";
 import ReviewsPage from "./routes/reviews";
 import SettingsPage from "./routes/settings";
@@ -34,10 +34,13 @@ const deckRoute = createRoute({
   component: DeckPage,
 });
 
-const deckGraphRoute = createRoute({
+const graphRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/deck/$deckId/graph",
-  component: DeckGraphPage,
+  path: "/graph",
+  component: GlobalGraphPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    focus: typeof search.focus === "string" ? search.focus : undefined,
+  }),
 });
 
 const reviewRoute = createRoute({
@@ -62,7 +65,7 @@ const routeTree = rootRoute.addChildren([
   decksRoute,
   browseRoute,
   deckRoute,
-  deckGraphRoute,
+  graphRoute,
   reviewRoute,
   reviewsRoute,
   settingsRoute,

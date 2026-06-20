@@ -162,8 +162,8 @@ describe("MCP stdio server", () => {
       "create_deck",
       "create_flashcard",
       "delete_card",
-      "get_deck_graph",
       "get_flashcard",
+      "get_graph",
       "import_flashcard_hierarchy",
       "list_decks",
       "list_flashcards",
@@ -290,8 +290,8 @@ describe("MCP stdio server", () => {
 
     const graph = parseToolText(
       await client!.callTool({
-        name: "get_deck_graph",
-        arguments: { deckId: hierarchyDeckId },
+        name: "get_graph",
+        arguments: {},
       }),
     );
     const edges = (graph.graph as { edges: unknown[] }).edges;
