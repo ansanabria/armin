@@ -13,6 +13,15 @@ import { FlashcardTypeBadge } from "@/components/flashcard-type-badge";
 import type { FlashcardType } from "../../../main/services/flashcard-types";
 import { cn } from "@/lib/utils";
 
+/**
+ * How a node is emphasized relative to the current selection:
+ * - `active`: the selected card
+ * - `connected`: a direct prerequisite/dependent of the selected card
+ * - `dimmed`: pushed back (not selected/connected, or filtered out)
+ * - `null`: neutral (nothing selected and not filtered)
+ */
+export type NodeEmphasis = "active" | "connected" | "dimmed" | null;
+
 export type CardNodeData = {
   front: string;
   back: string;
@@ -20,6 +29,9 @@ export type CardNodeData = {
   state: ReviewState;
   locked: boolean;
   isIsolated: boolean;
+  deckName: string;
+  deckColor: string;
+  emphasis: NodeEmphasis;
 };
 
 export type CardFlowNode = Node<CardNodeData, "card">;
@@ -46,16 +58,30 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
     if (nodeId) updateNodeInternals(nodeId);
   }, [nodeId, data.front, data.back, updateNodeInternals]);
 
+  const isActive = selected || data.emphasis === "active";
+  const isConnected = data.emphasis === "connected";
+  const isDimmed = data.emphasis === "dimmed";
+
   return (
     <div
       className={cn(
-        "group relative w-[240px] border border-border bg-surface px-3.5 py-3 transition-colors duration-150",
-        selected
+        "group relative w-[240px] overflow-hidden border border-border bg-surface px-3.5 py-3 pl-4 transition-[opacity,border-color,box-shadow] duration-150",
+        isActive
           ? "border-accent ring-2 ring-accent/30"
-          : "hover:border-border-strong",
+          : isConnected
+            ? "border-accent/50"
+            : "hover:border-border-strong",
         data.locked && "opacity-65",
+        isDimmed && "opacity-35",
       )}
     >
+      {/* Deck lens: left color stripe (decorative — the deck chip is the cue). */}
+      <span
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-1"
+        style={{ backgroundColor: data.deckColor }}
+      />
+
       {SIDES.map(({ id, position }) => (
         <Handle
           key={id}
@@ -69,6 +95,14 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <StateBadge state={data.state} locked={data.locked} />
         <FlashcardTypeBadge type={data.type} />
+        <span className="inline-flex items-center gap-1 text-[0.625rem] font-medium text-muted">
+          <span
+            aria-hidden
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ backgroundColor: data.deckColor }}
+          />
+          {data.deckName}
+        </span>
         {data.isIsolated && (
           <span className="text-[0.625rem] font-medium uppercase tracking-wide text-muted">
             Isolated

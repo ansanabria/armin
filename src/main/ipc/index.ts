@@ -289,10 +289,8 @@ export function registerIpc() {
   );
 
   // --- graph ---
-  registerForProfile(
-    "graph:get",
-    z.object({ deckId: z.string() }),
-    (ctx, { deckId }) => graph.getDeckGraph(ctx, deckId),
+  registerForProfile("graph:getGlobal", z.object({}), (ctx) =>
+    graph.getGlobalGraph(ctx),
   );
   registerForProfile(
     "graph:addPrereq",
@@ -313,7 +311,6 @@ export function registerIpc() {
   registerForProfile(
     "graph:saveLayout",
     z.object({
-      deckId: z.string(),
       placements: z.array(
         z.object({
           flashcardId: z.string(),
@@ -322,8 +319,8 @@ export function registerIpc() {
         }),
       ),
     }),
-    async (ctx, { deckId, placements }) => {
-      await graph.saveLayout(ctx, deckId, placements);
+    async (ctx, { placements }) => {
+      await graph.saveGlobalLayout(ctx, placements);
       return { ok: true };
     },
   );

@@ -285,7 +285,7 @@ export default function DeckPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/deck/$deckId/graph" params={{ deckId: deck.id }}>
+          <Link to="/graph" search={{ focus: deck.id }}>
             <Button variant="outline">
               <Share2 className="h-4 w-4" /> Graph
             </Button>

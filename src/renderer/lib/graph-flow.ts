@@ -12,12 +12,20 @@ import type {
 } from "@/components/prerequisite-graph/flashcard-node";
 
 export const EDGE_STROKE = "var(--color-border-strong)";
+export const EDGE_STROKE_ACCENT = "var(--color-accent)";
 
 export const EDGE_MARKER_END = {
   type: MarkerType.ArrowClosed,
   width: 14,
   height: 14,
   color: "var(--color-border-strong)",
+} as const;
+
+export const EDGE_MARKER_END_ACCENT = {
+  type: MarkerType.ArrowClosed,
+  width: 14,
+  height: 14,
+  color: "var(--color-accent)",
 } as const;
 
 export function makeFlowEdge(prereqId: string, dependentId: string): Edge {
@@ -32,6 +40,31 @@ export function makeFlowEdge(prereqId: string, dependentId: string): Edge {
       strokeWidth: 1.5,
     },
   } as Edge;
+}
+
+export type EdgeEmphasis = "active" | "dimmed" | null;
+
+/**
+ * Restyle an edge for the selection lens: edges incident to the selected node
+ * paint accent, the rest fade back. Returns a new edge so React Flow re-renders.
+ */
+export function styleEdgeForEmphasis(edge: Edge, emphasis: EdgeEmphasis): Edge {
+  if (emphasis === "active") {
+    return {
+      ...edge,
+      markerEnd: EDGE_MARKER_END_ACCENT,
+      style: { stroke: EDGE_STROKE_ACCENT, strokeWidth: 2 },
+    };
+  }
+  return {
+    ...edge,
+    markerEnd: EDGE_MARKER_END,
+    style: {
+      stroke: EDGE_STROKE,
+      strokeWidth: 1.5,
+      opacity: emphasis === "dimmed" ? 0.25 : 1,
+    },
+  };
 }
 
 export function toFlowNode(
@@ -54,6 +87,9 @@ export function toFlowNode(
       state: node.state,
       locked: node.locked,
       isIsolated: isIsolatedNode(node.id, edges),
+      deckName: node.deckName,
+      deckColor: node.deckColor,
+      emphasis: null,
     },
   };
 }

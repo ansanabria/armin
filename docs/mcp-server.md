@@ -20,7 +20,7 @@ Available tools:
 - `add_prerequisite`
 - `remove_prerequisite`
 - `import_flashcard_hierarchy`
-- `get_deck_graph`
+- `get_graph`
 - `list_flashcards`
 - `get_flashcard`
 - `list_open_profiles`

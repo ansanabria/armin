@@ -48,15 +48,14 @@ const api = {
     undo: (reviewUnitId: string) => invoke("review:undo", { reviewUnitId }),
   },
   graph: {
-    get: (deckId: string) => invoke("graph:get", { deckId }),
+    getGlobal: () => invoke("graph:getGlobal", {}),
     addPrereq: (prereqId: string, dependentId: string) =>
       invoke("graph:addPrereq", { prereqId, dependentId }),
     removePrereq: (prereqId: string, dependentId: string) =>
       invoke("graph:removePrereq", { prereqId, dependentId }),
     saveLayout: (
-      deckId: string,
       placements: { flashcardId: string; x: number; y: number }[],
-    ) => invoke("graph:saveLayout", { deckId, placements }),
+    ) => invoke("graph:saveLayout", { placements }),
   },
   settings: {
     get: () => invoke("settings:get"),

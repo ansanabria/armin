@@ -221,3 +221,44 @@ describe("canvas layout", () => {
     expect(dependentNode?.locked).toBe(true);
   });
 });
+
+describe("global graph", () => {
+  it("returns flashcards and edges across every deck, tagged by deck", async () => {
+    const ctx = await makeContext("global-graph");
+    const algebra = await decks.createDeck(ctx, { name: "Algebra" });
+    const calculus = await decks.createDeck(ctx, { name: "Calculus" });
+    const prereq = await basic(ctx, algebra.id, "Vectors", "Magnitude + direction");
+    const dependent = await basic(ctx, calculus.id, "Gradient", "Vector of partials");
+    // A cross-deck edge: the prereq lives in Algebra, the dependent in Calculus.
+    await graph.addPrereq(ctx, prereq.id, dependent.id);
+
+    const result = await graph.getGlobalGraph(ctx);
+
+    expect(result.nodes.map((n) => n.id).sort()).toEqual(
+      [prereq.id, dependent.id].sort(),
+    );
+    expect(result.nodes.find((n) => n.id === prereq.id)?.deckId).toBe(algebra.id);
+    expect(result.nodes.find((n) => n.id === dependent.id)?.deckId).toBe(
+      calculus.id,
+    );
+    expect(result.edges).toEqual([
+      { prereqId: prereq.id, dependentId: dependent.id },
+    ]);
+  });
+
+  it("saveGlobalLayout persists positions regardless of deck", async () => {
+    const ctx = await makeContext("global-layout");
+    const first = await decks.createDeck(ctx, { name: "First" });
+    const second = await decks.createDeck(ctx, { name: "Second" });
+    const a = await basic(ctx, first.id, "A", "A");
+    const b = await basic(ctx, second.id, "B", "B");
+
+    await graph.saveGlobalLayout(ctx, [
+      { flashcardId: a.id, x: 10, y: 20 },
+      { flashcardId: b.id, x: 30, y: 40 },
+    ]);
+
+    expect(await notes.getFlashcard(ctx, a.id)).toMatchObject({ posX: 10, posY: 20 });
+    expect(await notes.getFlashcard(ctx, b.id)).toMatchObject({ posX: 30, posY: 40 });
+  });
+});

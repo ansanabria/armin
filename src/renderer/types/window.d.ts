@@ -11,7 +11,7 @@ import type {
   PreviewOption,
   ReviewQueueItem,
 } from "../../main/services/review";
-import type { DeckGraph } from "../../main/services/graph";
+import type { DeckGraph, GlobalGraph } from "../../main/services/graph";
 import type { McpSetup } from "../../shared/mcp";
 import type {
   AnkiAnalysis,
@@ -93,11 +93,10 @@ export interface ArminApi {
     undo(reviewUnitId: string): Promise<ReviewQueueItem | null>;
   };
   graph: {
-    get(deckId: string): Promise<DeckGraph>;
+    getGlobal(): Promise<GlobalGraph>;
     addPrereq(prereqId: string, dependentId: string): Promise<{ ok: true }>;
     removePrereq(prereqId: string, dependentId: string): Promise<{ ok: true }>;
     saveLayout(
-      deckId: string,
       placements: { flashcardId: string; x: number; y: number }[],
     ): Promise<{ ok: true }>;
   };
@@ -156,4 +155,5 @@ export type {
   PreviewOption,
   ReviewQueueItem,
   DeckGraph,
+  GlobalGraph,
 };

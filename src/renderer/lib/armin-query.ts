@@ -28,7 +28,7 @@ export const reviewKeys = {
 };
 
 export const graphKeys = {
-  deck: (deckId: string) => ["graph", "deck", deckId] as const,
+  global: ["graph", "global"] as const,
 };
 
 export const settingsKeys = {
@@ -45,12 +45,12 @@ export function invalidateCoreData(queryClient: QueryClient, deckId?: string) {
   void queryClient.invalidateQueries({ queryKey: ["flashcards", "browse"] });
   void queryClient.invalidateQueries({ queryKey: flashcardKeys.tags });
   void queryClient.invalidateQueries({ queryKey: reviewKeys.all });
+  void queryClient.invalidateQueries({ queryKey: graphKeys.global });
 
   if (deckId) {
     void queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) });
     void queryClient.invalidateQueries({ queryKey: flashcardKeys.deck(deckId) });
     void queryClient.invalidateQueries({ queryKey: flashcardKeys.deckTags(deckId) });
     void queryClient.invalidateQueries({ queryKey: reviewKeys.deck(deckId) });
-    void queryClient.invalidateQueries({ queryKey: graphKeys.deck(deckId) });
   }
 }
