@@ -64,6 +64,8 @@ const api = {
   },
   mcp: {
     getSetup: () => invoke("mcp:getSetup"),
+    getEnabled: () => invoke("mcp:getEnabled"),
+    setEnabled: (enabled: boolean) => invoke("mcp:setEnabled", { enabled }),
   },
   import: {
     analyzeAnki: (bytes: Uint8Array, fileName: string) =>

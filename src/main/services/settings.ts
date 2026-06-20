@@ -35,6 +35,7 @@ export type SettingsUpdate = Partial<
     | "prereqStabilityFloor"
     | "newReviewUnitsPerDay"
     | "keepSiblingReviewUnitsTogether"
+    | "schedulingPreset"
   >
 >;
 

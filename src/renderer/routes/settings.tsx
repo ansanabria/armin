@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { RotateCcw } from "lucide-react";
 import {
   MaximumIntervalInput,
   NewCardsPerDayInput,
@@ -19,6 +20,15 @@ import { Switch } from "@/components/ui/switch";
 import { McpSettings } from "@/components/mcp-settings";
 import { useToast } from "@/components/ui/toast";
 import { settingsKeys } from "@/lib/armin-query";
+import {
+  fieldDiffersFromPreset,
+  PRESET_OPTIONS,
+  PRESET_VALUES,
+  presetHasOverrides,
+  presetLabel,
+  type PresetValues,
+  type SchedulingPreset,
+} from "../../shared/scheduling-presets";
 import { THEME_OPTIONS, type ThemePreference } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/theme/theme-provider";
@@ -39,19 +49,12 @@ type SettingsState = Pick<
   | "prereqStabilityFloor"
   | "newReviewUnitsPerDay"
   | "keepSiblingReviewUnitsTogether"
->;
+> & { schedulingPreset: SchedulingPreset };
 
 const initial: SettingsState = {
-  requestRetention: 0.9,
-  maximumInterval: 36500,
-  enableFuzz: true,
-  enableShortTerm: true,
-  learningSteps: "1m,10m",
-  relearningSteps: "10m",
+  ...PRESET_VALUES.balanced,
   weights: null,
-  prereqStabilityFloor: 2,
-  newReviewUnitsPerDay: 10,
-  keepSiblingReviewUnitsTogether: true,
+  schedulingPreset: "balanced",
 };
 
 function toSettingsState(settings: Settings): SettingsState {
@@ -66,6 +69,7 @@ function toSettingsState(settings: Settings): SettingsState {
     prereqStabilityFloor: settings.prereqStabilityFloor,
     newReviewUnitsPerDay: settings.newReviewUnitsPerDay,
     keepSiblingReviewUnitsTogether: settings.keepSiblingReviewUnitsTogether,
+    schedulingPreset: settings.schedulingPreset as SchedulingPreset,
   };
 }
 
@@ -113,6 +117,41 @@ export default function SettingsPage() {
 
   const save = () => updateSettings.mutate(s);
 
+  const preset = s.schedulingPreset;
+
+  const selectPreset = (next: SchedulingPreset) => {
+    if (next === "custom") {
+      set("schedulingPreset", "custom");
+      return;
+    }
+    setS((prev) => ({
+      ...prev,
+      ...PRESET_VALUES[next],
+      schedulingPreset: next,
+    }));
+  };
+
+  const resetToPreset = () => {
+    if (preset === "custom") return;
+    setS((prev) => ({
+      ...prev,
+      ...PRESET_VALUES[preset],
+      schedulingPreset: preset,
+    }));
+  };
+
+  // Per-field reset: only named presets that differ from their canonical value
+  // expose a reset affordance. Spread onto a <Row> to show its reset button.
+  const resetProps = (key: keyof PresetValues) => {
+    if (preset === "custom" || !fieldDiffersFromPreset(preset, key, s[key])) {
+      return {};
+    }
+    const presetValue = PRESET_VALUES[preset][key];
+    return { onReset: () => set(key, presetValue) };
+  };
+
+  const hasPresetOverrides = presetHasOverrides(preset, s);
+
   return (
     <div className="pb-24">
       <header className="mb-8">
@@ -136,11 +175,42 @@ export default function SettingsPage() {
       <div className="space-y-10">
         <Section
           title="Scheduling"
-          description="How FSRS spaces your reviews. Defaults work well; tune only if you know why."
+          description="Pick a preset for a tuned set of spaced-repetition settings, or choose Custom and adjust each value yourself."
+          action={
+            preset !== "custom" && hasPresetOverrides ? (
+              <Button variant="outline" size="sm" onClick={resetToPreset}>
+                Reset to {presetLabel(preset)} default settings
+              </Button>
+            ) : undefined
+          }
         >
+          <Row
+            label="Preset"
+            hint="Balanced suits most learners. Aggressive reviews more often; Relaxed reviews less."
+          >
+            <Select
+              value={preset}
+              items={PRESET_OPTIONS}
+              onValueChange={(v) => selectPreset(v as SchedulingPreset)}
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  {PRESET_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Row>
           <Row
             label="Desired retention"
             hint="Target recall probability. Higher means more frequent reviews."
+            {...resetProps("requestRetention")}
           >
             <RetentionInput
               value={s.requestRetention}
@@ -150,19 +220,28 @@ export default function SettingsPage() {
           <Row
             label="Maximum interval"
             hint="The longest gap between reviews, in days."
+            {...resetProps("maximumInterval")}
           >
             <MaximumIntervalInput
               value={s.maximumInterval}
               onChange={(v) => set("maximumInterval", v)}
             />
           </Row>
-          <Row label="Learning steps" hint="Short steps for brand-new review units.">
+          <Row
+            label="Learning steps"
+            hint="Short steps for brand-new review units."
+            {...resetProps("learningSteps")}
+          >
             <StepsInput
               value={s.learningSteps}
               onChange={(v) => set("learningSteps", v)}
             />
           </Row>
-          <Row label="Relearning steps" hint="Steps after you forget a review unit.">
+          <Row
+            label="Relearning steps"
+            hint="Steps after you forget a review unit."
+            {...resetProps("relearningSteps")}
+          >
             <StepsInput
               value={s.relearningSteps}
               onChange={(v) => set("relearningSteps", v)}
@@ -171,6 +250,7 @@ export default function SettingsPage() {
           <Row
             label="Interval fuzz"
             hint="Scatter due dates slightly so reviews don't clump."
+            {...resetProps("enableFuzz")}
           >
             <Switch
               checked={s.enableFuzz}
@@ -181,6 +261,7 @@ export default function SettingsPage() {
             label="Short-term scheduling"
             hint="Use same-day learning steps for new and lapsed review units."
             last
+            {...resetProps("enableShortTerm")}
           >
             <Switch
               checked={s.enableShortTerm}
@@ -196,6 +277,7 @@ export default function SettingsPage() {
           <Row
             label="Prerequisite stability"
             hint="A prereq must reach this FSRS stability in Review before dependents unlock."
+            {...resetProps("prereqStabilityFloor")}
           >
             <StabilityFloorInput
               value={s.prereqStabilityFloor}
@@ -205,6 +287,7 @@ export default function SettingsPage() {
           <Row
             label="New review units per day"
             hint="Maximum brand-new review units introduced from the unlock frontier each day."
+            {...resetProps("newReviewUnitsPerDay")}
           >
             <NewCardsPerDayInput
               value={s.newReviewUnitsPerDay}
@@ -215,6 +298,7 @@ export default function SettingsPage() {
             label="Keep siblings together"
             hint="Introduce all eligible directions or clozes for a flashcard in the same session."
             last
+            {...resetProps("keepSiblingReviewUnitsTogether")}
           >
             <Switch
               checked={s.keepSiblingReviewUnitsTogether}
@@ -348,10 +432,12 @@ function UnsavedChangesBar({
 function Section({
   title,
   description,
+  action,
   children,
 }: {
   title: string;
   description?: string;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -363,6 +449,7 @@ function Section({
             {description}
           </p>
         )}
+        {action && <div className="mt-3">{action}</div>}
       </div>
       <div className="border border-border bg-surface">{children}</div>
     </section>
@@ -374,11 +461,13 @@ function Row({
   hint,
   children,
   last,
+  onReset,
 }: {
   label: string;
   hint?: string;
   children: ReactNode;
   last?: boolean;
+  onReset?: () => void;
 }) {
   return (
     <div
@@ -391,7 +480,20 @@ function Row({
         <p className="text-sm font-medium text-ink">{label}</p>
         {hint && <p className="mt-0.5 text-[0.8125rem] text-muted">{hint}</p>}
       </div>
-      <div className="flex shrink-0 justify-end pt-0.5">{children}</div>
+      <div className="flex shrink-0 items-center justify-end gap-1.5 pt-0.5">
+        {onReset && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Reset ${label} to preset default`}
+            title="Reset to preset default"
+            onClick={onReset}
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+        )}
+        {children}
+      </div>
     </div>
   );
 }
