@@ -107,6 +107,8 @@ export interface ArminApi {
   };
   mcp: {
     getSetup(): Promise<McpSetup>;
+    getEnabled(): Promise<boolean>;
+    setEnabled(enabled: boolean): Promise<{ enabled: boolean }>;
   };
   import: {
     analyzeAnki(bytes: Uint8Array, fileName: string): Promise<AnkiAnalysis>;
