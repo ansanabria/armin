@@ -10,12 +10,15 @@ import { app } from "electron";
  */
 export type AppSettings = {
   mcpEnabled: boolean;
+  /** Last port the embedded MCP server bound successfully; null until first bind. */
+  mcpPort: number | null;
 };
 
 const STORE_VERSION = 1;
 
 const DEFAULTS: AppSettings = {
   mcpEnabled: true,
+  mcpPort: null,
 };
 
 function storePath() {
@@ -35,6 +38,10 @@ export function getAppSettings(): AppSettings {
         typeof parsed.mcpEnabled === "boolean"
           ? parsed.mcpEnabled
           : DEFAULTS.mcpEnabled,
+      mcpPort:
+        typeof parsed.mcpPort === "number" && Number.isFinite(parsed.mcpPort)
+          ? parsed.mcpPort
+          : DEFAULTS.mcpPort,
     };
   } catch {
     return { ...DEFAULTS };
@@ -53,6 +60,12 @@ function writeAppSettings(settings: AppSettings) {
 
 export function setMcpEnabled(enabled: boolean): AppSettings {
   const next = { ...getAppSettings(), mcpEnabled: enabled };
+  writeAppSettings(next);
+  return next;
+}
+
+export function setMcpPort(port: number | null): AppSettings {
+  const next = { ...getAppSettings(), mcpPort: port };
   writeAppSettings(next);
   return next;
 }

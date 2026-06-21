@@ -47,6 +47,21 @@ export function McpSettings() {
       toast({ tone: "error", title: "Couldn't update MCP server" }),
   });
 
+  const retry = useMutation({
+    mutationFn: () => window.armin.mcp.retry(),
+    onSuccess: (status) => {
+      void queryClient.invalidateQueries({ queryKey: mcpKeys.setup });
+      toast({
+        tone: status.running ? "success" : "error",
+        title: status.running
+          ? "MCP server started"
+          : "MCP server still unavailable",
+      });
+    },
+    onError: () =>
+      toast({ tone: "error", title: "Couldn't start MCP server" }),
+  });
+
   const setupQuery = useQuery({
     queryKey: mcpKeys.setup,
     queryFn: () => window.armin.mcp.getSetup(),
@@ -64,31 +79,32 @@ export function McpSettings() {
 
   const setup = setupQuery.data;
 
-  const agentSnippet = setup
-    ? agent === "cursor"
-      ? {
-          title: ".cursor/mcp.json",
-          hint: "Add this in the project where your agent should create flashcards.",
-          body: buildCursorMcpConfig(setup),
-        }
-      : agent === "claude"
+  const agentSnippet =
+    setup?.running && setup.url
+      ? agent === "cursor"
         ? {
-            title: "Claude Code setup",
-            hint: "Run this in your project to register the Armin MCP server.",
-            body: buildClaudeCliCommand(setup),
+            title: ".cursor/mcp.json",
+            hint: "Add this in the project where your agent should create flashcards.",
+            body: buildCursorMcpConfig(setup),
           }
-        : agent === "codex"
+        : agent === "claude"
           ? {
-              title: "Codex CLI",
+              title: "Claude Code setup",
               hint: "Run this in your project to register the Armin MCP server.",
-              body: buildCodexCliCommand(setup),
+              body: buildClaudeCliCommand(setup),
             }
-          : {
-              title: "opencode.jsonc",
-              hint: "Add this under mcp in opencode.json or opencode.jsonc.",
-              body: buildOpenCodeMcpConfig(setup),
-            }
-    : null;
+          : agent === "codex"
+            ? {
+                title: "Codex CLI",
+                hint: "Run this in your project to register the Armin MCP server.",
+                body: buildCodexCliCommand(setup),
+              }
+            : {
+                title: "opencode.jsonc",
+                hint: "Add this under mcp in opencode.json or opencode.jsonc.",
+                body: buildOpenCodeMcpConfig(setup),
+              }
+      : null;
 
   return (
     <div>
@@ -132,7 +148,29 @@ export function McpSettings() {
             </div>
           )}
 
-          {setup && (
+          {setup && !setup.running && (
+            <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3.5">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink">
+                  MCP server couldn&apos;t start
+                </p>
+                <p className="mt-0.5 text-[0.8125rem] leading-snug text-muted">
+                  {setup.error ??
+                    "All candidate ports are in use. Free a port or retry."}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={retry.isPending}
+                onClick={() => void retry.mutate()}
+              >
+                Retry
+              </Button>
+            </div>
+          )}
+
+          {setup?.running && setup.url && (
             <>
               <div className="border-b border-border px-4 py-3.5">
                 <p className="text-sm font-medium text-ink">

@@ -38,7 +38,11 @@ app.on("ready", async () => {
   session.defaultSession.setSpellCheckerEnabled(false);
   registerIpc();
   if (getAppSettings().mcpEnabled) {
-    await startEmbeddedMcpServer();
+    try {
+      await startEmbeddedMcpServer();
+    } catch (error) {
+      console.error("Embedded MCP server failed to start:", error);
+    }
   }
   await loadDevToolsExtensions();
   await openStartupProfile();

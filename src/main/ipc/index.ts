@@ -351,6 +351,11 @@ export function registerIpc() {
       return { enabled };
     },
   );
+  register("mcp:getStatus", z.void().optional(), () => mcp.getMcpStatus());
+  register("mcp:retry", z.void().optional(), async () => {
+    await startEmbeddedMcpServer();
+    return mcp.getMcpStatus();
+  });
 
   // --- settings ---
   registerForProfile("settings:get", z.void().optional(), (ctx) =>

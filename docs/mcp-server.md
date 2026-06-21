@@ -29,7 +29,13 @@ Available tools:
 ## Embedded server
 
 Open Armin and select the profile you want the agent to write to. Armin starts
-the MCP server automatically at:
+the MCP server automatically when the app opens (if MCP is enabled in Settings).
+
+The server binds to the first free port in `47321-47330`, preferring the last
+port it used successfully. The exact URL is shown in the in-app MCP settings
+panel — copy agent configs from there rather than assuming a fixed port.
+
+Example URL (default when port 47321 is free):
 
 ```text
 http://127.0.0.1:47321/mcp
@@ -76,8 +82,9 @@ types. Build the prerequisite graph from foundations to advanced concepts.
 
 ## Agent setup
 
-Use the in-app MCP settings panel when possible. It shows the local MCP URL and
-copies the right config for each agent.
+Use the in-app MCP settings panel when possible. It shows the live MCP URL and
+copies the right config for each agent. If the server could not bind a port at
+launch, the panel shows an error and a **Retry** button.
 
 The simplest setup for each supported coding agent is:
 
@@ -91,7 +98,8 @@ to.
 
 ## Cursor
 
-Create `.cursor/mcp.json` in the project where Cursor should use Armin:
+Create `.cursor/mcp.json` in the project where Cursor should use Armin. Use the
+URL from the in-app MCP settings panel (example below assumes port 47321):
 
 ```json
 {
@@ -105,7 +113,8 @@ Create `.cursor/mcp.json` in the project where Cursor should use Armin:
 
 ## Claude Code
 
-Run this in the project where Claude Code should use Armin:
+Run this in the project where Claude Code should use Armin (replace the URL with
+the one shown in Settings if your port differs):
 
 ```bash
 claude mcp add --scope local --transport http armin http://127.0.0.1:47321/mcp
@@ -120,7 +129,8 @@ Run `claude mcp list` or use `/mcp` inside Claude Code to verify the server.
 
 ## Codex
 
-Run this once:
+Run this once (replace the URL with the one shown in Settings if your port
+differs):
 
 ```bash
 codex mcp add armin --url http://127.0.0.1:47321/mcp
@@ -130,7 +140,8 @@ In the Codex TUI, run `/mcp` to check that `armin` is connected.
 
 ## OpenCode
 
-Add Armin under `mcp` in `opencode.json` or `opencode.jsonc`:
+Add Armin under `mcp` in `opencode.json` or `opencode.jsonc` (replace the URL
+with the one shown in Settings if your port differs):
 
 ```jsonc
 {
