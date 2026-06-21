@@ -2,10 +2,22 @@ export type McpSetup = {
   url: string | null;
   running: boolean;
   error: string | null;
+  configuredPort: number;
+  activePort: number | null;
   isPackaged: boolean;
   /** Armin source checkout; null when the desktop app is packaged. */
   repoPath: string | null;
 };
+
+export const DEFAULT_MCP_PORT = 47321;
+export const MCP_PORT_MIN = 1024;
+export const MCP_PORT_MAX = 65535;
+
+export function isValidMcpPort(port: number): boolean {
+  return (
+    Number.isInteger(port) && port >= MCP_PORT_MIN && port <= MCP_PORT_MAX
+  );
+}
 
 export function buildCursorMcpConfig(setup: McpSetup): string {
   if (!setup.url) {

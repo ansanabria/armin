@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from "electron";
+import { readFile, writeFile } from "node:fs/promises";
+import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
 import { getDb, initDb, deleteProfileData } from "../db";
 import { runMigrations } from "../db/migrate";
@@ -14,10 +15,12 @@ import * as review from "../services/review";
 import * as graph from "../services/graph";
 import * as settings from "../services/settings";
 import * as mcp from "../services/mcp";
-import { getAppSettings, setMcpEnabled } from "../services/app-settings";
+import { getAppSettings, setMcpEnabled, setMcpPort } from "../services/app-settings";
 import { startEmbeddedMcpServer, stopEmbeddedMcpServer } from "../mcp-http";
 import * as profiles from "../services/profiles";
 import { analyzeAnkiPackage, commitAnkiImport } from "../services/anki/import";
+import { exportProfileToMarkdownZip } from "../services/export";
+import { restoreProfileFromZip } from "../services/restore";
 import {
   getProfileIdForWebContents,
   isProfileOpen,
@@ -259,6 +262,63 @@ export function registerIpc() {
     (ctx, input) => decks.createDeckWithFlashcards(ctx, input),
   );
 
+  // --- data export / restore ---
+  ipcMain.handle("data:export", async (event) => {
+    const ctx = await serviceContextForEvent(event);
+    const profileName = profiles.getProfile(ctx.profileId)?.name ?? "Armin";
+    const { fileName, bytes, deckCount, flashcardCount } =
+      await exportProfileToMarkdownZip(ctx, profileName);
+
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: "Export & back up library",
+      defaultPath: fileName,
+      filters: [{ name: "Zip archive", extensions: ["zip"] }],
+    };
+    const result = win
+      ? await dialog.showSaveDialog(win, options)
+      : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) {
+      return { canceled: true as const };
+    }
+
+    await writeFile(result.filePath, bytes);
+    return {
+      canceled: false as const,
+      path: result.filePath,
+      deckCount,
+      flashcardCount,
+    };
+  });
+
+  // Restore runs from the profile-picker window, which has no profile context:
+  // it creates a brand-new profile from the chosen backup archive.
+  ipcMain.handle("data:restore", async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: "Restore from backup",
+      properties: ["openFile" as const],
+      filters: [{ name: "Armin backup", extensions: ["zip"] }],
+    };
+    const picked = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options);
+    if (picked.canceled || picked.filePaths.length === 0) {
+      return { canceled: true as const };
+    }
+
+    const bytes = await readFile(picked.filePaths[0]);
+    const { profile, deckCount, flashcardCount } = await restoreProfileFromZip(
+      new Uint8Array(bytes),
+    );
+    return {
+      canceled: false as const,
+      profile,
+      deckCount,
+      flashcardCount,
+    };
+  });
+
   // --- review ---
   registerForProfile(
     "review:queue",
@@ -352,6 +412,19 @@ export function registerIpc() {
     },
   );
   register("mcp:getStatus", z.void().optional(), () => mcp.getMcpStatus());
+  register("mcp:getPort", z.void().optional(), () => mcp.getMcpPort());
+  register(
+    "mcp:setPort",
+    z.object({ port: z.number().int().min(1024).max(65535) }),
+    async ({ port }) => {
+      setMcpPort(port);
+      if (getAppSettings().mcpEnabled) {
+        stopEmbeddedMcpServer();
+        await startEmbeddedMcpServer();
+      }
+      return mcp.getMcpStatus();
+    },
+  );
   register("mcp:retry", z.void().optional(), async () => {
     await startEmbeddedMcpServer();
     return mcp.getMcpStatus();

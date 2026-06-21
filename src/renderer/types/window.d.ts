@@ -132,6 +132,13 @@ export interface ArminApi {
       port: number | null;
       error: string | null;
     }>;
+    getPort(): Promise<number>;
+    setPort(port: number): Promise<{
+      running: boolean;
+      url: string | null;
+      port: number | null;
+      error: string | null;
+    }>;
     retry(): Promise<{
       running: boolean;
       url: string | null;
@@ -152,6 +159,26 @@ export interface ArminApi {
       description?: string | null;
       flashcards: { front: string; back: string; tags?: string[] }[];
     }): Promise<{ deckId: string; flashcardCount: number }>;
+  };
+  data: {
+    export(): Promise<
+      | { canceled: true }
+      | {
+          canceled: false;
+          path: string;
+          deckCount: number;
+          flashcardCount: number;
+        }
+    >;
+    restore(): Promise<
+      | { canceled: true }
+      | {
+          canceled: false;
+          profile: Profile;
+          deckCount: number;
+          flashcardCount: number;
+        }
+    >;
   };
   onDataChanged(cb: () => void): () => void;
 }

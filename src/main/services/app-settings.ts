@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { app } from "electron";
+import { DEFAULT_MCP_PORT, isValidMcpPort } from "../../shared/mcp";
 
 /**
  * App-global settings that live outside any profile database. Unlike the
@@ -10,7 +11,7 @@ import { app } from "electron";
  */
 export type AppSettings = {
   mcpEnabled: boolean;
-  /** Last port the embedded MCP server bound successfully; null until first bind. */
+  /** User-overridden MCP port; null means use {@link DEFAULT_MCP_PORT}. */
   mcpPort: number | null;
 };
 
@@ -39,9 +40,9 @@ export function getAppSettings(): AppSettings {
           ? parsed.mcpEnabled
           : DEFAULTS.mcpEnabled,
       mcpPort:
-        typeof parsed.mcpPort === "number" && Number.isFinite(parsed.mcpPort)
+        typeof parsed.mcpPort === "number" && isValidMcpPort(parsed.mcpPort)
           ? parsed.mcpPort
-          : DEFAULTS.mcpPort,
+          : null,
     };
   } catch {
     return { ...DEFAULTS };
@@ -64,8 +65,18 @@ export function setMcpEnabled(enabled: boolean): AppSettings {
   return next;
 }
 
-export function setMcpPort(port: number | null): AppSettings {
-  const next = { ...getAppSettings(), mcpPort: port };
+export function getEffectiveMcpPort(): number {
+  return getAppSettings().mcpPort ?? DEFAULT_MCP_PORT;
+}
+
+export function setMcpPort(port: number): AppSettings {
+  if (!isValidMcpPort(port)) {
+    throw new Error(`Invalid MCP port: ${port}`);
+  }
+  const next = {
+    ...getAppSettings(),
+    mcpPort: port === DEFAULT_MCP_PORT ? null : port,
+  };
   writeAppSettings(next);
   return next;
 }

@@ -31,9 +31,10 @@ Available tools:
 Open Armin and select the profile you want the agent to write to. Armin starts
 the MCP server automatically when the app opens (if MCP is enabled in Settings).
 
-The server binds to the first free port in `47321-47330`, preferring the last
-port it used successfully. The exact URL is shown in the in-app MCP settings
-panel — copy agent configs from there rather than assuming a fixed port.
+The server binds to the port set in Settings (default `47321`), trying nearby
+fallback ports if that one is in use. The exact URL is shown in the in-app MCP
+settings panel — copy agent configs from there rather than assuming a fixed
+port.
 
 Example URL (default when port 47321 is free):
 
