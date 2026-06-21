@@ -7,14 +7,56 @@ import {
 } from "node:http";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createArminMcpServer } from "../mcp/app";
+import { getAppSettings, setMcpPort } from "./services/app-settings";
 import { getActiveProfileIdForMcp, getOpenProfilesForMcp } from "./windows";
 
 const MCP_HOST = "127.0.0.1";
-const MCP_PORT = 47321;
+const MCP_PORTS = [
+  47321, 47322, 47323, 47324, 47325, 47326, 47327, 47328, 47329, 47330,
+];
 const MCP_PATH = "/mcp";
 
 let httpServer: Server | null = null;
+let boundPort: number | null = null;
+let lastStartError: string | null = null;
 const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
+
+function buildCandidatePorts(persistedPort: number | null): number[] {
+  const seen = new Set<number>();
+  const candidates: number[] = [];
+  for (const port of [persistedPort, ...MCP_PORTS]) {
+    if (port == null || !Number.isFinite(port)) continue;
+    if (seen.has(port)) continue;
+    seen.add(port);
+    candidates.push(port);
+  }
+  return candidates;
+}
+
+function isAddrInUse(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "EADDRINUSE"
+  );
+}
+
+async function listenOnPort(server: Server, port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const onError = (error: NodeJS.ErrnoException) => {
+      server.off("listening", onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off("error", onError);
+      resolve();
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, MCP_HOST);
+  });
+}
 
 function isInitializedNotification(body: unknown) {
   if (Array.isArray(body)) return body.every(isInitializedNotification);
@@ -78,11 +120,27 @@ async function createTransport() {
 }
 
 export function getEmbeddedMcpUrl() {
-  return `http://${MCP_HOST}:${MCP_PORT}${MCP_PATH}`;
+  const port = boundPort ?? MCP_PORTS[0];
+  return `http://${MCP_HOST}:${port}${MCP_PATH}`;
+}
+
+export function getEmbeddedMcpStatus(): {
+  running: boolean;
+  url: string | null;
+  port: number | null;
+  error: string | null;
+} {
+  const running = httpServer != null && boundPort != null;
+  return {
+    running,
+    url: running ? getEmbeddedMcpUrl() : null,
+    port: boundPort,
+    error: lastStartError,
+  };
 }
 
 export async function startEmbeddedMcpServer() {
-  if (httpServer) return getEmbeddedMcpUrl();
+  if (httpServer && boundPort != null) return getEmbeddedMcpUrl();
 
   httpServer = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", getEmbeddedMcpUrl());
@@ -141,18 +199,36 @@ export async function startEmbeddedMcpServer() {
     }
   });
 
-  await new Promise<void>((resolve, reject) => {
-    const server = httpServer;
-    if (!server) {
-      reject(new Error("Embedded MCP server was not created."));
-      return;
+  const candidates = buildCandidatePorts(getAppSettings().mcpPort);
+  let bound = false;
+
+  for (const port of candidates) {
+    try {
+      await listenOnPort(httpServer, port);
+      boundPort = port;
+      lastStartError = null;
+      setMcpPort(port);
+      bound = true;
+      break;
+    } catch (error) {
+      if (isAddrInUse(error)) continue;
+      httpServer.close();
+      httpServer = null;
+      boundPort = null;
+      lastStartError =
+        error instanceof Error ? error.message : String(error);
+      throw error;
     }
-    server.once("error", reject);
-    server.listen(MCP_PORT, MCP_HOST, () => {
-      server.off("error", reject);
-      resolve();
-    });
-  });
+  }
+
+  if (!bound) {
+    httpServer.close();
+    httpServer = null;
+    boundPort = null;
+    const range = `${MCP_PORTS[0]}-${MCP_PORTS[MCP_PORTS.length - 1]}`;
+    lastStartError = `All MCP ports are in use (${range}).`;
+    throw new Error(lastStartError);
+  }
 
   return getEmbeddedMcpUrl();
 }
@@ -160,6 +236,7 @@ export async function startEmbeddedMcpServer() {
 export function stopEmbeddedMcpServer() {
   httpServer?.close();
   httpServer = null;
+  boundPort = null;
   for (const transport of transports.values()) {
     void transport.close();
   }
