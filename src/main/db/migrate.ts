@@ -8,7 +8,7 @@ function hasMigrations(folder: string) {
   return fs.existsSync(path.join(folder, "meta", "_journal.json"));
 }
 
-function defaultMigrationsFolder() {
+export function defaultMigrationsFolder() {
   const candidates = [
     process.env.ARMIN_MIGRATIONS_DIR,
     process.versions.electron ? path.join(app.getAppPath(), "drizzle") : null,

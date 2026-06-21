@@ -7,12 +7,14 @@ import {
 } from "node:http";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createArminMcpServer } from "../mcp/app";
-import { getAppSettings, setMcpPort } from "./services/app-settings";
+import { DEFAULT_MCP_PORT } from "../shared/mcp";
+import { getEffectiveMcpPort } from "./services/app-settings";
 import { getActiveProfileIdForMcp, getOpenProfilesForMcp } from "./windows";
 
 const MCP_HOST = "127.0.0.1";
 const MCP_PORTS = [
-  47321, 47322, 47323, 47324, 47325, 47326, 47327, 47328, 47329, 47330,
+  DEFAULT_MCP_PORT,
+  47322, 47323, 47324, 47325, 47326, 47327, 47328, 47329, 47330,
 ];
 const MCP_PATH = "/mcp";
 
@@ -21,11 +23,11 @@ let boundPort: number | null = null;
 let lastStartError: string | null = null;
 const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
 
-function buildCandidatePorts(persistedPort: number | null): number[] {
+function buildCandidatePorts(preferredPort: number): number[] {
   const seen = new Set<number>();
   const candidates: number[] = [];
-  for (const port of [persistedPort, ...MCP_PORTS]) {
-    if (port == null || !Number.isFinite(port)) continue;
+  for (const port of [preferredPort, ...MCP_PORTS]) {
+    if (!Number.isFinite(port)) continue;
     if (seen.has(port)) continue;
     seen.add(port);
     candidates.push(port);
@@ -199,7 +201,7 @@ export async function startEmbeddedMcpServer() {
     }
   });
 
-  const candidates = buildCandidatePorts(getAppSettings().mcpPort);
+  const candidates = buildCandidatePorts(getEffectiveMcpPort());
   let bound = false;
 
   for (const port of candidates) {
@@ -207,7 +209,6 @@ export async function startEmbeddedMcpServer() {
       await listenOnPort(httpServer, port);
       boundPort = port;
       lastStartError = null;
-      setMcpPort(port);
       bound = true;
       break;
     } catch (error) {

@@ -69,6 +69,8 @@ const api = {
     getEnabled: () => invoke("mcp:getEnabled"),
     setEnabled: (enabled: boolean) => invoke("mcp:setEnabled", { enabled }),
     getStatus: () => invoke("mcp:getStatus"),
+    getPort: () => invoke("mcp:getPort"),
+    setPort: (port: number) => invoke("mcp:setPort", { port }),
     retry: () => invoke("mcp:retry"),
   },
   import: {
@@ -77,6 +79,10 @@ const api = {
     commitAnki: (input: unknown) => invoke("import:commitAnki", input),
     createDeckWithFlashcards: (input: unknown) =>
       invoke("import:createDeckWithFlashcards", input),
+  },
+  data: {
+    export: () => invoke("data:export"),
+    restore: () => invoke("data:restore"),
   },
   onDataChanged: (cb: () => void) => {
     const listener = () => cb();

@@ -77,6 +77,33 @@ export function closeDb(profileId?: string) {
   handles.clear();
 }
 
+/**
+ * A consistent single-file image of a profile's live database. Checkpointing
+ * folds the WAL back into the main file first, so the serialized bytes include
+ * every committed write without needing to close the database.
+ */
+export function snapshotProfileDb(profileId: string): Uint8Array {
+  const handle = handles.get(profileId);
+  if (!handle) {
+    throw new Error(
+      `Database for profile ${profileId} is not initialized — call initDb(profileId) first.`,
+    );
+  }
+  handle.client.pragma("wal_checkpoint(TRUNCATE)");
+  return handle.client.serialize();
+}
+
+/**
+ * Write raw SQLite bytes as a profile's database file (used by restore). The
+ * profile must not already have an open handle; callers create a fresh profile
+ * id first.
+ */
+export function writeProfileDbFile(profileId: string, bytes: Uint8Array) {
+  const dir = profileDbDir(profileId);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, "armin.db"), bytes);
+}
+
 export function deleteProfileData(profileId: string) {
   closeDb(profileId);
   const dir = profileDbDir(profileId);

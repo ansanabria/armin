@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RotateCcw } from "lucide-react";
+import { Download, RotateCcw } from "lucide-react";
 import {
   MaximumIntervalInput,
   NewCardsPerDayInput,
@@ -399,6 +399,13 @@ export default function SettingsPage() {
         </Section>
 
         <Section
+          title="Export & backup"
+          description="Take your data out of the app."
+        >
+          <ExportRow />
+        </Section>
+
+        <Section
           title="Appearance"
           description="How Armin looks on your machine."
         >
@@ -428,6 +435,48 @@ export default function SettingsPage() {
           </Row>
         </Section>
       </div>
+    </div>
+  );
+}
+
+function ExportRow() {
+  const toast = useToast();
+
+  const exportData = useMutation({
+    mutationFn: () => window.armin.data.export(),
+    onSuccess: (result) => {
+      if (result.canceled) return;
+      toast({
+        tone: "success",
+        title: "Library exported & backed up",
+        description: `${result.deckCount} deck${
+          result.deckCount === 1 ? "" : "s"
+        }, ${result.flashcardCount} flashcard${
+          result.flashcardCount === 1 ? "" : "s"
+        } saved.`,
+      });
+    },
+    onError: () =>
+      toast({ tone: "error", title: "Couldn’t export your library" }),
+  });
+
+  return (
+    <div className="flex items-start justify-between gap-6 px-4 py-3.5">
+      <p className="text-[0.8125rem] leading-snug text-muted">
+        Download your whole library as a single zip — readable Markdown (one
+        file per deck) plus a complete backup you can restore later from the
+        profile picker.
+      </p>
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0"
+        disabled={exportData.isPending}
+        onClick={() => exportData.mutate()}
+      >
+        <Download className="h-4 w-4" />
+        {exportData.isPending ? "Exporting…" : "Export"}
+      </Button>
     </div>
   );
 }
@@ -463,7 +512,7 @@ function Section({
         )}
         {action && <div className="mt-3">{action}</div>}
       </div>
-      <div className="border border-border bg-surface">{children}</div>
+      <div className="self-start border border-border bg-surface">{children}</div>
     </section>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ArchiveRestore,
   ArrowLeft,
   ChevronRight,
   Plus,
@@ -48,6 +49,8 @@ export function ProfilePickerApp() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const selected = profiles.find((p) => p.id === selectedId) ?? null;
@@ -120,6 +123,24 @@ export function ProfilePickerApp() {
       await openProfile(profile);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const restoreFromBackup = async () => {
+    if (restoring) return;
+    setRestoring(true);
+    setRestoreError(null);
+    try {
+      const result = await window.armin.data.restore();
+      if (result.canceled) return;
+      await refresh(false);
+      await openProfile(result.profile);
+    } catch (error) {
+      setRestoreError(
+        error instanceof Error ? error.message : "Couldn't restore backup",
+      );
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -197,6 +218,9 @@ export function ProfilePickerApp() {
             onSetDefault={(id) => void setDefaultProfile(id)}
             onClearDefault={() => void clearDefaultProfile()}
             onDelete={requestDelete}
+            onRestore={() => void restoreFromBackup()}
+            restoring={restoring}
+            restoreError={restoreError}
           />
         ) : (
           <CreateView
@@ -293,6 +317,9 @@ function PickerView({
   onSetDefault,
   onClearDefault,
   onDelete,
+  onRestore,
+  restoring,
+  restoreError,
 }: {
   profiles: Profile[];
   defaultId: string | null;
@@ -306,6 +333,9 @@ function PickerView({
   onSetDefault: (id: string) => void;
   onClearDefault: () => void;
   onDelete: (profile: Profile) => void;
+  onRestore: () => void;
+  restoring: boolean;
+  restoreError: string | null;
 }) {
   const hasProfiles = profiles.length > 0;
   const menuClose = useMenuCloseAction();
@@ -413,12 +443,22 @@ function PickerView({
           <EmptyState
             icon={UserRound}
             title="No profiles yet"
-            description="Create a profile to keep decks and settings separate for each learner or context."
+            description="Create a profile to keep decks and settings separate for each learner or context. You can also restore one from a backup."
             action={
-              <Button onClick={onCreate}>
-                <Plus className="h-4 w-4" />
-                Create profile
-              </Button>
+              <div className="flex flex-col items-center gap-2">
+                <Button onClick={onCreate}>
+                  <Plus className="h-4 w-4" />
+                  Create profile
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={restoring}
+                  onClick={onRestore}
+                >
+                  <ArchiveRestore className="h-4 w-4" />
+                  {restoring ? "Restoring…" : "Restore from backup"}
+                </Button>
+              </div>
             }
             className="flex-1 justify-center"
           />
@@ -426,6 +466,9 @@ function PickerView({
       </div>
 
       <footer className="flex shrink-0 flex-col gap-2 bg-bg px-6 py-4">
+        {restoreError && (
+          <p className="text-sm text-again">{restoreError}</p>
+        )}
         {hasProfiles ? (
           <>
             <Button
@@ -438,6 +481,15 @@ function PickerView({
             <Button variant="outline" className="w-full" onClick={onCreate}>
               <Plus className="h-4 w-4" />
               Create profile
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full"
+              disabled={restoring}
+              onClick={onRestore}
+            >
+              <ArchiveRestore className="h-4 w-4" />
+              {restoring ? "Restoring…" : "Restore from backup"}
             </Button>
           </>
         ) : null}
