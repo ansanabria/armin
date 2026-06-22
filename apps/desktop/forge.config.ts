@@ -110,6 +110,27 @@ const config: ForgeConfig = {
     }),
   ],
   hooks: {
+    // In the npm-workspaces monorepo, better-sqlite3 and its runtime deps hoist
+    // to the repo-root node_modules, outside this app dir. @electron/packager
+    // only bundles files physically under the app, so the packaged asar would
+    // ship without the native module and crash on first database open. Copy the
+    // resolved modules (electron-ABI builds, already rebuilt by the prepackage
+    // `native:electron` hook) into the staged app before asar packaging; the
+    // AutoUnpackNatives plugin then extracts the .node from the asar. require
+    // resolution finds them whether they are hoisted to root or installed local.
+    packageAfterCopy: async (_config, buildPath) => {
+      const runtimeNativeModules = [
+        "better-sqlite3",
+        "bindings",
+        "file-uri-to-path",
+      ];
+      for (const name of runtimeNativeModules) {
+        const src = path.dirname(require.resolve(`${name}/package.json`));
+        const dest = path.join(buildPath, "node_modules", name);
+        fs.rmSync(dest, { recursive: true, force: true });
+        fs.cpSync(src, dest, { recursive: true });
+      }
+    },
     // AppImages mount via FUSE (nosuid), so Electron's setuid sandbox helper
     // can never be privileged and the app aborts on launch unless started with
     // --no-sandbox. The AppImage maker makes AppRun a symlink to the binary, so

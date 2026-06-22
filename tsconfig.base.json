@@ -7,12 +7,7 @@
     "esModuleInterop": true,
     "strict": true,
     "sourceMap": true,
-    "outDir": "dist",
     "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "jsx": "react-jsx",
-    "paths": {
-      "@/*": ["./src/renderer/*"]
-    }
+    "resolveJsonModule": true
   }
 }
