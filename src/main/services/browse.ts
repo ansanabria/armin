@@ -58,7 +58,7 @@ async function countFlashcards(
   filters: SQL | undefined,
 ): Promise<number> {
   const base = ctx.db.select({ value: count() }).from(flashcards);
-  const row = filters ? await base.where(filters).get() : await base.get();
+  const row = filters ? base.where(filters).get() : base.get();
   return row?.value ?? 0;
 }
 
@@ -139,7 +139,7 @@ export async function listBrowsePage(
   // Front/back/state/due are derived from generated review units, so we hydrate
   // the filtered set and sort in memory. The sort is deterministic per call,
   // which keeps offset-based pagination stable across page fetches.
-  const rows = await (filters
+  const rows = (filters
     ? ctx.db
         .select({ flashcard: flashcards, deckName: decks.name })
         .from(flashcards)
@@ -171,7 +171,7 @@ export async function listBrowsePage(
 }
 
 export async function listAllTagNames(ctx: ServiceContext): Promise<string[]> {
-  const rows = await ctx.db
+  const rows = ctx.db
     .select({ name: tags.name })
     .from(tags)
     .orderBy(tags.name)
@@ -183,7 +183,7 @@ export async function listDeckTagNames(
   ctx: ServiceContext,
   deckId: string,
 ): Promise<string[]> {
-  const rows = await ctx.db
+  const rows = ctx.db
     .selectDistinct({ name: tags.name })
     .from(flashcardTags)
     .innerJoin(tags, eq(flashcardTags.tagId, tags.id))

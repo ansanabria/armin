@@ -35,13 +35,13 @@ export const SCHEDULING_SETTING_KEYS = [
 /** Read the singleton settings row, seeding defaults on first access. */
 export async function getSettings(ctx: ServiceContext): Promise<Settings> {
   const db = ctx.db;
-  const existing = await db
+  const existing = db
     .select()
     .from(schema.settings)
     .where(eq(schema.settings.id, 1))
     .get();
   if (existing) return existing;
-  await db
+  db
     .insert(schema.settings)
     .values({
       id: 1,
@@ -49,7 +49,7 @@ export async function getSettings(ctx: ServiceContext): Promise<Settings> {
       schedulingPreset: "balanced",
     })
     .run();
-  const seeded = await db
+  const seeded = db
     .select()
     .from(schema.settings)
     .where(eq(schema.settings.id, 1))
@@ -139,7 +139,7 @@ export async function updateSettings(
 ): Promise<Settings> {
   const db = ctx.db;
   await getSettings(ctx); // ensure row exists
-  await db
+  db
     .update(schema.settings)
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(schema.settings.id, 1))
@@ -153,7 +153,7 @@ export async function updateSettings(
 
 export async function getDeckSettings(ctx: ServiceContext, deckId: string) {
   const globalSettings = await getSettings(ctx);
-  const row = await ctx.db
+  const row = ctx.db
     .select()
     .from(schema.deckSettings)
     .where(eq(schema.deckSettings.deckId, deckId))
@@ -180,20 +180,20 @@ export async function updateDeckSettings(
   patch: DeckSettingsUpdate,
 ) {
   const now = new Date();
-  const existing = await ctx.db
+  const existing = ctx.db
     .select()
     .from(schema.deckSettings)
     .where(eq(schema.deckSettings.deckId, deckId))
     .get();
 
   if (existing) {
-    await ctx.db
+    ctx.db
       .update(schema.deckSettings)
       .set({ ...patch, updatedAt: now })
       .where(eq(schema.deckSettings.deckId, deckId))
       .run();
   } else {
-    await ctx.db
+    ctx.db
       .insert(schema.deckSettings)
       .values({ deckId, ...patch, updatedAt: now })
       .run();

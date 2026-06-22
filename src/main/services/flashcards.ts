@@ -88,7 +88,7 @@ export async function getTagsForFlashcards(
   const tagsByFlashcardId = new Map(uniqueIds.map((id) => [id, [] as string[]]));
   if (uniqueIds.length === 0) return tagsByFlashcardId;
 
-  const rows = await db
+  const rows = db
     .select({ flashcardId: flashcardTags.flashcardId, name: tags.name })
     .from(flashcardTags)
     .innerJoin(tags, eq(flashcardTags.tagId, tags.id))
@@ -338,7 +338,7 @@ export async function listFlashcards(
   ctx: ServiceContext,
   deckId: string,
 ): Promise<FlashcardWithMeta[]> {
-  const rows = await ctx.db
+  const rows = ctx.db
     .select()
     .from(flashcards)
     .where(eq(flashcards.deckId, deckId))
@@ -350,7 +350,7 @@ export async function listFlashcards(
 export async function listAllFlashcards(
   ctx: ServiceContext,
 ): Promise<BrowseFlashcard[]> {
-  const rows = await ctx.db
+  const rows = ctx.db
     .select({ flashcard: flashcards, deckName: schema.decks.name })
     .from(flashcards)
     .innerJoin(schema.decks, eq(flashcards.deckId, schema.decks.id))
@@ -373,7 +373,7 @@ export async function getFlashcard(
   ctx: ServiceContext,
   id: string,
 ): Promise<FlashcardWithMeta | undefined> {
-  const flashcard = await ctx.db
+  const flashcard = ctx.db
     .select()
     .from(flashcards)
     .where(eq(flashcards.id, id))
@@ -421,7 +421,7 @@ export async function createFlashcard(input: {
   tags?: string[];
 }): Promise<FlashcardWithMeta> {
   const { ctx } = input;
-  const flashcard = await ctx.db.transaction((tx) =>
+  const flashcard = ctx.db.transaction((tx) =>
     createFlashcardRecord(tx, input),
   );
 
@@ -433,7 +433,7 @@ export async function updateFlashcard(
   id: string,
   patch: { type?: FlashcardType; content?: unknown; tags?: string[] },
 ): Promise<FlashcardWithMeta | undefined> {
-  const flashcard = await ctx.db.transaction((tx) => {
+  const flashcard = ctx.db.transaction((tx) => {
     const current = tx
       .select()
       .from(flashcards)
@@ -486,7 +486,7 @@ export async function deleteFlashcard(
 
   // review_units.flashcard_id has no DB-level FK on migrated databases, so
   // remove the generated review units explicitly (review_logs cascade off them).
-  await ctx.db.transaction((tx) => {
+  ctx.db.transaction((tx) => {
     tx.delete(reviewUnits).where(eq(reviewUnits.flashcardId, id)).run();
     tx.delete(flashcards).where(eq(flashcards.id, id)).run();
   });
@@ -506,7 +506,7 @@ export async function setArchived(
   flashcardId: string,
   archived: boolean,
 ): Promise<FlashcardWithMeta | undefined> {
-  const flashcard = await ctx.db
+  const flashcard = ctx.db
     .select()
     .from(flashcards)
     .where(eq(flashcards.id, flashcardId))
@@ -514,7 +514,7 @@ export async function setArchived(
   if (!flashcard) return undefined;
 
   const now = new Date();
-  await ctx.db.transaction((tx) => {
+  ctx.db.transaction((tx) => {
     tx.update(flashcards)
       .set({ archived, updatedAt: now })
       .where(eq(flashcards.id, flashcardId))

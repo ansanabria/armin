@@ -39,7 +39,7 @@ describe("Flashcard → Review unit generation", () => {
       content: { front: "F", back: "B" },
     });
 
-    const cards = await reviewUnitsForFlashcard(ctx, note.id);
+    const cards = reviewUnitsForFlashcard(ctx, note.id);
     expect(cards.map((c) => c.subKey)).toEqual(["", "rev"]);
     expect(cards.find((c) => c.subKey === "")?.front).toBe("F");
     expect(cards.find((c) => c.subKey === "rev")?.front).toBe("B");
@@ -55,7 +55,7 @@ describe("Flashcard → Review unit generation", () => {
       content: { text: "{{1::a}} and {{2::b}}" },
     });
 
-    const cards = await reviewUnitsForFlashcard(ctx, note.id);
+    const cards = reviewUnitsForFlashcard(ctx, note.id);
     expect(cards.map((c) => c.subKey)).toEqual(["c1", "c2"]);
   });
 });
@@ -71,7 +71,7 @@ describe("updateFlashcard reconciliation", () => {
       content: { text: "{{1::a}} and {{2::b}}" },
     });
 
-    const c1 = (await reviewUnitsForFlashcard(ctx, note.id)).find(
+    const c1 = (reviewUnitsForFlashcard(ctx, note.id)).find(
       (c) => c.subKey === "c1",
     )!;
     await secureReviewUnit(ctx, c1.id);
@@ -81,7 +81,7 @@ describe("updateFlashcard reconciliation", () => {
       content: { text: "{{1::a}} and {{2::b}} and {{3::c}}" },
     });
 
-    const after = await reviewUnitsForFlashcard(ctx, note.id);
+    const after = reviewUnitsForFlashcard(ctx, note.id);
     expect(after.map((c) => c.subKey)).toEqual(["c1", "c2", "c3"]);
 
     const c1After = after.find((c) => c.subKey === "c1")!;
@@ -103,13 +103,13 @@ describe("updateFlashcard reconciliation", () => {
       type: "cloze",
       content: { text: "{{1::a}} and {{2::b}}" },
     });
-    expect(await reviewUnitsForFlashcard(ctx, note.id)).toHaveLength(2);
+    expect(reviewUnitsForFlashcard(ctx, note.id)).toHaveLength(2);
 
     await flashcards.updateFlashcard(ctx, note.id, {
       content: { text: "{{1::a}} only" },
     });
 
-    const after = await reviewUnitsForFlashcard(ctx, note.id);
+    const after = reviewUnitsForFlashcard(ctx, note.id);
     expect(after.map((c) => c.subKey)).toEqual(["c1"]);
   });
 
@@ -134,7 +134,7 @@ describe("updateFlashcard reconciliation", () => {
       },
     });
 
-    const m1 = (await reviewUnitsForFlashcard(ctx, note.id)).find(
+    const m1 = (reviewUnitsForFlashcard(ctx, note.id)).find(
       (c) => c.subKey === "m1",
     )!;
     await secureReviewUnit(ctx, m1.id);
@@ -158,7 +158,7 @@ describe("updateFlashcard reconciliation", () => {
       },
     });
 
-    const after = await reviewUnitsForFlashcard(ctx, note.id);
+    const after = reviewUnitsForFlashcard(ctx, note.id);
     expect(after.map((c) => c.subKey)).toEqual(["m1", "m3"]);
     const m1After = after.find((c) => c.subKey === "m1")!;
     const m3After = after.find((c) => c.subKey === "m3")!;
@@ -179,9 +179,9 @@ describe("updateFlashcard reconciliation", () => {
       content: { front: "F", back: "B" },
     });
 
-    const [forward] = await reviewUnitsForFlashcard(ctx, note.id);
+    const [forward] = reviewUnitsForFlashcard(ctx, note.id);
     await review.rateReviewUnit(ctx, forward.id, Rating.Good);
-    const reviewedForward = (await reviewUnitsForFlashcard(ctx, note.id))[0];
+    const reviewedForward = (reviewUnitsForFlashcard(ctx, note.id))[0];
     const logsBefore = await reviewLogsFor(ctx, forward.id);
 
     await flashcards.updateFlashcard(ctx, note.id, {
@@ -189,7 +189,7 @@ describe("updateFlashcard reconciliation", () => {
       content: { front: "F", back: "B" },
     });
 
-    const reversed = await reviewUnitsForFlashcard(ctx, note.id);
+    const reversed = reviewUnitsForFlashcard(ctx, note.id);
     expect(reversed.map((c) => c.subKey)).toEqual(["", "rev"]);
     const forwardAfterAdd = reversed.find((c) => c.subKey === "")!;
     const reverseAfterAdd = reversed.find((c) => c.subKey === "rev")!;
@@ -207,7 +207,7 @@ describe("updateFlashcard reconciliation", () => {
       content: { front: "F", back: "B" },
     });
 
-    const basicAgain = await reviewUnitsForFlashcard(ctx, note.id);
+    const basicAgain = reviewUnitsForFlashcard(ctx, note.id);
     expect(basicAgain.map((c) => c.subKey)).toEqual([""]);
     expect(basicAgain[0].id).toBe(forward.id);
     expect(basicAgain[0].reps).toBe(reviewedForward.reps);
@@ -227,13 +227,13 @@ describe("deleteFlashcard", () => {
       content: { front: "F", back: "B" },
       tags: ["doomed"],
     });
-    expect(await reviewUnitsForFlashcard(ctx, note.id)).toHaveLength(2);
+    expect(reviewUnitsForFlashcard(ctx, note.id)).toHaveLength(2);
 
     await flashcards.deleteFlashcard(ctx, note.id);
 
     expect(await flashcards.getFlashcard(ctx, note.id)).toBeUndefined();
-    expect(await reviewUnitsForFlashcard(ctx, note.id)).toHaveLength(0);
-    const tagLinks = await ctx.db
+    expect(reviewUnitsForFlashcard(ctx, note.id)).toHaveLength(0);
+    const tagLinks = ctx.db
       .select()
       .from(schema.flashcardTags)
       .where(eq(schema.flashcardTags.flashcardId, note.id))
@@ -265,7 +265,7 @@ describe("deleteFlashcard", () => {
 
     const after = await flashcards.getFlashcard(ctx, dependent.id);
     expect(after?.locked).toBe(false);
-    const [dependentCard] = await reviewUnitsForFlashcard(ctx, dependent.id);
+    const [dependentCard] = reviewUnitsForFlashcard(ctx, dependent.id);
     expect(dependentCard.locked).toBe(false);
     expect(dependentCard.state).toBe(State.New);
     // Re-enters the schedulable frontier instead of staying pending forever.
@@ -302,7 +302,7 @@ describe("deleteFlashcard", () => {
       true,
     );
 
-    const [bCard] = await reviewUnitsForFlashcard(ctx, prereqB.id);
+    const [bCard] = reviewUnitsForFlashcard(ctx, prereqB.id);
     await secureReviewUnit(ctx, bCard.id);
     await graph.refreshAfterPrerequisiteStateChange(ctx, prereqB.id);
 
@@ -333,7 +333,7 @@ describe("Flashcard-level securing", () => {
 
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
 
-    const prereqReviewUnits = await reviewUnitsForFlashcard(ctx, prereq.id);
+    const prereqReviewUnits = reviewUnitsForFlashcard(ctx, prereq.id);
     await secureReviewUnit(ctx, prereqReviewUnits[0].id);
     await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);

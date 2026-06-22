@@ -68,7 +68,7 @@ export async function countNewReviewUnitsIntroducedToday(
   ctx: ServiceContext,
 ): Promise<number> {
   const since = startOfToday();
-  const rows = await ctx.db
+  const rows = ctx.db
     .select({ reviewUnitId: reviewLogs.reviewUnitId })
     .from(reviewLogs)
     .where(and(gte(reviewLogs.review, since), eq(reviewLogs.state, State.New)))
@@ -161,7 +161,7 @@ async function toReviewQueueItems(
   const flashcardIds = [
     ...new Set(reviewUnitRows.map((reviewUnit) => reviewUnit.flashcardId)),
   ];
-  const flashcardRows = await ctx.db
+  const flashcardRows = ctx.db
     .select({
       id: flashcards.id,
       type: flashcards.type,
@@ -203,7 +203,7 @@ export async function getQueue(
   ctx: ServiceContext,
   deckId: string,
 ): Promise<ReviewQueueItem[]> {
-  const deckReviewUnits = await ctx.db
+  const deckReviewUnits = ctx.db
     .select()
     .from(reviewUnits)
     .where(eq(reviewUnits.deckId, deckId))
@@ -215,7 +215,7 @@ export async function getQueue(
 export async function getGlobalQueue(
   ctx: ServiceContext,
 ): Promise<ReviewQueueItem[]> {
-  const rows = await ctx.db
+  const rows = ctx.db
     .select({ reviewUnit: reviewUnits, deckName: decks.name })
     .from(reviewUnits)
     .innerJoin(decks, eq(reviewUnits.deckId, decks.id))
@@ -240,7 +240,7 @@ export async function previewReviewUnit(
   ctx: ServiceContext,
   reviewUnitId: string,
 ): Promise<PreviewOption[]> {
-  const reviewUnit = await ctx.db
+  const reviewUnit = ctx.db
     .select()
     .from(reviewUnits)
     .where(eq(reviewUnits.id, reviewUnitId))
@@ -262,14 +262,14 @@ export async function rateReviewUnit(
   rating: Grade,
 ): Promise<ReviewQueueItem> {
   const now = new Date();
-  const reviewUnit = await ctx.db
+  const reviewUnit = ctx.db
     .select()
     .from(reviewUnits)
     .where(eq(reviewUnits.id, reviewUnitId))
     .get();
   if (!reviewUnit) throw new Error(`Review unit ${reviewUnitId} not found`);
   const scheduler = await buildSchedulerForReviewUnit(ctx, reviewUnit);
-  const updated = await ctx.db.transaction((tx) => {
+  const updated = ctx.db.transaction((tx) => {
     const { card: next, log } = scheduler.next(
       toFsrsCard(reviewUnit),
       now,
@@ -312,14 +312,14 @@ export async function undoReview(
   ctx: ServiceContext,
   reviewUnitId: string,
 ): Promise<ReviewQueueItem | null> {
-  const reviewUnit = await ctx.db
+  const reviewUnit = ctx.db
     .select()
     .from(reviewUnits)
     .where(eq(reviewUnits.id, reviewUnitId))
     .get();
   if (!reviewUnit) throw new Error(`Review unit ${reviewUnitId} not found`);
 
-  const logRow = await ctx.db
+  const logRow = ctx.db
     .select()
     .from(reviewLogs)
     .where(eq(reviewLogs.reviewUnitId, reviewUnitId))
@@ -344,7 +344,7 @@ export async function undoReview(
   const now = new Date();
   const prev = scheduler.rollback(toFsrsCard(reviewUnit), log);
 
-  const updated = await ctx.db.transaction((tx) => {
+  const updated = ctx.db.transaction((tx) => {
     const rolled = tx
       .update(reviewUnits)
       .set({ ...fromFsrsCard(prev), updatedAt: now })

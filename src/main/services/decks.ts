@@ -59,7 +59,7 @@ async function withStats(
 
 export async function listDecks(ctx: ServiceContext): Promise<DeckWithStats[]> {
   const db = ctx.db;
-  const rows = await db.select().from(decks).orderBy(decks.createdAt).all();
+  const rows = db.select().from(decks).orderBy(decks.createdAt).all();
   return Promise.all(rows.map((deck) => withStats(ctx, deck)));
 }
 
@@ -67,7 +67,7 @@ export async function getDeck(
   ctx: ServiceContext,
   id: string,
 ): Promise<DeckWithStats | undefined> {
-  const deck = await ctx.db.select().from(decks).where(eq(decks.id, id)).get();
+  const deck = ctx.db.select().from(decks).where(eq(decks.id, id)).get();
   return deck ? withStats(ctx, deck) : undefined;
 }
 
@@ -79,7 +79,7 @@ export async function createDeck(
   },
 ): Promise<Deck> {
   const db = ctx.db;
-  const row = await db
+  const row = db
     .insert(decks)
     .values({ name: input.name, description: input.description ?? null })
     .returning()
@@ -105,7 +105,7 @@ export async function deleteDeck(
   ctx: ServiceContext,
   id: string,
 ): Promise<void> {
-  await ctx.db.delete(decks).where(eq(decks.id, id)).run();
+  ctx.db.delete(decks).where(eq(decks.id, id)).run();
 }
 
 /**

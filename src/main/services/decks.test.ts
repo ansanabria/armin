@@ -33,7 +33,7 @@ async function tableCount(
     | typeof schema.flashcardPrereqs
     | typeof schema.reviewLogs,
 ) {
-  const row = await ctx.db.select({ value: count() }).from(table).get();
+  const row = ctx.db.select({ value: count() }).from(table).get();
   return row?.value ?? 0;
 }
 
@@ -92,7 +92,7 @@ describe("deck lifecycle", () => {
     expect(await tableCount(ctx, schema.flashcards)).toBe(1);
     expect(await tableCount(ctx, schema.reviewUnits)).toBe(1);
 
-    const remainingFlashcards = await ctx.db
+    const remainingFlashcards = ctx.db
       .select()
       .from(schema.flashcards)
       .where(eq(schema.flashcards.deckId, survivor.id))
