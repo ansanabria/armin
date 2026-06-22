@@ -5,6 +5,7 @@ import { loadDevToolsExtensions } from "./devtools";
 import { applyLinuxDesktopEntry } from "./icon";
 import { registerIpc, openProfile } from "./ipc";
 import { startEmbeddedMcpServer, stopEmbeddedMcpServer } from "./mcp-http";
+import { applyContentSecurityPolicy } from "./security";
 import { getAppSettings } from "./services/app-settings";
 import * as profiles from "./services/profiles";
 import { openProfilePicker } from "./windows";
@@ -35,6 +36,7 @@ async function openStartupProfile() {
 // Some APIs can only be used after this event occurs.
 app.on("ready", async () => {
   applyLinuxDesktopEntry();
+  applyContentSecurityPolicy();
   session.defaultSession.setSpellCheckerEnabled(false);
   registerIpc();
   if (getAppSettings().mcpEnabled) {
