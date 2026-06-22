@@ -152,7 +152,7 @@ function selectFrontierByFlashcard(
 }
 
 /** Attach the owning flashcard's type/content to a set of review-unit rows. */
-async function toReviewQueueItems(
+export async function toReviewQueueItems(
   ctx: ServiceContext,
   reviewUnitRows: ReviewUnit[],
   deckNameByReviewUnitId?: Map<string, string>,

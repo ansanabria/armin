@@ -25,6 +25,8 @@ export type {
   FlashcardContent,
   PreviewOption,
   ReviewQueueItem,
+  CramPool,
+  CramScope,
   DeckGraph,
   GlobalGraph,
 } from "../../shared/armin-api";

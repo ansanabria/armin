@@ -1,5 +1,5 @@
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Layers, Library, Settings, Share2 } from "lucide-react";
+import { Dumbbell, Layers, Library, Settings, Share2 } from "lucide-react";
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { ProfileSwitcher } from "@/components/profile-switcher";
@@ -97,6 +97,17 @@ export default function RootLayout() {
           >
             <Share2 className="h-4 w-4" strokeWidth={1.5} />
             Graph
+          </Link>
+          <Link
+            to="/cram"
+            className={navClass("/cram")}
+            onPointerDown={(event) => {
+              if (event.button === 0) activateNav("/cram");
+            }}
+            onKeyDown={(event) => activateNavFromKeyboard(event, "/cram")}
+          >
+            <Dumbbell className="h-4 w-4" strokeWidth={1.5} />
+            Cram
           </Link>
           <Link
             to="/settings"

@@ -27,6 +27,10 @@ export const reviewKeys = {
   preview: (reviewUnitId: string) => ["review", "preview", reviewUnitId] as const,
 };
 
+export const cramKeys = {
+  pool: (scope: unknown) => ["cram", "pool", scope] as const,
+};
+
 export const graphKeys = {
   global: ["graph", "global"] as const,
 };

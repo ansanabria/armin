@@ -53,6 +53,9 @@ export const ipcChannels = {
     rate: channel("review:rate"),
     undo: channel("review:undo"),
   },
+  cram: {
+    pool: channel("cram:pool"),
+  },
   graph: {
     getGlobal: channel("graph:getGlobal"),
     addPrereq: channel("graph:addPrereq"),

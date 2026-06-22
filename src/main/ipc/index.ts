@@ -9,6 +9,7 @@ import * as decks from "../services/decks";
 import * as flashcards from "../services/flashcards";
 import * as browse from "../services/browse";
 import * as review from "../services/review";
+import * as cram from "../services/cram";
 import * as graph from "../services/graph";
 import * as settings from "../services/settings";
 import * as mcp from "../services/mcp";
@@ -286,6 +287,9 @@ export function registerIpc() {
       return result;
     },
   );
+
+  // --- cram ---
+  registerForProfile(c.cram.pool, (ctx, scope) => cram.getCramPool(ctx, scope));
 
   // --- graph ---
   registerForProfile(c.graph.getGlobal, (ctx) =>
