@@ -18,6 +18,7 @@ import {
 } from "./scheduler";
 import {
   getEffectiveSettingsForDeck,
+  getSettings,
   type SchedulingSettings,
 } from "./settings";
 import { shuffle } from "./shuffle";
@@ -62,23 +63,16 @@ function startOfToday(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-/** First-time ratings logged today, optionally scoped to one deck. */
+/** First-time ratings logged today across the Profile-wide Frontier. */
 export async function countNewReviewUnitsIntroducedToday(
   ctx: ServiceContext,
-  deckId?: string,
 ): Promise<number> {
   const since = startOfToday();
-  const conditions = [
-    gte(reviewLogs.review, since),
-    eq(reviewLogs.state, State.New),
-  ];
-  const query = ctx.db
+  const rows = await ctx.db
     .select({ reviewUnitId: reviewLogs.reviewUnitId })
     .from(reviewLogs)
-    .innerJoin(reviewUnits, eq(reviewLogs.reviewUnitId, reviewUnits.id));
-  const rows = deckId
-    ? await query.where(and(...conditions, eq(reviewUnits.deckId, deckId))).all()
-    : await query.where(and(...conditions)).all();
+    .where(and(gte(reviewLogs.review, since), eq(reviewLogs.state, State.New)))
+    .all();
   return new Set(rows.map((row) => row.reviewUnitId)).size;
 }
 
@@ -111,36 +105,25 @@ export async function buildSessionQueue(
       reviewUnit.due <= now,
   );
 
-  const cappedFrontier = await selectFrontierByDeck(ctx, frontier);
+  const cappedFrontier = await selectFrontier(ctx, frontier);
 
   return [...shuffle([...reviews]), ...cappedFrontier];
 }
 
-async function selectFrontierByDeck(
+async function selectFrontier(
   ctx: ServiceContext,
   frontier: ReviewUnit[],
 ): Promise<ReviewUnit[]> {
-  const byDeckId = new Map<string, ReviewUnit[]>();
-  for (const reviewUnit of frontier) {
-    const list = byDeckId.get(reviewUnit.deckId) ?? [];
-    list.push(reviewUnit);
-    byDeckId.set(reviewUnit.deckId, list);
-  }
+  const settings = await getSettings(ctx);
+  const introducedToday = await countNewReviewUnitsIntroducedToday(ctx);
+  const remaining = Math.max(
+    0,
+    settings.newReviewUnitsPerDay - introducedToday,
+  );
 
-  const selected: ReviewUnit[] = [];
-  for (const [deckId, deckFrontier] of byDeckId) {
-    const settings = await getEffectiveSettingsForDeck(ctx, deckId);
-    const introducedToday = await countNewReviewUnitsIntroducedToday(ctx, deckId);
-    const remaining = Math.max(
-      0,
-      settings.newReviewUnitsPerDay - introducedToday,
-    );
-    const capped = settings.keepSiblingReviewUnitsTogether
-      ? selectFrontierByFlashcard(deckFrontier, remaining)
-      : shuffle([...deckFrontier]).slice(0, remaining);
-    selected.push(...capped);
-  }
-  return shuffle(selected);
+  return settings.keepSiblingReviewUnitsTogether
+    ? selectFrontierByFlashcard(frontier, remaining)
+    : shuffle([...frontier]).slice(0, remaining);
 }
 
 function selectFrontierByFlashcard(

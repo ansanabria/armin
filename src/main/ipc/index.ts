@@ -469,7 +469,6 @@ export function registerIpc() {
         relearningSteps: z.string().nullable().optional(),
         weights: z.string().nullable().optional(),
         prereqStabilityFloor: z.number().nullable().optional(),
-        newReviewUnitsPerDay: z.number().int().min(0).nullable().optional(),
         keepSiblingReviewUnitsTogether: z.boolean().nullable().optional(),
       }),
     }),

@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, X } from "lucide-react";
 import {
   MaximumIntervalInput,
-  NewCardsPerDayInput,
   RetentionInput,
   StabilityFloorInput,
   StepsInput,
@@ -31,7 +30,6 @@ const OVERRIDE_KEYS = [
   "enableFuzz",
   "enableShortTerm",
   "prereqStabilityFloor",
-  "newReviewUnitsPerDay",
   "keepSiblingReviewUnitsTogether",
 ] as const satisfies readonly SchedulingKey[];
 
@@ -232,19 +230,6 @@ export function DeckSettingsDialog({
                 />
               </OverrideRow>
               <OverrideRow
-                label="New review units per day"
-                hint="Maximum brand-new review units introduced from the unlock frontier each day."
-                overridden={localOverrides.newReviewUnitsPerDay !== null}
-                onRevert={() => clearField("newReviewUnitsPerDay")}
-              >
-                <NewCardsPerDayInput
-                  value={effective.newReviewUnitsPerDay}
-                  onChange={(value) =>
-                    setField("newReviewUnitsPerDay", value)
-                  }
-                />
-              </OverrideRow>
-              <OverrideRow
                 label="Keep siblings together"
                 hint="Introduce all eligible directions or clozes for a flashcard in the same session."
                 overridden={
@@ -368,8 +353,7 @@ function resolveEffective(
     weights: overrides.weights ?? global.weights,
     prereqStabilityFloor:
       overrides.prereqStabilityFloor ?? global.prereqStabilityFloor,
-    newReviewUnitsPerDay:
-      overrides.newReviewUnitsPerDay ?? global.newReviewUnitsPerDay,
+    newReviewUnitsPerDay: global.newReviewUnitsPerDay,
     keepSiblingReviewUnitsTogether:
       overrides.keepSiblingReviewUnitsTogether ??
       global.keepSiblingReviewUnitsTogether,

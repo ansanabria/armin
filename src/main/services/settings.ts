@@ -60,8 +60,17 @@ export async function getSettings(ctx: ServiceContext): Promise<Settings> {
 export type SettingsUpdate = Partial<SchedulingSettings> &
   Partial<Pick<Settings, "schedulingPreset">>;
 
+type DeckSettingOverrideKey = Exclude<
+  keyof SchedulingSettings,
+  "newReviewUnitsPerDay"
+>;
+
+const DECK_SETTING_OVERRIDE_KEYS = SCHEDULING_SETTING_KEYS.filter(
+  (key): key is DeckSettingOverrideKey => key !== "newReviewUnitsPerDay",
+);
+
 export type DeckSettingsOverrides = {
-  [K in keyof SchedulingSettings]: SchedulingSettings[K] | null;
+  [K in DeckSettingOverrideKey]: SchedulingSettings[K] | null;
 };
 
 export type DeckSettingsUpdate = Partial<DeckSettingsOverrides>;
@@ -91,7 +100,6 @@ function emptyOverrides(): DeckSettingsOverrides {
     relearningSteps: null,
     weights: null,
     prereqStabilityFloor: null,
-    newReviewUnitsPerDay: null,
     keepSiblingReviewUnitsTogether: null,
   };
 }
@@ -107,7 +115,6 @@ function overridesFrom(row: DeckSettings | undefined): DeckSettingsOverrides {
     relearningSteps: row.relearningSteps,
     weights: row.weights,
     prereqStabilityFloor: row.prereqStabilityFloor,
-    newReviewUnitsPerDay: row.newReviewUnitsPerDay,
     keepSiblingReviewUnitsTogether: row.keepSiblingReviewUnitsTogether,
   };
 }
@@ -117,7 +124,7 @@ function resolveEffective(
   overrides: DeckSettingsOverrides,
 ): SchedulingSettings {
   const effective = { ...global };
-  for (const key of SCHEDULING_SETTING_KEYS) {
+  for (const key of DECK_SETTING_OVERRIDE_KEYS) {
     const override = overrides[key];
     if (override !== null) {
       effective[key] = override as never;
