@@ -42,7 +42,7 @@ describe("prerequisite edges", () => {
     expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(true);
 
     await securePrereq(ctx, prereq.id);
-    await graph.activateUnlockedDependents(ctx, prereq.id);
+    await graph.refreshAfterPrerequisiteReview(ctx, prereq.id);
 
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
     const dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
@@ -95,14 +95,14 @@ describe("prerequisite edges", () => {
     expect(await graph.isUnlocked(ctx, c.id)).toBe(false);
 
     await securePrereq(ctx, a.id);
-    await graph.refreshLockedAfterPrereqSecured(ctx, a.id);
+    await graph.refreshAfterPrerequisiteStateChange(ctx, a.id);
 
     expect(await graph.isUnlocked(ctx, b.id)).toBe(true);
     // C still waits on B, which is unlocked but not secured.
     expect(await graph.isUnlocked(ctx, c.id)).toBe(false);
 
     await securePrereq(ctx, b.id);
-    await graph.refreshLockedAfterPrereqSecured(ctx, b.id);
+    await graph.refreshAfterPrerequisiteStateChange(ctx, b.id);
 
     expect(await graph.isUnlocked(ctx, c.id)).toBe(true);
   });
@@ -117,11 +117,11 @@ describe("prerequisite edges", () => {
     await graph.addPrereq(ctx, b.id, dependent.id);
 
     await securePrereq(ctx, a.id);
-    await graph.refreshLockedAfterPrereqSecured(ctx, a.id);
+    await graph.refreshAfterPrerequisiteStateChange(ctx, a.id);
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
 
     await securePrereq(ctx, b.id);
-    await graph.refreshLockedAfterPrereqSecured(ctx, b.id);
+    await graph.refreshAfterPrerequisiteStateChange(ctx, b.id);
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
   });
 
@@ -135,7 +135,7 @@ describe("prerequisite edges", () => {
 
     await graph.addPrereq(ctx, prereq.id, dependent.id);
     await securePrereq(ctx, prereq.id);
-    await graph.refreshLockedAfterPrereqSecured(ctx, prereq.id);
+    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
 
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
 
@@ -185,8 +185,7 @@ describe("prerequisite edges", () => {
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
     await securePrereq(ctx, prereq.id);
-    await graph.refreshLockedAfterPrereqSecured(ctx, prereq.id);
-    await graph.syncFlashcardScheduling(ctx, dependent.id);
+    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
     expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
     expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
 

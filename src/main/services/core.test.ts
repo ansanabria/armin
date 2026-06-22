@@ -108,7 +108,7 @@ describe("core services", () => {
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
 
     await securePrereq(ctx, prereq.id);
-    await graph.activateUnlockedDependents(ctx, prereq.id);
+    await graph.refreshAfterPrerequisiteReview(ctx, prereq.id);
 
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
     const dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
@@ -222,7 +222,7 @@ describe("core services", () => {
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
     await securePrereq(ctx, prereq.id);
-    await graph.activateUnlockedDependents(ctx, prereq.id);
+    await graph.refreshAfterPrerequisiteReview(ctx, prereq.id);
 
     const queue = await review.getQueue(ctx, deck.id);
     expect(queue.map((item) => item.flashcardId).sort()).toEqual(
@@ -293,7 +293,7 @@ describe("core services", () => {
     expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
 
     await securePrereq(ctx, prereq.id);
-    await graph.refreshLockedAfterPrereqSecured(ctx, prereq.id);
+    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
 
     expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
   });

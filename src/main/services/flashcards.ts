@@ -18,8 +18,8 @@ import {
 import type { ServiceContext } from "./context";
 import {
   getDependentIds,
-  persistLockedForFlashcardIds,
-  syncFlashcardScheduling,
+  refreshAfterPrerequisiteStateChange,
+  refreshDependentSubgraph,
 } from "./graph";
 
 const { reviewUnits, reviewLogs, flashcards, flashcardTags, tags } = schema;
@@ -493,10 +493,7 @@ export async function deleteFlashcard(
 
   // The deleted flashcard may have been the lock holding dependents back.
   if (dependentIds.length > 0) {
-    await persistLockedForFlashcardIds(ctx, dependentIds);
-    for (const dependentId of dependentIds) {
-      await syncFlashcardScheduling(ctx, dependentId);
-    }
+    await refreshDependentSubgraph(ctx, dependentIds);
   }
 }
 
@@ -528,13 +525,7 @@ export async function setArchived(
       .run();
   });
 
-  const dependentIds = await getDependentIds(ctx, flashcardId);
-  if (dependentIds.length > 0) {
-    await persistLockedForFlashcardIds(ctx, dependentIds);
-    for (const dependentId of dependentIds) {
-      await syncFlashcardScheduling(ctx, dependentId);
-    }
-  }
+  await refreshAfterPrerequisiteStateChange(ctx, flashcardId);
 
   return withFlashcardMeta(ctx, { ...flashcard, archived });
 }

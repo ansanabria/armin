@@ -171,7 +171,7 @@ async function computeLockedByFlashcardIds(
 }
 
 /** Persist flashcard lock state and mirror it onto every generated review unit. */
-export async function persistLockedForFlashcardIds(
+async function persistLockedForFlashcardIds(
   ctx: ServiceContext,
   flashcardIds: string[],
 ): Promise<void> {
@@ -216,22 +216,60 @@ async function collectTransitiveDependents(
   return [...seen];
 }
 
-export async function refreshLockedAfterPrereqChange(
+async function collectTransitiveDependentsForRoots(
   ctx: ServiceContext,
-  dependentId: string,
-): Promise<void> {
-  const affected = await collectTransitiveDependents(ctx, dependentId);
-  affected.push(dependentId);
-  await persistLockedForFlashcardIds(ctx, affected);
+  rootIds: string[],
+): Promise<string[]> {
+  const seen = new Set<string>();
+  const stack = [...rootIds];
+
+  while (stack.length) {
+    const node = stack.pop()!;
+    const dependents = await getDependentIds(ctx, node);
+    for (const dependentId of dependents) {
+      if (seen.has(dependentId)) continue;
+      seen.add(dependentId);
+      stack.push(dependentId);
+    }
+  }
+
+  return [...seen];
 }
 
-export async function refreshLockedAfterPrereqSecured(
+async function syncFlashcardsScheduling(
+  ctx: ServiceContext,
+  flashcardIds: string[],
+): Promise<void> {
+  const uniqueIds = [...new Set(flashcardIds)];
+  await Promise.all(uniqueIds.map((id) => syncFlashcardScheduling(ctx, id)));
+}
+
+async function refreshLockStateAndScheduling(
+  ctx: ServiceContext,
+  flashcardIds: string[],
+): Promise<void> {
+  const uniqueIds = [...new Set(flashcardIds)];
+  if (uniqueIds.length === 0) return;
+
+  await persistLockedForFlashcardIds(ctx, uniqueIds);
+  await syncFlashcardsScheduling(ctx, uniqueIds);
+}
+
+export async function refreshDependentSubgraph(
+  ctx: ServiceContext,
+  dependentIds: string[],
+): Promise<void> {
+  const uniqueIds = [...new Set(dependentIds)];
+  const affected = await collectTransitiveDependentsForRoots(ctx, uniqueIds);
+  await refreshLockStateAndScheduling(ctx, [...uniqueIds, ...affected]);
+}
+
+export async function refreshAfterPrerequisiteStateChange(
   ctx: ServiceContext,
   prereqId: string,
 ): Promise<void> {
   const affected = await collectTransitiveDependents(ctx, prereqId);
-  if (affected.length === 0) return;
-  await persistLockedForFlashcardIds(ctx, affected);
+  await refreshLockStateAndScheduling(ctx, affected);
 }
 
 export async function refreshAllLockedStates(
@@ -249,7 +287,7 @@ export async function refreshAllLockedStates(
     return;
   }
 
-  await persistLockedForFlashcardIds(ctx, dependentIds);
+  await refreshLockStateAndScheduling(ctx, dependentIds);
   await ctx.db
     .update(flashcards)
     .set({ locked: false })
@@ -260,6 +298,15 @@ export async function refreshAllLockedStates(
     .set({ locked: false })
     .where(notInArray(reviewUnits.flashcardId, dependentIds))
     .run();
+  const nonDependents = await ctx.db
+    .select({ id: flashcards.id })
+    .from(flashcards)
+    .where(notInArray(flashcards.id, dependentIds))
+    .all();
+  await syncFlashcardsScheduling(
+    ctx,
+    nonDependents.map((row) => row.id),
+  );
 }
 
 export async function refreshLockedForDeck(
@@ -282,7 +329,7 @@ export async function refreshLockedForDeck(
   const dependentIds = dependents.map((row) => row.id);
 
   if (dependentIds.length > 0) {
-    await persistLockedForFlashcardIds(ctx, dependentIds);
+    await refreshLockStateAndScheduling(ctx, dependentIds);
   }
 
   const nonDependentIds = deckFlashcardIds.filter(
@@ -300,6 +347,7 @@ export async function refreshLockedForDeck(
     .set({ locked: false })
     .where(inArray(reviewUnits.flashcardId, nonDependentIds))
     .run();
+  await syncFlashcardsScheduling(ctx, nonDependentIds);
 }
 
 /** Would adding edge prereq → dependent introduce a cycle? */
@@ -324,7 +372,7 @@ async function reaches(
  * Align FSRS scheduling with lock state for a flashcard's never-studied review
  * units.
  */
-export async function syncFlashcardScheduling(
+async function syncFlashcardScheduling(
   ctx: ServiceContext,
   flashcardId: string,
 ): Promise<void> {
@@ -363,18 +411,12 @@ export async function syncFlashcardScheduling(
   }
 }
 
-/** Start FSRS for dependents whose prerequisites just became secured. */
-export async function activateUnlockedDependents(
+/** Recompute dependents after a prerequisite flashcard's securedness changes. */
+export async function refreshAfterPrerequisiteReview(
   ctx: ServiceContext,
   flashcardId: string,
 ): Promise<void> {
-  await refreshLockedAfterPrereqSecured(ctx, flashcardId);
-  const dependentIds = await getDependentIds(ctx, flashcardId);
-  await Promise.all(
-    dependentIds.map((dependentId) =>
-      syncFlashcardScheduling(ctx, dependentId),
-    ),
-  );
+  await refreshAfterPrerequisiteStateChange(ctx, flashcardId);
 }
 
 export async function addPrereq(
@@ -405,8 +447,7 @@ export async function addPrereq(
     .values({ prereqId, dependentId })
     .onConflictDoNothing()
     .run();
-  await refreshLockedAfterPrereqChange(ctx, dependentId);
-  await syncFlashcardScheduling(ctx, dependentId);
+  await refreshDependentSubgraph(ctx, [dependentId]);
 }
 
 export async function removePrereq(
@@ -423,8 +464,7 @@ export async function removePrereq(
       ),
     )
     .run();
-  await refreshLockedAfterPrereqChange(ctx, dependentId);
-  await syncFlashcardScheduling(ctx, dependentId);
+  await refreshDependentSubgraph(ctx, [dependentId]);
 }
 
 export type DeckGraph = {

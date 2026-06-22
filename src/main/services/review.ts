@@ -8,7 +8,7 @@ import {
   type FlashcardType,
 } from "./flashcard-types";
 import type { ServiceContext } from "./context";
-import { activateUnlockedDependents } from "./graph";
+import { refreshAfterPrerequisiteReview } from "./graph";
 import {
   buildScheduler,
   fromFsrsCard,
@@ -302,7 +302,7 @@ export async function rateReviewUnit(
     return updated!;
   });
 
-  await activateUnlockedDependents(ctx, updated.flashcardId);
+  await refreshAfterPrerequisiteReview(ctx, updated.flashcardId);
   const [item] = await toReviewQueueItems(ctx, [updated]);
   return item;
 }
@@ -356,7 +356,7 @@ export async function undoReview(
     return rolled!;
   });
 
-  await activateUnlockedDependents(ctx, updated.flashcardId);
+  await refreshAfterPrerequisiteReview(ctx, updated.flashcardId);
   const [item] = await toReviewQueueItems(ctx, [updated]);
   return item;
 }
