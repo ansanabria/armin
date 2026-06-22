@@ -54,6 +54,9 @@ const api = {
       invoke(c.review.rate, { reviewUnitId, rating }),
     undo: (reviewUnitId: string) => invoke(c.review.undo, { reviewUnitId }),
   },
+  cram: {
+    pool: (input: unknown) => invoke(c.cram.pool, input),
+  },
   graph: {
     getGlobal: () => invoke(c.graph.getGlobal, {}),
     addPrereq: (prereqId: string, dependentId: string) =>

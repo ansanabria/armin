@@ -13,6 +13,7 @@ import type {
 } from "../main/services/flashcards";
 import type { FlashcardContent, FlashcardType } from "./flashcard-types";
 import type { PreviewOption, ReviewQueueItem } from "../main/services/review";
+import type { CramPool, CramScope } from "../main/services/cram";
 import type { DeckGraph, GlobalGraph } from "../main/services/graph";
 import type { McpSetup } from "./mcp";
 import type {
@@ -93,6 +94,9 @@ export interface ArminApi {
     preview(reviewUnitId: string): Promise<PreviewOption[]>;
     rate(reviewUnitId: string, rating: Grade): Promise<ReviewQueueItem>;
     undo(reviewUnitId: string): Promise<ReviewQueueItem | null>;
+  };
+  cram: {
+    pool(scope: CramScope): Promise<CramPool>;
   };
   graph: {
     getGlobal(): Promise<GlobalGraph>;
@@ -202,6 +206,8 @@ export type {
   FlashcardContent,
   PreviewOption,
   ReviewQueueItem,
+  CramPool,
+  CramScope,
   DeckGraph,
   GlobalGraph,
 };

@@ -184,6 +184,16 @@ export const ipcCommands = {
       z.object({ reviewUnitId: z.string() }),
     ),
   },
+  cram: {
+    pool: command(
+      ipcChannels.cram.pool.channel,
+      z.object({
+        deckIds: z.array(z.string()).optional(),
+        tags: z.array(z.string()).optional(),
+        combine: z.enum(["intersection", "union"]).default("intersection"),
+      }),
+    ),
+  },
   graph: {
     getGlobal: command(ipcChannels.graph.getGlobal.channel, z.object({})),
     addPrereq: command(ipcChannels.graph.addPrereq.channel, graphEdge),

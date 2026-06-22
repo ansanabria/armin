@@ -11,6 +11,7 @@ import DeckPage from "./routes/deck";
 import GlobalGraphPage from "./routes/graph";
 import ReviewPage from "./routes/review";
 import ReviewsPage from "./routes/reviews";
+import CramPage from "./routes/cram";
 import SettingsPage from "./routes/settings";
 
 const rootRoute = createRootRoute({ component: RootLayout });
@@ -54,6 +55,12 @@ const reviewsRoute = createRoute({
   component: ReviewsPage,
 });
 
+const cramRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/cram",
+  component: CramPage,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -67,6 +74,7 @@ const routeTree = rootRoute.addChildren([
   graphRoute,
   reviewRoute,
   reviewsRoute,
+  cramRoute,
   settingsRoute,
 ]);
 
