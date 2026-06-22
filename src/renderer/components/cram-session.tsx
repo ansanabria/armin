@@ -21,7 +21,7 @@ import {
   matchesTypeAnswer,
   type ImageOcclusionContent,
   type TypeAnswerContent,
-} from "../../main/services/flashcard-types";
+} from "../../shared/flashcard-types";
 import { cn } from "@/lib/utils";
 
 export type { CramMode, CramFlashcardGroup };
