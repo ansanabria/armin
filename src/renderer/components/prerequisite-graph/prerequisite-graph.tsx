@@ -22,7 +22,6 @@ import {
   type XYPosition,
 } from "@xyflow/react";
 import {
-  Check,
   LayoutGrid,
   Layers,
   Maximize,
@@ -47,6 +46,12 @@ import {
 } from "@/lib/graph-flow";
 import { layoutGraph } from "@/lib/graph-layout";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { FloatingEdge } from "./floating-edge";
 import {
   FlashcardNode,
@@ -775,10 +780,8 @@ function PrerequisiteGraphCanvas({
             </div>
 
             {decks && decks.length > 0 && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setDeckMenuOpen((open) => !open)}
+              <DropdownMenu open={deckMenuOpen} onOpenChange={setDeckMenuOpen}>
+                <DropdownMenuTrigger
                   className={cn(
                     "inline-flex h-8 items-center gap-1.5 border border-border bg-surface px-2.5 text-xs font-medium shadow-overlay transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                     focusedDeckIds.size > 0 ? "text-accent" : "text-ink",
@@ -788,50 +791,41 @@ function PrerequisiteGraphCanvas({
                   {focusedDeckIds.size > 0
                     ? `${focusedDeckIds.size} deck${focusedDeckIds.size === 1 ? "" : "s"}`
                     : "Decks"}
-                </button>
-                {deckMenuOpen && (
-                  <div className="absolute left-0 top-9 z-10 w-56 border border-border bg-surface p-1 shadow-overlay">
-                    <div className="flex items-center justify-between px-2 py-1.5">
-                      <span className="text-[0.625rem] font-medium uppercase tracking-wide text-muted">
-                        Focus decks
-                      </span>
-                      {focusedDeckIds.size > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setFocusedDeckIds(new Set())}
-                          className="text-[0.625rem] font-medium text-accent hover:text-accent-deep"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                    <ul className="max-h-64 overflow-y-auto">
-                      {decks.map((deck) => {
-                        const active = focusedDeckIds.has(deck.id);
-                        return (
-                          <li key={deck.id}>
-                            <button
-                              type="button"
-                              onClick={() => toggleDeckFocus(deck.id)}
-                              className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs text-ink transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
-                            >
-                              <span
-                                aria-hidden
-                                className="h-2 w-2 shrink-0 rounded-full"
-                                style={{ backgroundColor: deck.color }}
-                              />
-                              <span className="flex-1 truncate">{deck.name}</span>
-                              {active && (
-                                <Check className="h-3.5 w-3.5 shrink-0 text-accent" />
-                              )}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <div className="flex items-center justify-between px-1.5 py-1">
+                    <span className="text-[0.625rem] font-medium uppercase tracking-wide text-muted">
+                      Focus decks
+                    </span>
+                    {focusedDeckIds.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setFocusedDeckIds(new Set())}
+                        className="text-[0.625rem] font-medium text-accent hover:text-accent-deep"
+                      >
+                        Clear
+                      </button>
+                    )}
                   </div>
-                )}
-              </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {decks.map((deck) => (
+                      <DropdownMenuCheckboxItem
+                        key={deck.id}
+                        checked={focusedDeckIds.has(deck.id)}
+                        onCheckedChange={() => toggleDeckFocus(deck.id)}
+                        className="text-xs"
+                      >
+                        <span
+                          aria-hidden
+                          className="h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: deck.color }}
+                        />
+                        <span className="flex-1 truncate">{deck.name}</span>
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
         </Panel>
