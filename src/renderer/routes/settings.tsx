@@ -359,7 +359,7 @@ export default function SettingsPage() {
           </Row>
           <Row
             label="New review units per day"
-            hint="Maximum brand-new review units introduced from the unlock frontier each day."
+            hint="Maximum brand-new review units introduced from the Profile-wide Frontier each day."
             {...resetProps("newReviewUnitsPerDay")}
           >
             <NewCardsPerDayInput

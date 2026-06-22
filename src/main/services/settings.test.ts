@@ -18,30 +18,29 @@ describe("deck settings", () => {
 
     const result = await settings.getDeckSettings(ctx, deck.id);
 
-    expect(result.overrides.newReviewUnitsPerDay).toBeNull();
     expect(result.effective.requestRetention).toBe(0.85);
     expect(result.effective.newReviewUnitsPerDay).toBe(7);
   });
 
   it("applies individual overrides and clears them back to inheritance", async () => {
     const ctx = await makeContext("deck-settings-override");
-    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 10 });
+    await settings.updateSettings(ctx, { requestRetention: 0.9 });
     const deck = await decks.createDeck(ctx, { name: "Overrides" });
 
     let result = await settings.updateDeckSettings(ctx, deck.id, {
-      newReviewUnitsPerDay: 3,
+      requestRetention: 0.8,
     });
 
-    expect(result.overrides.newReviewUnitsPerDay).toBe(3);
-    expect(result.effective.newReviewUnitsPerDay).toBe(3);
+    expect(result.overrides.requestRetention).toBe(0.8);
+    expect(result.effective.requestRetention).toBe(0.8);
 
-    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 12 });
+    await settings.updateSettings(ctx, { requestRetention: 0.85 });
     result = await settings.updateDeckSettings(ctx, deck.id, {
-      newReviewUnitsPerDay: null,
+      requestRetention: null,
     });
 
-    expect(result.overrides.newReviewUnitsPerDay).toBeNull();
-    expect(result.effective.newReviewUnitsPerDay).toBe(12);
+    expect(result.overrides.requestRetention).toBeNull();
+    expect(result.effective.requestRetention).toBe(0.85);
   });
 
   it("does not create a row for new decks until settings are saved", async () => {

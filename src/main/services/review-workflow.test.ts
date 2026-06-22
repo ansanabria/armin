@@ -100,7 +100,7 @@ describe("review workflow", () => {
     expect(queue.some((item) => item.reviewUnitId === card.id)).toBe(true);
   });
 
-  it("applies the daily new-card cap independently per deck in the global queue", async () => {
+  it("applies the daily new-card cap once across the global queue", async () => {
     const ctx = await makeContext("global-cap");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
 
@@ -111,10 +111,8 @@ describe("review workflow", () => {
     await basic(ctx, deckB.id, "B1", "B");
 
     const queue = await review.getGlobalQueue(ctx);
-    expect(queue).toHaveLength(2);
-    expect(new Set(queue.map((item) => item.deckId))).toEqual(
-      new Set([deckA.id, deckB.id]),
-    );
+    expect(queue).toHaveLength(1);
+    expect([deckA.id, deckB.id]).toContain(queue[0].deckId);
   });
 
   it("introduces all eligible siblings for a reversed flashcard together", async () => {
@@ -208,7 +206,7 @@ describe("review workflow", () => {
     );
   });
 
-  it("counts introduced review units against that deck's daily cap only", async () => {
+  it("counts introduced review units against the shared daily Frontier cap", async () => {
     const ctx = await makeContext("shared-cap");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
 
@@ -221,17 +219,15 @@ describe("review workflow", () => {
     await review.rateReviewUnit(ctx, cardA.id, Rating.Good);
 
     expect(await review.countNewReviewUnitsIntroducedToday(ctx)).toBe(1);
-    expect(await review.countNewReviewUnitsIntroducedToday(ctx, deckA.id)).toBe(1);
-    expect(await review.countNewReviewUnitsIntroducedToday(ctx, deckB.id)).toBe(0);
 
     const queueB = await review.getQueue(ctx, deckB.id);
-    expect(queueB.filter((item) => item.deckId === deckB.id)).toHaveLength(1);
+    expect(queueB.filter((item) => item.deckId === deckB.id)).toHaveLength(0);
 
     const globalQueue = await review.getGlobalQueue(ctx);
-    expect(globalQueue.filter((item) => item.deckId === deckB.id)).toHaveLength(1);
+    expect(globalQueue).toHaveLength(0);
   });
 
-  it("global queue introductions consume the same per-deck cap used by deck queues", async () => {
+  it("global queue introductions consume the same shared cap used by deck queues", async () => {
     const ctx = await makeContext("global-to-deck-cap");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
 
@@ -248,14 +244,10 @@ describe("review workflow", () => {
 
     const otherDeckId = introduced.deckId === deckA.id ? deckB.id : deckA.id;
     const otherDeckQueue = await review.getQueue(ctx, otherDeckId);
-    expect(
-      otherDeckQueue.filter((item) => item.deckId === otherDeckId),
-    ).toHaveLength(1);
+    expect(otherDeckQueue).toHaveLength(0);
 
     const introducedDeckQueue = await review.getQueue(ctx, introduced.deckId);
-    expect(
-      introducedDeckQueue.filter((item) => item.deckId === introduced.deckId),
-    ).toHaveLength(0);
+    expect(introducedDeckQueue).toHaveLength(0);
   });
 
   it("does not introduce more than ten new cards in one deck queue by default", async () => {
@@ -271,18 +263,21 @@ describe("review workflow", () => {
     expect(queue).toHaveLength(10);
   });
 
-  it("uses a deck override for the daily new review-unit cap", async () => {
+  it("ignores deck overrides for the shared daily new review-unit cap", async () => {
     const ctx = await makeContext("deck-cap-override");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 10 });
     const deck = await decks.createDeck(ctx, { name: "Override" });
-    await settings.updateDeckSettings(ctx, deck.id, { newReviewUnitsPerDay: 2 });
+    await ctx.db
+      .insert(schema.deckSettings)
+      .values({ deckId: deck.id, newReviewUnitsPerDay: 2 })
+      .run();
 
     for (let i = 0; i < 3; i += 1) {
       await basic(ctx, deck.id, `Q${i + 1}`, `A${i + 1}`);
     }
 
     const queue = await review.getQueue(ctx, deck.id);
-    expect(queue).toHaveLength(2);
+    expect(queue).toHaveLength(3);
   });
 
   it("labels global queue items with their deck name", async () => {
