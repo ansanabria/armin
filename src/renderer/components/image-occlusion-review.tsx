@@ -1,4 +1,4 @@
-import type { ImageOcclusionContent } from "../../main/services/flashcard-types";
+import type { ImageOcclusionContent } from "../../shared/flashcard-types";
 import { cn } from "@/lib/utils";
 
 export function isImageOcclusionMaskHidden({
@@ -54,9 +54,7 @@ export function ImageOcclusionReview({
               key={mask.id}
               className={cn(
                 "pointer-events-none absolute border-2",
-                hidden
-                  ? "border-ink/80 bg-ink/80"
-                  : "border-good bg-good/15",
+                hidden ? "border-ink/80 bg-ink/80" : "border-good bg-good/15",
                 isTarget && !flipped && "animate-pulse border-accent",
               )}
               style={{
@@ -71,7 +69,9 @@ export function ImageOcclusionReview({
       </div>
       {!flipped && (
         <p className="mt-4 text-sm text-muted">
-          {target?.hint ? `What is hidden here? (${target.hint})` : "What is hidden here?"}
+          {target?.hint
+            ? `What is hidden here? (${target.hint})`
+            : "What is hidden here?"}
         </p>
       )}
       {flipped && (
@@ -79,7 +79,9 @@ export function ImageOcclusionReview({
           {target?.label && (
             <p className="text-lg font-medium text-ink">{target.label}</p>
           )}
-          {content.extra && <p className="text-sm text-muted">{content.extra}</p>}
+          {content.extra && (
+            <p className="text-sm text-muted">{content.extra}</p>
+          )}
         </div>
       )}
     </div>

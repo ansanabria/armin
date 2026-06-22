@@ -11,10 +11,7 @@ import type {
   FlashcardDeleteConsequences,
   FlashcardWithMeta,
 } from "../main/services/flashcards";
-import type {
-  FlashcardContent,
-  FlashcardType,
-} from "../main/services/flashcard-types";
+import type { FlashcardContent, FlashcardType } from "./flashcard-types";
 import type { PreviewOption, ReviewQueueItem } from "../main/services/review";
 import type { DeckGraph, GlobalGraph } from "../main/services/graph";
 import type { McpSetup } from "./mcp";

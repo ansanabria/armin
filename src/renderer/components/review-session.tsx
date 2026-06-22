@@ -34,13 +34,17 @@ import {
   type CardFormValues,
 } from "@/components/flashcard-form-dialog";
 import { reviewKeys } from "@/lib/armin-query";
-import type { FlashcardDeleteConsequences, Grade, PreviewOption } from "@/types/window";
+import type {
+  FlashcardDeleteConsequences,
+  Grade,
+  PreviewOption,
+} from "@/types/window";
 import type { UiFlashcard, UiReviewUnit } from "@/types/view-models";
 import {
   matchesTypeAnswer,
   type ImageOcclusionContent,
   type TypeAnswerContent,
-} from "../../main/services/flashcard-types";
+} from "../../shared/flashcard-types";
 import { cn } from "@/lib/utils";
 
 const RATINGS: {

@@ -10,7 +10,7 @@ import {
 import { StateBadge, type ReviewState } from "@/components/ui/badge";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { FlashcardTypeBadge } from "@/components/flashcard-type-badge";
-import type { FlashcardType } from "../../../main/services/flashcard-types";
+import type { FlashcardType } from "../../../shared/flashcard-types";
 import { cn } from "@/lib/utils";
 
 /**

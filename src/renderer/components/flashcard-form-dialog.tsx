@@ -26,7 +26,7 @@ import {
   parseClozes,
   type FlashcardContent,
   type FlashcardType,
-} from "../../main/services/flashcard-types";
+} from "../../shared/flashcard-types";
 
 export type CardFormValues = {
   type: FlashcardType;
@@ -141,7 +141,9 @@ export function FlashcardFormDialog({
   }, [open, initialType, initialContent, initialTags, reviewUnitId, mode]);
 
   const displayMode = open ? mode : displaySession.mode;
-  const displayCardId = open ? (reviewUnitId ?? null) : displaySession.reviewUnitId;
+  const displayCardId = open
+    ? (reviewUnitId ?? null)
+    : displaySession.reviewUnitId;
 
   const buildContent = (): FlashcardContent | null => {
     switch (type) {
@@ -211,28 +213,34 @@ export function FlashcardFormDialog({
       className="max-w-[35rem]"
     >
       <div className="space-y-4">
-        {displayMode === "create" && decks && decks.length > 0 && onDeckChange && (
-          <Field label="Deck" hint="Which deck this card is filed under.">
-            <Select
-              value={deckId ?? undefined}
-              items={decks.map((deck) => ({ value: deck.id, label: deck.name }))}
-              onValueChange={(next) => onDeckChange(next as string)}
-            >
-              <SelectTrigger className="w-full" aria-label="Deck">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent alignItemWithTrigger={false}>
-                <SelectGroup>
-                  {decks.map((deck) => (
-                    <SelectItem key={deck.id} value={deck.id}>
-                      {deck.name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-        )}
+        {displayMode === "create" &&
+          decks &&
+          decks.length > 0 &&
+          onDeckChange && (
+            <Field label="Deck" hint="Which deck this card is filed under.">
+              <Select
+                value={deckId ?? undefined}
+                items={decks.map((deck) => ({
+                  value: deck.id,
+                  label: deck.name,
+                }))}
+                onValueChange={(next) => onDeckChange(next as string)}
+              >
+                <SelectTrigger className="w-full" aria-label="Deck">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  <SelectGroup>
+                    {decks.map((deck) => (
+                      <SelectItem key={deck.id} value={deck.id}>
+                        {deck.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
         <Field label="Type">
           <div className="flex w-full gap-1.5">
             {TYPE_OPTIONS.map((option) => (
