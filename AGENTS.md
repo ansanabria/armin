@@ -18,4 +18,6 @@ Single-context layout (`CONTEXT.md` + `docs/adr/` at the repo root). See `docs/a
 
 - The project context is described in @README.md . Always read the file when starting a new session.
 - Testing philosophy and validation tiers are described in @docs/testing.md . Read it before adding or changing tests.
+- Migration workflow is described in @docs/migrations.md . Read it before changing @src/main/db/schema.ts or files under @drizzle/ .
+- Migration names must be descriptive. Pass a snake_case `--name` to Drizzle instead of accepting generated fantasy names.
 - Shadcn uses Base UI instead of Radix UI. Use only Base UI, unless the user explictly asks to use the Radix UI API.
