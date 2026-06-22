@@ -118,7 +118,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="v$(node -p "require('./package.json').version")"
+          tag="v$(node -p "require('./apps/desktop/package.json').version")"
           uploaded=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" \
             --jq "[.assets[] | select(.updated_at >= \"${PUBLISH_STARTED_AT}\")] | length")
           if [ "${uploaded}" -eq 0 ]; then

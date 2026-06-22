@@ -54,7 +54,7 @@ jobs:
       # yauzl@2 silent failure on Node 24.16+, electron/forge#4277), so
       # assert the packaged app actually exists.
       - name: Check packaged app output
-        run: test -x out/Armin-linux-x64/Armin
+        run: test -x apps/desktop/out/Armin-linux-x64/Armin
 
       - name: Run E2E tests
         run: xvfb-run --auto-servernum npm run test:e2e
@@ -64,5 +64,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: test-results/
+          path: apps/desktop/test-results/
           if-no-files-found: ignore

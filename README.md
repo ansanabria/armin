@@ -67,13 +67,13 @@ into Applications. If Gatekeeper blocks the app, right-click it and choose **Ope
 ## Releases
 
 Alpha builds are published from GitHub tags. See
-[docs/release.md](docs/release.md) for the release checklist, artifact targets,
+[docs/release.md](apps/desktop/docs/release.md) for the release checklist, artifact targets,
 and current unsigned-build notes.
 
 ## MCP server
 
 Armin includes a local stdio MCP server so coding agents can create decks, cards,
-and prerequisite graphs. See [docs/mcp-server.md](docs/mcp-server.md) for setup,
+and prerequisite graphs. See [docs/mcp-server.md](apps/desktop/docs/mcp-server.md) for setup,
 available tools, and configuration for Codex, Claude Code, Cursor, and OpenCode.
 
 ## Card-writing skill
@@ -111,7 +111,7 @@ The `skills` CLI discovers skills under `.agents/skills/`, so it picks up
 
 Early development. Expect lots of bugs and strange behavior. I built this for myself in a Linux machine and it is supposed to work for macOS and Windows, but I haven't tested those builds myself, so be aware.
 
-See [docs/testing.md](docs/testing.md) for the testing philosophy, test-layer guidance,
+See [docs/testing.md](apps/desktop/docs/testing.md) for the testing philosophy, test-layer guidance,
 and validation commands used in this codebase.
 
 ## Contributions
