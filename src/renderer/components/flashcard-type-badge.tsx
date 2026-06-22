@@ -1,4 +1,4 @@
-import type { FlashcardType } from "../../main/services/flashcard-types";
+import type { FlashcardType } from "../../shared/flashcard-types";
 import { cn } from "@/lib/utils";
 
 export const CARD_TYPE_LABELS: Record<FlashcardType, string> = {

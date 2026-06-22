@@ -1,15 +1,15 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ArminApi, ArminShell } from "../shared/armin-api";
 import {
-  ipcCommands,
+  ipcChannels,
   ipcEvents,
-  type IpcCommand,
-} from "../shared/ipc-command-catalog";
+  type IpcChannel,
+} from "../shared/ipc-channels";
 
-const invoke = (command: IpcCommand, payload?: unknown) =>
+const invoke = (command: IpcChannel, payload?: unknown) =>
   ipcRenderer.invoke(command.channel, payload);
 
-const c = ipcCommands;
+const c = ipcChannels;
 
 const api = {
   profiles: {
@@ -48,7 +48,8 @@ const api = {
   review: {
     queue: (deckId: string) => invoke(c.review.queue, { deckId }),
     queueAll: () => invoke(c.review.queueAll),
-    preview: (reviewUnitId: string) => invoke(c.review.preview, { reviewUnitId }),
+    preview: (reviewUnitId: string) =>
+      invoke(c.review.preview, { reviewUnitId }),
     rate: (reviewUnitId: string, rating: number) =>
       invoke(c.review.rate, { reviewUnitId, rating }),
     undo: (reviewUnitId: string) => invoke(c.review.undo, { reviewUnitId }),
@@ -59,9 +60,8 @@ const api = {
       invoke(c.graph.addPrereq, { prereqId, dependentId }),
     removePrereq: (prereqId: string, dependentId: string) =>
       invoke(c.graph.removePrereq, { prereqId, dependentId }),
-    saveLayout: (
-      placements: { flashcardId: string; x: number; y: number }[],
-    ) => invoke(c.graph.saveLayout, { placements }),
+    saveLayout: (placements: { flashcardId: string; x: number; y: number }[]) =>
+      invoke(c.graph.saveLayout, { placements }),
   },
   settings: {
     get: () => invoke(c.settings.get),
