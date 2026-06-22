@@ -4,7 +4,7 @@ import { schema } from "../db";
 import { getOnlyReviewUnit, makeContext, useTestDb } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
-import * as notes from "./flashcards";
+import * as flashcards from "./flashcards";
 import * as review from "./review";
 
 useTestDb();
@@ -16,7 +16,7 @@ function basic(
   back: string,
   tags?: string[],
 ) {
-  return notes.createFlashcard({
+  return flashcards.createFlashcard({
     ctx,
     deckId,
     type: "basic",
@@ -70,7 +70,7 @@ describe("deck lifecycle", () => {
     expect(described?.description).toBe("Now described");
   });
 
-  it("deleteDeck cascades notes, cards, edges, and review logs", async () => {
+  it("deleteDeck cascades Flashcards, Review units, edges, and review logs", async () => {
     const ctx = await makeContext("deck-delete");
     const doomed = await decks.createDeck(ctx, { name: "Doomed" });
     const survivor = await decks.createDeck(ctx, { name: "Survivor" });
@@ -92,12 +92,12 @@ describe("deck lifecycle", () => {
     expect(await tableCount(ctx, schema.flashcards)).toBe(1);
     expect(await tableCount(ctx, schema.reviewUnits)).toBe(1);
 
-    const remainingNote = await ctx.db
+    const remainingFlashcards = await ctx.db
       .select()
       .from(schema.flashcards)
       .where(eq(schema.flashcards.deckId, survivor.id))
       .all();
-    expect(remainingNote).toHaveLength(1);
+    expect(remainingFlashcards).toHaveLength(1);
   });
   it("deck stats track due, learning, and learned counts", async () => {
     const ctx = await makeContext("deck-stats");

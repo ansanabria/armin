@@ -1,9 +1,14 @@
-import { count, eq } from "drizzle-orm";
 import { createEmptyCard, fsrs, Rating, type Card as FsrsCard } from "ts-fsrs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { schema } from "../db";
-import { getOnlyReviewUnit, makeContext, useTestDb } from "../test/db";
-import * as notes from "./flashcards";
+import {
+  countReviewLogs,
+  getOnlyReviewUnit,
+  makeContext,
+  makeReviewUnitDue,
+  reviewLogsFor,
+  useTestDb,
+} from "../test/db";
+import * as flashcards from "./flashcards";
 import * as decks from "./decks";
 import * as review from "./review";
 import * as settings from "./settings";
@@ -41,7 +46,7 @@ describe("review FSRS integration", () => {
   }
 
   function basic(ctx: Awaited<ReturnType<typeof makeContext>>, deckId: string) {
-    return notes.createFlashcard({
+    return flashcards.createFlashcard({
       ctx,
       deckId,
       type: "basic",
@@ -92,11 +97,7 @@ describe("review FSRS integration", () => {
     expect(persisted.reps).toBe(expected.reps);
     expect(rated.lastReview).toBeInstanceOf(Date);
 
-    const logRow = await ctx.db
-      .select()
-      .from(schema.reviewLogs)
-      .where(eq(schema.reviewLogs.reviewUnitId, card.id))
-      .get();
+    const [logRow] = await reviewLogsFor(ctx, card.id);
 
     expect(logRow).toBeDefined();
     expect(logRow!.rating).toBe(log.rating);
@@ -135,11 +136,7 @@ describe("review FSRS integration", () => {
     vi.setSystemTime(new Date("2026-06-15T12:00:00.000Z"));
 
     const matured = await getOnlyReviewUnit(ctx, note.id);
-    await ctx.db
-      .update(schema.reviewUnits)
-      .set({ due: new Date("2026-06-15T12:00:00.000Z") })
-      .where(eq(schema.reviewUnits.id, card.id))
-      .run();
+    await makeReviewUnitDue(ctx, card.id, new Date("2026-06-15T12:00:00.000Z"));
 
     const scheduler = referenceScheduler();
     const { card: expected } = scheduler.next(
@@ -152,10 +149,6 @@ describe("review FSRS integration", () => {
     const rated = await getOnlyReviewUnit(ctx, note.id);
     expect(rated.lapses).toBe(expected.lapses);
 
-    const logCount = await ctx.db
-      .select({ value: count() })
-      .from(schema.reviewLogs)
-      .get();
-    expect(logCount?.value).toBe(2);
+    expect(await countReviewLogs(ctx)).toBe(2);
   });
 });

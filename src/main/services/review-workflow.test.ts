@@ -1,9 +1,15 @@
-import { eq } from "drizzle-orm";
 import { Rating } from "ts-fsrs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { schema } from "../db";
-import { getOnlyReviewUnit, makeContext, useTestDb } from "../test/db";
-import * as notes from "./flashcards";
+import {
+  countReviewLogs,
+  getOnlyReviewUnit,
+  makeContext,
+  makeReviewUnitDue,
+  makeReviewUnitLearningDue,
+  useTestDb,
+  writeLegacyDeckFrontierOverride,
+} from "../test/db";
+import * as flashcards from "./flashcards";
 import * as decks from "./decks";
 import * as graph from "./graph";
 import * as review from "./review";
@@ -20,7 +26,7 @@ function basic(
   front: string,
   back: string,
 ) {
-  return notes.createFlashcard({
+  return flashcards.createFlashcard({
     ctx,
     deckId,
     type: "basic",
@@ -34,7 +40,7 @@ function basicReversed(
   front: string,
   back: string,
 ) {
-  return notes.createFlashcard({
+  return flashcards.createFlashcard({
     ctx,
     deckId,
     type: "basic_reversed",
@@ -47,7 +53,7 @@ function cloze(
   deckId: string,
   text: string,
 ) {
-  return notes.createFlashcard({
+  return flashcards.createFlashcard({
     ctx,
     deckId,
     type: "cloze",
@@ -65,24 +71,20 @@ afterEach(() => {
 });
 
 describe("review workflow", () => {
-  it("excludes future-due review cards from the queue", async () => {
+  it("excludes future-due Review units from the queue", async () => {
     const ctx = await makeContext("future-due");
     const deck = await decks.createDeck(ctx, { name: "Future" });
     const note = await basic(ctx, deck.id, "Later", "Answer");
     const card = await getOnlyReviewUnit(ctx, note.id);
 
     await review.rateReviewUnit(ctx, card.id, Rating.Good);
-    await ctx.db
-      .update(schema.reviewUnits)
-      .set({ due: new Date("2099-01-01T00:00:00.000Z") })
-      .where(eq(schema.reviewUnits.id, card.id))
-      .run();
+    await makeReviewUnitDue(ctx, card.id, new Date("2099-01-01T00:00:00.000Z"));
 
     const queue = await review.getQueue(ctx, deck.id);
     expect(queue.map((item) => item.reviewUnitId)).not.toContain(card.id);
   });
 
-  it("includes learning cards that are due now", async () => {
+  it("includes Learning Review units that are due now", async () => {
     const ctx = await makeContext("learning-due");
     await settings.updateSettings(ctx, { enableFuzz: false });
     const deck = await decks.createDeck(ctx, { name: "Learning" });
@@ -90,17 +92,13 @@ describe("review workflow", () => {
     const card = await getOnlyReviewUnit(ctx, note.id);
 
     await review.rateReviewUnit(ctx, card.id, Rating.Again);
-    await ctx.db
-      .update(schema.reviewUnits)
-      .set({ due: FIXED_NOW, state: State.Learning })
-      .where(eq(schema.reviewUnits.id, card.id))
-      .run();
+    await makeReviewUnitLearningDue(ctx, card.id, FIXED_NOW);
 
     const queue = await review.getQueue(ctx, deck.id);
     expect(queue.some((item) => item.reviewUnitId === card.id)).toBe(true);
   });
 
-  it("applies the daily new-card cap once across the global queue", async () => {
+  it("applies the daily Frontier cap once across the global queue", async () => {
     const ctx = await makeContext("global-cap");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
 
@@ -201,9 +199,9 @@ describe("review workflow", () => {
 
     const options = await review.previewReviewUnit(ctx, card.id);
 
-    expect(options.find((option) => option.rating === Rating.Again)?.label).toBe(
-      "30m",
-    );
+    expect(
+      options.find((option) => option.rating === Rating.Again)?.label,
+    ).toBe("30m");
   });
 
   it("counts introduced review units against the shared daily Frontier cap", async () => {
@@ -250,7 +248,7 @@ describe("review workflow", () => {
     expect(introducedDeckQueue).toHaveLength(0);
   });
 
-  it("does not introduce more than ten new cards in one deck queue by default", async () => {
+  it("does not introduce more than ten Frontier Review units in one Deck queue by default", async () => {
     const ctx = await makeContext("ten-card-deck-cap");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 10 });
 
@@ -267,10 +265,7 @@ describe("review workflow", () => {
     const ctx = await makeContext("deck-cap-override");
     await settings.updateSettings(ctx, { newReviewUnitsPerDay: 10 });
     const deck = await decks.createDeck(ctx, { name: "Override" });
-    await ctx.db
-      .insert(schema.deckSettings)
-      .values({ deckId: deck.id, newReviewUnitsPerDay: 2 })
-      .run();
+    await writeLegacyDeckFrontierOverride(ctx, deck.id, 2);
 
     for (let i = 0; i < 3; i += 1) {
       await basic(ctx, deck.id, `Q${i + 1}`, `A${i + 1}`);
@@ -304,23 +299,23 @@ describe("review workflow", () => {
     const dependent = await basic(ctx, deck.id, "Advanced", "Top");
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      true,
+    );
 
     const prereqCard = await getOnlyReviewUnit(ctx, prereq.id);
     await review.rateReviewUnit(ctx, prereqCard.id, Rating.Good);
     let prereqState = await getOnlyReviewUnit(ctx, prereq.id);
     while (prereqState.state !== State.Review || prereqState.stability < 0.5) {
       vi.advanceTimersByTime(24 * 60 * 60 * 1000);
-      await ctx.db
-        .update(schema.reviewUnits)
-        .set({ due: new Date() })
-        .where(eq(schema.reviewUnits.id, prereqCard.id))
-        .run();
+      await makeReviewUnitDue(ctx, prereqCard.id);
       await review.rateReviewUnit(ctx, prereqCard.id, Rating.Good);
       prereqState = await getOnlyReviewUnit(ctx, prereq.id);
     }
 
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      false,
+    );
     const dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
     expect(isPendingSchedule(dependentCard)).toBe(false);
 
@@ -339,8 +334,7 @@ describe("review workflow", () => {
     const afterRate = await getOnlyReviewUnit(ctx, note.id);
     expect(afterRate.reps).toBe(1);
 
-    const logsBefore = await ctx.db.select().from(schema.reviewLogs).all();
-    expect(logsBefore).toHaveLength(1);
+    expect(await countReviewLogs(ctx)).toBe(1);
 
     const undone = await review.undoReview(ctx, card.id);
     expect(undone?.reviewUnitId).toBe(card.id);
@@ -349,8 +343,7 @@ describe("review workflow", () => {
     expect(restored.reps).toBe(0);
     expect(restored.state).toBe(State.New);
 
-    const logsAfter = await ctx.db.select().from(schema.reviewLogs).all();
-    expect(logsAfter).toHaveLength(0);
+    expect(await countReviewLogs(ctx)).toBe(0);
   });
 
   it("undoReview re-locks dependents when a prereq is no longer secured", async () => {
@@ -372,23 +365,23 @@ describe("review workflow", () => {
     let prereqState = await getOnlyReviewUnit(ctx, prereq.id);
     while (prereqState.state !== State.Review || prereqState.stability < 0.5) {
       vi.advanceTimersByTime(24 * 60 * 60 * 1000);
-      await ctx.db
-        .update(schema.reviewUnits)
-        .set({ due: new Date() })
-        .where(eq(schema.reviewUnits.id, prereqCard.id))
-        .run();
+      await makeReviewUnitDue(ctx, prereqCard.id);
       await review.rateReviewUnit(ctx, prereqCard.id, Rating.Good);
       prereqState = await getOnlyReviewUnit(ctx, prereq.id);
     }
 
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      false,
+    );
 
     await review.undoReview(ctx, prereqCard.id);
 
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      true,
+    );
   });
 
-  it("excludes archived cards from the review queue", async () => {
+  it("excludes Archived flashcards from the review queue", async () => {
     const ctx = await makeContext("archive-queue");
     const deck = await decks.createDeck(ctx, { name: "Archive" });
     const note = await basic(ctx, deck.id, "Q", "A");
@@ -396,24 +389,26 @@ describe("review workflow", () => {
     let queue = await review.getQueue(ctx, deck.id);
     expect(queue.map((item) => item.flashcardId)).toContain(note.id);
 
-    await notes.setArchived(ctx, note.id, true);
+    await flashcards.setArchived(ctx, note.id, true);
 
     queue = await review.getQueue(ctx, deck.id);
     expect(queue.map((item) => item.flashcardId)).not.toContain(note.id);
 
-    const hydrated = await notes.getFlashcard(ctx, note.id);
+    const hydrated = await flashcards.getFlashcard(ctx, note.id);
     expect(hydrated?.archived).toBe(true);
   });
 
-  it("keeps archived notes visible in browse", async () => {
+  it("keeps Archived flashcards visible in browse", async () => {
     const ctx = await makeContext("archive-browse");
     const deck = await decks.createDeck(ctx, { name: "BrowseArchive" });
     const note = await basic(ctx, deck.id, "Q", "A");
-    await notes.setArchived(ctx, note.id, true);
+    await flashcards.setArchived(ctx, note.id, true);
 
     const page = await import("./browse").then((m) =>
       m.listBrowsePage(ctx, { offset: 0, limit: 50, sort: "created-new" }),
     );
-    expect(page.flashcards.some((c) => c.id === note.id && c.archived)).toBe(true);
+    expect(page.flashcards.some((c) => c.id === note.id && c.archived)).toBe(
+      true,
+    );
   });
 });
