@@ -33,7 +33,7 @@ export async function runMigrations(
   profileId: string,
   options: { migrationsFolder?: string } = {},
 ) {
-  await migrate(getDb(profileId), {
+  migrate(getDb(profileId), {
     migrationsFolder: options.migrationsFolder ?? defaultMigrationsFolder(),
   });
 }

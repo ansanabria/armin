@@ -252,7 +252,7 @@ describe("Anki package import", () => {
     expect(result.deckCount).toBe(1);
     expect(result.cardCount).toBe(10);
 
-    const rows = await ctx.db.select().from(schema.reviewUnits).all();
+    const rows = ctx.db.select().from(schema.reviewUnits).all();
     expect(rows).toHaveLength(10);
 
     // The review card kept its FSRS state (state 2 = Review, reps 3).
@@ -265,10 +265,10 @@ describe("Anki package import", () => {
       true,
     );
 
-    const tags = await ctx.db.select().from(schema.tags).all();
+    const tags = ctx.db.select().from(schema.tags).all();
     expect(tags.map((t) => t.name).sort()).toEqual(["capital", "europe"]);
 
-    const notes = await ctx.db.select().from(schema.flashcards).all();
+    const notes = ctx.db.select().from(schema.flashcards).all();
     expect(notes.map((n) => n.type).sort()).toEqual([
       "basic",
       "basic",
@@ -293,11 +293,11 @@ describe("Anki package import", () => {
     });
     expect(result.deckCount).toBe(2);
 
-    const decks = await ctx.db.select().from(schema.decks).all();
+    const decks = ctx.db.select().from(schema.decks).all();
     expect(decks.map((d) => d.name).sort()).toEqual(["Geography", "Science"]);
 
     // keepScheduling=false → every card is a fresh New card.
-    const cards = await ctx.db.select().from(schema.reviewUnits).all();
+    const cards = ctx.db.select().from(schema.reviewUnits).all();
     expect(cards.every((c) => c.state === 0 && c.reps === 0)).toBe(true);
   });
 
@@ -339,7 +339,7 @@ describe("Anki package import", () => {
     expect(result.skippedCount).toBe(1);
     expect(result.skippedNotes).toEqual(analysis.skippedNotes);
 
-    const notes = await ctx.db.select().from(schema.flashcards).all();
+    const notes = ctx.db.select().from(schema.flashcards).all();
     expect(notes).toHaveLength(7);
     expect(notes.filter((n) => n.type === "basic")).toHaveLength(3);
   });
@@ -379,7 +379,7 @@ describe("Anki package import", () => {
       deckStrategy: "single",
     });
 
-    const [flashcard] = await ctx.db.select().from(schema.flashcards).all();
+    const [flashcard] = ctx.db.select().from(schema.flashcards).all();
     expect(flashcard.type).toBe("image_occlusion");
     const content = JSON.parse(flashcard.content) as {
       baseImage: string;
@@ -400,7 +400,7 @@ describe("Anki package import", () => {
     expect(content.masks[1].geometry.w).toBeCloseTo(0.2);
     expect(content.masks[1].geometry.h).toBeCloseTo(0.1);
 
-    const rows = await ctx.db.select().from(schema.reviewUnits).all();
+    const rows = ctx.db.select().from(schema.reviewUnits).all();
     expect(rows.map((row) => row.subKey).sort()).toEqual(["c1", "c2"]);
     expect(rows.find((row) => row.subKey === "c2")).toMatchObject({
       state: 2,

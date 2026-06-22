@@ -12,7 +12,7 @@ async function storedFlashcardShape(
   ctx: Awaited<ReturnType<typeof makeContext>>,
   flashcardId: string,
 ) {
-  const flashcard = await ctx.db
+  const flashcard = ctx.db
     .select({
       type: schema.flashcards.type,
       content: schema.flashcards.content,
@@ -20,7 +20,7 @@ async function storedFlashcardShape(
     .from(schema.flashcards)
     .where(eq(schema.flashcards.id, flashcardId))
     .get();
-  const reviewUnits = await ctx.db
+  const reviewUnits = ctx.db
     .select({
       subKey: schema.reviewUnits.subKey,
       front: schema.reviewUnits.front,
@@ -118,7 +118,7 @@ describe("importFlashcardHierarchy", () => {
     });
 
     const cloze = result.flashcards.find((card) => card.clientId === "gap")!;
-    const clozeReviewUnits = await ctx.db
+    const clozeReviewUnits = ctx.db
       .select()
       .from(schema.reviewUnits)
       .where(eq(schema.reviewUnits.flashcardId, cloze.id))
@@ -170,7 +170,7 @@ describe("importFlashcardHierarchy", () => {
       }),
     ).rejects.toThrow(/unknown type/);
 
-    const deckCount = await ctx.db
+    const deckCount = ctx.db
       .select({ value: count() })
       .from(schema.decks)
       .get();

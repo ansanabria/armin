@@ -20,7 +20,7 @@ export async function getPrereqIds(
   ctx: ServiceContext,
   flashcardId: string,
 ): Promise<string[]> {
-  const rows = await ctx.db
+  const rows = ctx.db
     .select({ id: flashcardPrereqs.prereqId })
     .from(flashcardPrereqs)
     .where(eq(flashcardPrereqs.dependentId, flashcardId))
@@ -32,7 +32,7 @@ export async function getDependentIds(
   ctx: ServiceContext,
   flashcardId: string,
 ): Promise<string[]> {
-  const rows = await ctx.db
+  const rows = ctx.db
     .select({ id: flashcardPrereqs.dependentId })
     .from(flashcardPrereqs)
     .where(eq(flashcardPrereqs.prereqId, flashcardId))
@@ -48,7 +48,7 @@ async function getReviewUnitsByFlashcardId(
   const byFlashcard = new Map<string, { state: number; stability: number }[]>();
   if (uniqueIds.length === 0) return byFlashcard;
 
-  const rows = await ctx.db
+  const rows = ctx.db
     .select({
       flashcardId: reviewUnits.flashcardId,
       state: reviewUnits.state,
@@ -87,7 +87,7 @@ export async function getLockedByFlashcardIds(
   const locked = new Map(uniqueIds.map((id) => [id, false]));
   if (uniqueIds.length === 0) return locked;
 
-  const rows = await ctx.db
+  const rows = ctx.db
     .select({ id: flashcards.id, locked: flashcards.locked })
     .from(flashcards)
     .where(inArray(flashcards.id, uniqueIds))
@@ -109,7 +109,7 @@ async function computeLockedByFlashcardIds(
   const locked = new Map(uniqueIds.map((id) => [id, false]));
   if (uniqueIds.length === 0) return locked;
 
-  const edges = await ctx.db
+  const edges = ctx.db
     .select({
       dependentId: flashcardPrereqs.dependentId,
       prereqId: flashcardPrereqs.prereqId,
@@ -124,7 +124,7 @@ async function computeLockedByFlashcardIds(
 
   const prereqIds = [...new Set(edges.map((edge) => edge.prereqId))];
   const prereqReviewUnits = await getReviewUnitsByFlashcardId(ctx, prereqIds);
-  const prereqRows = await ctx.db
+  const prereqRows = ctx.db
     .select({ id: flashcards.id, archived: flashcards.archived })
     .from(flashcards)
     .where(inArray(flashcards.id, prereqIds))
@@ -181,7 +181,7 @@ async function persistLockedForFlashcardIds(
   const computed = await computeLockedByFlashcardIds(ctx, uniqueIds);
   const now = new Date();
 
-  await ctx.db.transaction((tx) => {
+  ctx.db.transaction((tx) => {
     for (const id of uniqueIds) {
       const locked = computed.get(id) ?? false;
       tx.update(flashcards)
@@ -275,30 +275,30 @@ export async function refreshAfterPrerequisiteStateChange(
 export async function refreshAllLockedStates(
   ctx: ServiceContext,
 ): Promise<void> {
-  const dependents = await ctx.db
+  const dependents = ctx.db
     .selectDistinct({ id: flashcardPrereqs.dependentId })
     .from(flashcardPrereqs)
     .all();
   const dependentIds = dependents.map((row) => row.id);
 
   if (dependentIds.length === 0) {
-    await ctx.db.update(flashcards).set({ locked: false }).run();
-    await ctx.db.update(reviewUnits).set({ locked: false }).run();
+    ctx.db.update(flashcards).set({ locked: false }).run();
+    ctx.db.update(reviewUnits).set({ locked: false }).run();
     return;
   }
 
   await refreshLockStateAndScheduling(ctx, dependentIds);
-  await ctx.db
+  ctx.db
     .update(flashcards)
     .set({ locked: false })
     .where(notInArray(flashcards.id, dependentIds))
     .run();
-  await ctx.db
+  ctx.db
     .update(reviewUnits)
     .set({ locked: false })
     .where(notInArray(reviewUnits.flashcardId, dependentIds))
     .run();
-  const nonDependents = await ctx.db
+  const nonDependents = ctx.db
     .select({ id: flashcards.id })
     .from(flashcards)
     .where(notInArray(flashcards.id, dependentIds))
@@ -313,7 +313,7 @@ export async function refreshLockedForDeck(
   ctx: ServiceContext,
   deckId: string,
 ): Promise<void> {
-  const deckFlashcards = await ctx.db
+  const deckFlashcards = ctx.db
     .select({ id: flashcards.id })
     .from(flashcards)
     .where(eq(flashcards.deckId, deckId))
@@ -321,7 +321,7 @@ export async function refreshLockedForDeck(
   const deckFlashcardIds = deckFlashcards.map((row) => row.id);
   if (deckFlashcardIds.length === 0) return;
 
-  const dependents = await ctx.db
+  const dependents = ctx.db
     .selectDistinct({ id: flashcardPrereqs.dependentId })
     .from(flashcardPrereqs)
     .where(inArray(flashcardPrereqs.dependentId, deckFlashcardIds))
@@ -337,12 +337,12 @@ export async function refreshLockedForDeck(
   );
   if (nonDependentIds.length === 0) return;
 
-  await ctx.db
+  ctx.db
     .update(flashcards)
     .set({ locked: false })
     .where(inArray(flashcards.id, nonDependentIds))
     .run();
-  await ctx.db
+  ctx.db
     .update(reviewUnits)
     .set({ locked: false })
     .where(inArray(reviewUnits.flashcardId, nonDependentIds))
@@ -376,7 +376,7 @@ async function syncFlashcardScheduling(
   ctx: ServiceContext,
   flashcardId: string,
 ): Promise<void> {
-  const flashcard = await ctx.db
+  const flashcard = ctx.db
     .select({ locked: flashcards.locked })
     .from(flashcards)
     .where(eq(flashcards.id, flashcardId))
@@ -384,7 +384,7 @@ async function syncFlashcardScheduling(
   if (!flashcard) return;
 
   const unlocked = !flashcard.locked;
-  const siblingReviewUnits = await ctx.db
+  const siblingReviewUnits = ctx.db
     .select()
     .from(reviewUnits)
     .where(eq(reviewUnits.flashcardId, flashcardId))
@@ -396,13 +396,13 @@ async function syncFlashcardScheduling(
     const pending = isPendingSchedule(reviewUnit);
 
     if (!unlocked && !pending) {
-      await ctx.db
+      ctx.db
         .update(reviewUnits)
         .set({ ...pendingReviewUnitFields(), locked: true, updatedAt: now })
         .where(eq(reviewUnits.id, reviewUnit.id))
         .run();
     } else if (unlocked && pending) {
-      await ctx.db
+      ctx.db
         .update(reviewUnits)
         .set({ ...newReviewUnitFields(now), locked: false, updatedAt: now })
         .where(eq(reviewUnits.id, reviewUnit.id))
@@ -432,7 +432,7 @@ export async function addPrereq(
       "That edge would create a cycle in the prerequisite graph.",
     );
   }
-  const edgeFlashcards = await ctx.db
+  const edgeFlashcards = ctx.db
     .select({ id: flashcards.id })
     .from(flashcards)
     .where(inArray(flashcards.id, [prereqId, dependentId]))
@@ -442,7 +442,7 @@ export async function addPrereq(
       "Both flashcards must exist before connecting prerequisites.",
     );
   }
-  await ctx.db
+  ctx.db
     .insert(flashcardPrereqs)
     .values({ prereqId, dependentId })
     .onConflictDoNothing()
@@ -455,7 +455,7 @@ export async function removePrereq(
   prereqId: string,
   dependentId: string,
 ): Promise<void> {
-  await ctx.db
+  ctx.db
     .delete(flashcardPrereqs)
     .where(
       and(
@@ -486,7 +486,7 @@ export async function getDeckGraph(
   deckId: string,
 ): Promise<DeckGraph> {
   const db = ctx.db;
-  const deckFlashcards = await db
+  const deckFlashcards = db
     .select()
     .from(flashcards)
     .where(eq(flashcards.deckId, deckId))
@@ -494,7 +494,7 @@ export async function getDeckGraph(
   const ids = deckFlashcards.map((n) => n.id);
 
   const stateRows = ids.length
-    ? await db
+    ? db
         .select({
           flashcardId: reviewUnits.flashcardId,
           state: reviewUnits.state,
@@ -513,7 +513,7 @@ export async function getDeckGraph(
 
   const edges = ids.length
     ? (
-        await db
+        db
           .select({
             prereqId: flashcardPrereqs.prereqId,
             dependentId: flashcardPrereqs.dependentId,
@@ -558,11 +558,11 @@ export type GlobalGraph = {
  */
 export async function getGlobalGraph(ctx: ServiceContext): Promise<GlobalGraph> {
   const db = ctx.db;
-  const allFlashcards = await db.select().from(flashcards).all();
+  const allFlashcards = db.select().from(flashcards).all();
   const ids = allFlashcards.map((n) => n.id);
 
   const stateRows = ids.length
-    ? await db
+    ? db
         .select({
           flashcardId: reviewUnits.flashcardId,
           state: reviewUnits.state,
@@ -580,7 +580,7 @@ export async function getGlobalGraph(ctx: ServiceContext): Promise<GlobalGraph> 
   }
 
   const edges = ids.length
-    ? await db
+    ? db
         .select({
           prereqId: flashcardPrereqs.prereqId,
           dependentId: flashcardPrereqs.dependentId,
@@ -624,7 +624,7 @@ export async function saveLayout(
 ): Promise<void> {
   if (placements.length === 0) return;
   const ids = placements.map((p) => p.flashcardId);
-  const owned = await ctx.db
+  const owned = ctx.db
     .select({ id: flashcards.id })
     .from(flashcards)
     .where(and(eq(flashcards.deckId, deckId), inArray(flashcards.id, ids)))
@@ -632,7 +632,7 @@ export async function saveLayout(
   const ownedIds = new Set(owned.map((n) => n.id));
   const toWrite = placements.filter((p) => ownedIds.has(p.flashcardId));
   if (toWrite.length === 0) return;
-  await ctx.db.transaction((tx) => {
+  ctx.db.transaction((tx) => {
     for (const p of toWrite) {
       tx.update(flashcards)
         .set({ posX: p.x, posY: p.y })
@@ -653,7 +653,7 @@ export async function saveGlobalLayout(
 ): Promise<void> {
   if (placements.length === 0) return;
   const ids = placements.map((p) => p.flashcardId);
-  const existing = await ctx.db
+  const existing = ctx.db
     .select({ id: flashcards.id })
     .from(flashcards)
     .where(inArray(flashcards.id, ids))
@@ -661,7 +661,7 @@ export async function saveGlobalLayout(
   const existingIds = new Set(existing.map((n) => n.id));
   const toWrite = placements.filter((p) => existingIds.has(p.flashcardId));
   if (toWrite.length === 0) return;
-  await ctx.db.transaction((tx) => {
+  ctx.db.transaction((tx) => {
     for (const p of toWrite) {
       tx.update(flashcards)
         .set({ posX: p.x, posY: p.y })

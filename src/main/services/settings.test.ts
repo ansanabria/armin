@@ -47,7 +47,7 @@ describe("deck settings", () => {
     const ctx = await makeContext("deck-settings-row");
     const deck = await decks.createDeck(ctx, { name: "No row" });
 
-    let rows = await ctx.db
+    let rows = ctx.db
       .select()
       .from(schema.deckSettings)
       .where(eq(schema.deckSettings.deckId, deck.id))
@@ -55,7 +55,7 @@ describe("deck settings", () => {
     expect(rows).toHaveLength(0);
 
     await settings.updateDeckSettings(ctx, deck.id, { requestRetention: 0.8 });
-    rows = await ctx.db
+    rows = ctx.db
       .select()
       .from(schema.deckSettings)
       .where(eq(schema.deckSettings.deckId, deck.id))
@@ -70,7 +70,7 @@ describe("deck settings", () => {
 
     await decks.deleteDeck(ctx, deck.id);
 
-    const rows = await ctx.db
+    const rows = ctx.db
       .select()
       .from(schema.deckSettings)
       .where(eq(schema.deckSettings.deckId, deck.id))

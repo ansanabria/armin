@@ -21,7 +21,7 @@ export async function makeContext(profileId: string): Promise<ServiceContext> {
  * into FSRS Review state above the stability floor.
  */
 export async function securePrereq(ctx: ServiceContext, flashcardId: string) {
-  await ctx.db
+  ctx.db
     .update(schema.reviewUnits)
     .set({
       state: State.Review,
@@ -41,7 +41,7 @@ export async function secureReviewUnit(
   ctx: ServiceContext,
   reviewUnitId: string,
 ) {
-  await ctx.db
+  ctx.db
     .update(schema.reviewUnits)
     .set({
       state: State.Review,
@@ -63,7 +63,7 @@ export async function markPrereqBelowStabilityFloor(
   flashcardId: string,
   stability: number,
 ) {
-  await ctx.db
+  ctx.db
     .update(schema.reviewUnits)
     .set({ state: State.Review, stability })
     .where(eq(schema.reviewUnits.flashcardId, flashcardId))
@@ -76,7 +76,7 @@ export async function makeReviewUnitDue(
   reviewUnitId: string,
   due = new Date(),
 ) {
-  await ctx.db
+  ctx.db
     .update(schema.reviewUnits)
     .set({ due })
     .where(eq(schema.reviewUnits.id, reviewUnitId))
@@ -89,7 +89,7 @@ export async function makeReviewUnitLearningDue(
   reviewUnitId: string,
   due = new Date(),
 ) {
-  await ctx.db
+  ctx.db
     .update(schema.reviewUnits)
     .set({ due, state: State.Learning })
     .where(eq(schema.reviewUnits.id, reviewUnitId))
@@ -105,7 +105,7 @@ export async function writeLegacyDeckFrontierOverride(
   deckId: string,
   newReviewUnitsPerDay: number,
 ) {
-  await ctx.db
+  ctx.db
     .insert(schema.deckSettings)
     .values({ deckId, newReviewUnitsPerDay })
     .run();
@@ -116,7 +116,7 @@ export async function getOnlyReviewUnit(
   ctx: ServiceContext,
   flashcardId: string,
 ) {
-  const rows = await ctx.db
+  const rows = ctx.db
     .select()
     .from(schema.reviewUnits)
     .where(eq(schema.reviewUnits.flashcardId, flashcardId))
@@ -133,7 +133,7 @@ export async function reviewLogsFor(ctx: ServiceContext, reviewUnitId: string) {
 }
 
 export async function countReviewLogs(ctx: ServiceContext) {
-  const row = await ctx.db
+  const row = ctx.db
     .select({ value: count() })
     .from(schema.reviewLogs)
     .get();
