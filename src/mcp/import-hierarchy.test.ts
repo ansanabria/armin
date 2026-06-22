@@ -1,7 +1,7 @@
 import { asc, count, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { schema } from "../main/db";
-import * as notes from "../main/services/flashcards";
+import * as flashcards from "../main/services/flashcards";
 import * as decks from "../main/services/decks";
 import { makeContext, useTestDb } from "../main/test/db";
 import { importFlashcardHierarchy, readDeckGraph } from "./import-hierarchy";
@@ -13,7 +13,10 @@ async function storedFlashcardShape(
   flashcardId: string,
 ) {
   const flashcard = await ctx.db
-    .select({ type: schema.flashcards.type, content: schema.flashcards.content })
+    .select({
+      type: schema.flashcards.type,
+      content: schema.flashcards.content,
+    })
     .from(schema.flashcards)
     .where(eq(schema.flashcards.id, flashcardId))
     .get();
@@ -57,7 +60,7 @@ describe("importFlashcardHierarchy", () => {
     ]);
 
     const dependent = result.flashcards.find((c) => c.clientId === "ts")!;
-    const persistedDependent = await notes.getFlashcard(ctx, dependent.id);
+    const persistedDependent = await flashcards.getFlashcard(ctx, dependent.id);
     expect(persistedDependent?.locked).toBe(true);
 
     const graph = await readDeckGraph(ctx, result.deck.id);
@@ -115,12 +118,15 @@ describe("importFlashcardHierarchy", () => {
     });
 
     const cloze = result.flashcards.find((card) => card.clientId === "gap")!;
-    const clozeCards = await ctx.db
+    const clozeReviewUnits = await ctx.db
       .select()
       .from(schema.reviewUnits)
       .where(eq(schema.reviewUnits.flashcardId, cloze.id))
       .all();
-    expect(clozeCards.map((card) => card.subKey).sort()).toEqual(["c1", "c2"]);
+    expect(clozeReviewUnits.map((unit) => unit.subKey).sort()).toEqual([
+      "c1",
+      "c2",
+    ]);
   });
 
   it("stores the same normalized shape as UI creation", async () => {
@@ -128,7 +134,7 @@ describe("importFlashcardHierarchy", () => {
     const deck = await decks.createDeck(ctx, { name: "Shared" });
     const content = { text: "The {{mitochondria}} powers the {{cell::unit}}." };
 
-    const uiCreated = await notes.createFlashcard({
+    const uiCreated = await flashcards.createFlashcard({
       ctx,
       deckId: deck.id,
       type: "cloze",
@@ -140,9 +146,9 @@ describe("importFlashcardHierarchy", () => {
     });
     const agentCreated = imported.flashcards[0];
 
-    await expect(
-      storedFlashcardShape(ctx, agentCreated.id),
-    ).resolves.toEqual(await storedFlashcardShape(ctx, uiCreated.id));
+    await expect(storedFlashcardShape(ctx, agentCreated.id)).resolves.toEqual(
+      await storedFlashcardShape(ctx, uiCreated.id),
+    );
     expect(
       (await storedFlashcardShape(ctx, uiCreated.id)).flashcard?.content,
     ).toBe(

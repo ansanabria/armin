@@ -31,7 +31,7 @@ new material lands on knowledge you've already secured.
   should be keyboard-driven and frictionless.
 - **AI-assisted card creation.** Armin exposes a local MCP server, so you can use
   your own AI agent (Claude Code, Codex, OpenCode, etc.) to generate flashcards from
-  a topic, your notes, or research. It also comes with an agent skill that guides agents on which guidelines they should use for creating cards. It is important not only to be able to create the cards, but to make sure the content aligns with what you are actually are trying to learn and it is structured in an effective manner for future studying. 
+  a topic, your notes, or research. It also comes with an agent skill that guides agents on which guidelines they should use for creating cards. It is important not only to be able to create the cards, but to make sure the content aligns with what you are actually are trying to learn and it is structured in an effective manner for future studying.
 - **Open-source.** Fully open, MIT-licensed, and meant to be built on.
 
 ## Installation
@@ -110,6 +110,9 @@ The `skills` CLI discovers skills under `.agents/skills/`, so it picks up
 ## Development notes
 
 Early development. Expect lots of bugs and strange behavior. I built this for myself in a Linux machine and it is supposed to work for macOS and Windows, but I haven't tested those builds myself, so be aware.
+
+See [docs/testing.md](docs/testing.md) for the testing philosophy, test-layer guidance,
+and validation commands used in this codebase.
 
 ## Contributions
 

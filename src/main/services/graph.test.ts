@@ -7,7 +7,7 @@ import {
 } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
-import * as notes from "./flashcards";
+import * as flashcards from "./flashcards";
 import * as settings from "./settings";
 import { isPendingSchedule } from "./scheduler";
 
@@ -19,7 +19,7 @@ function basic(
   front: string,
   back: string,
 ) {
-  return notes.createFlashcard({
+  return flashcards.createFlashcard({
     ctx,
     deckId,
     type: "basic",
@@ -39,7 +39,9 @@ describe("prerequisite edges", () => {
 
     expect(await graph.getPrereqIds(ctx, dependent.id)).toEqual([prereq.id]);
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
-    expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(true);
+    expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(
+      true,
+    );
 
     await securePrereq(ctx, prereq.id);
     await graph.refreshAfterPrerequisiteReview(ctx, prereq.id);
@@ -71,12 +73,18 @@ describe("prerequisite edges", () => {
     const dependent = await basic(ctx, deck.id, "D", "D");
 
     await graph.addPrereq(ctx, prereq.id, dependent.id);
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
-    expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(true);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      true,
+    );
+    expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(
+      true,
+    );
 
     await graph.removePrereq(ctx, prereq.id, dependent.id);
 
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      false,
+    );
     const card = await getOnlyReviewUnit(ctx, dependent.id);
     expect(isPendingSchedule(card)).toBe(false);
     expect(card.locked).toBe(false);
@@ -159,19 +167,27 @@ describe("prerequisite edges", () => {
     const dependent = await basic(ctx, deck.id, "D", "D");
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
-    expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(true);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      true,
+    );
+    expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(
+      true,
+    );
 
-    await notes.setArchived(ctx, prereq.id, true);
+    await flashcards.setArchived(ctx, prereq.id, true);
 
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      false,
+    );
     let dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
     expect(dependentCard.locked).toBe(false);
     expect(isPendingSchedule(dependentCard)).toBe(false);
 
-    await notes.setArchived(ctx, prereq.id, false);
+    await flashcards.setArchived(ctx, prereq.id, false);
 
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(true);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      true,
+    );
     dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
     expect(dependentCard.locked).toBe(true);
     expect(isPendingSchedule(dependentCard)).toBe(true);
@@ -186,17 +202,23 @@ describe("prerequisite edges", () => {
 
     await securePrereq(ctx, prereq.id);
     await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      false,
+    );
     expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
 
-    await notes.setArchived(ctx, prereq.id, true);
+    await flashcards.setArchived(ctx, prereq.id, true);
 
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      false,
+    );
     expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
 
-    await notes.setArchived(ctx, prereq.id, false);
+    await flashcards.setArchived(ctx, prereq.id, false);
 
-    expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
+    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
+      false,
+    );
     expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
   });
 });
@@ -214,11 +236,11 @@ describe("canvas layout", () => {
       { flashcardId: outside.id, x: 99, y: 99 },
     ]);
 
-    const insideNote = await notes.getFlashcard(ctx, inside.id);
+    const insideNote = await flashcards.getFlashcard(ctx, inside.id);
     expect(insideNote?.posX).toBe(10);
     expect(insideNote?.posY).toBe(20);
 
-    const outsideNote = await notes.getFlashcard(ctx, outside.id);
+    const outsideNote = await flashcards.getFlashcard(ctx, outside.id);
     expect(outsideNote?.posX).toBeNull();
     expect(outsideNote?.posY).toBeNull();
   });
@@ -229,7 +251,9 @@ describe("canvas layout", () => {
     const prereq = await basic(ctx, deck.id, "Front P", "Back P");
     const dependent = await basic(ctx, deck.id, "Front D", "Back D");
     await graph.addPrereq(ctx, prereq.id, dependent.id);
-    await graph.saveLayout(ctx, deck.id, [{ flashcardId: prereq.id, x: 1, y: 2 }]);
+    await graph.saveLayout(ctx, deck.id, [
+      { flashcardId: prereq.id, x: 1, y: 2 },
+    ]);
 
     const result = await graph.getDeckGraph(ctx, deck.id);
     expect(result.edges).toEqual([
@@ -254,8 +278,18 @@ describe("global graph", () => {
     const ctx = await makeContext("global-graph");
     const algebra = await decks.createDeck(ctx, { name: "Algebra" });
     const calculus = await decks.createDeck(ctx, { name: "Calculus" });
-    const prereq = await basic(ctx, algebra.id, "Vectors", "Magnitude + direction");
-    const dependent = await basic(ctx, calculus.id, "Gradient", "Vector of partials");
+    const prereq = await basic(
+      ctx,
+      algebra.id,
+      "Vectors",
+      "Magnitude + direction",
+    );
+    const dependent = await basic(
+      ctx,
+      calculus.id,
+      "Gradient",
+      "Vector of partials",
+    );
     // A cross-deck edge: the prereq lives in Algebra, the dependent in Calculus.
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
@@ -264,7 +298,9 @@ describe("global graph", () => {
     expect(result.nodes.map((n) => n.id).sort()).toEqual(
       [prereq.id, dependent.id].sort(),
     );
-    expect(result.nodes.find((n) => n.id === prereq.id)?.deckId).toBe(algebra.id);
+    expect(result.nodes.find((n) => n.id === prereq.id)?.deckId).toBe(
+      algebra.id,
+    );
     expect(result.nodes.find((n) => n.id === dependent.id)?.deckId).toBe(
       calculus.id,
     );
@@ -285,7 +321,13 @@ describe("global graph", () => {
       { flashcardId: b.id, x: 30, y: 40 },
     ]);
 
-    expect(await notes.getFlashcard(ctx, a.id)).toMatchObject({ posX: 10, posY: 20 });
-    expect(await notes.getFlashcard(ctx, b.id)).toMatchObject({ posX: 30, posY: 40 });
+    expect(await flashcards.getFlashcard(ctx, a.id)).toMatchObject({
+      posX: 10,
+      posY: 20,
+    });
+    expect(await flashcards.getFlashcard(ctx, b.id)).toMatchObject({
+      posX: 30,
+      posY: 40,
+    });
   });
 });

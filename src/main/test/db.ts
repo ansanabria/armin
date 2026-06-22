@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach } from "vitest";
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { closeDb, getDb, initDb, schema, setDbRootForTests } from "../db";
 import { runMigrations } from "../db/migrate";
 import type { ServiceContext } from "../services/context";
@@ -36,6 +36,81 @@ export async function securePrereq(ctx: ServiceContext, flashcardId: string) {
     .run();
 }
 
+/** Mark one Review unit as secured for tests that need stable history state. */
+export async function secureReviewUnit(
+  ctx: ServiceContext,
+  reviewUnitId: string,
+) {
+  await ctx.db
+    .update(schema.reviewUnits)
+    .set({
+      state: State.Review,
+      stability: 2.5,
+      reps: 2,
+      lastReview: new Date(),
+      due: new Date(),
+    })
+    .where(eq(schema.reviewUnits.id, reviewUnitId))
+    .run();
+}
+
+/**
+ * Mark a prerequisite flashcard as reviewed but still below the stability floor
+ * a dependent flashcard requires.
+ */
+export async function markPrereqBelowStabilityFloor(
+  ctx: ServiceContext,
+  flashcardId: string,
+  stability: number,
+) {
+  await ctx.db
+    .update(schema.reviewUnits)
+    .set({ state: State.Review, stability })
+    .where(eq(schema.reviewUnits.flashcardId, flashcardId))
+    .run();
+}
+
+/** Force a review unit to be due at a known time. */
+export async function makeReviewUnitDue(
+  ctx: ServiceContext,
+  reviewUnitId: string,
+  due = new Date(),
+) {
+  await ctx.db
+    .update(schema.reviewUnits)
+    .set({ due })
+    .where(eq(schema.reviewUnits.id, reviewUnitId))
+    .run();
+}
+
+/** Force a review unit into Learning state and make it due at a known time. */
+export async function makeReviewUnitLearningDue(
+  ctx: ServiceContext,
+  reviewUnitId: string,
+  due = new Date(),
+) {
+  await ctx.db
+    .update(schema.reviewUnits)
+    .set({ due, state: State.Learning })
+    .where(eq(schema.reviewUnits.id, reviewUnitId))
+    .run();
+}
+
+/**
+ * Write the removed per-Deck Frontier override to simulate older persisted data.
+ * Current service operations intentionally no longer expose this setting.
+ */
+export async function writeLegacyDeckFrontierOverride(
+  ctx: ServiceContext,
+  deckId: string,
+  newReviewUnitsPerDay: number,
+) {
+  await ctx.db
+    .insert(schema.deckSettings)
+    .values({ deckId, newReviewUnitsPerDay })
+    .run();
+}
+
 /** The single generated review unit for a basic flashcard (test convenience). */
 export async function getOnlyReviewUnit(
   ctx: ServiceContext,
@@ -47,6 +122,22 @@ export async function getOnlyReviewUnit(
     .where(eq(schema.reviewUnits.flashcardId, flashcardId))
     .all();
   return rows[0];
+}
+
+export async function reviewLogsFor(ctx: ServiceContext, reviewUnitId: string) {
+  return ctx.db
+    .select()
+    .from(schema.reviewLogs)
+    .where(eq(schema.reviewLogs.reviewUnitId, reviewUnitId))
+    .all();
+}
+
+export async function countReviewLogs(ctx: ServiceContext) {
+  const row = await ctx.db
+    .select({ value: count() })
+    .from(schema.reviewLogs)
+    .get();
+  return row?.value ?? 0;
 }
 
 /** Register beforeEach/afterEach hooks for an isolated temp SQLite root. */

@@ -3,7 +3,7 @@ import { getOnlyReviewUnit, makeContext, useTestDb } from "../test/db";
 import * as browse from "./browse";
 import * as decks from "./decks";
 import * as graph from "./graph";
-import * as notes from "./flashcards";
+import * as flashcards from "./flashcards";
 import * as review from "./review";
 import { State } from "./scheduler";
 
@@ -16,7 +16,7 @@ function basic(
   back: string,
   tags?: string[],
 ) {
-  return notes.createFlashcard({
+  return flashcards.createFlashcard({
     ctx,
     deckId,
     type: "basic",
