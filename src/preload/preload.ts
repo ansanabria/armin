@@ -1,95 +1,101 @@
-// Exposes a typed, namespaced API to the renderer over IPC.
-// See src/renderer/types/window.d.ts for the contract.
 import { contextBridge, ipcRenderer } from "electron";
+import type { ArminApi, ArminShell } from "../shared/armin-api";
+import {
+  ipcCommands,
+  ipcEvents,
+  type IpcCommand,
+} from "../shared/ipc-command-catalog";
 
-const invoke = (channel: string, payload?: unknown) =>
-  ipcRenderer.invoke(channel, payload);
+const invoke = (command: IpcCommand, payload?: unknown) =>
+  ipcRenderer.invoke(command.channel, payload);
+
+const c = ipcCommands;
 
 const api = {
   profiles: {
-    list: () => invoke("profiles:list"),
-    create: (name: string) => invoke("profiles:create", { name }),
-    open: (id: string, name?: string) => invoke("profiles:open", { id, name }),
-    getDefault: () => invoke("profiles:getDefault"),
-    setDefault: (id: string) => invoke("profiles:setDefault", { id }),
-    clearDefault: () => invoke("profiles:clearDefault"),
-    delete: (id: string) => invoke("profiles:delete", { id }),
-    showPicker: () => invoke("profiles:showPicker"),
+    list: () => invoke(c.profiles.list),
+    create: (name: string) => invoke(c.profiles.create, { name }),
+    open: (id: string, name?: string) => invoke(c.profiles.open, { id, name }),
+    getDefault: () => invoke(c.profiles.getDefault),
+    setDefault: (id: string) => invoke(c.profiles.setDefault, { id }),
+    clearDefault: () => invoke(c.profiles.clearDefault),
+    delete: (id: string) => invoke(c.profiles.delete, { id }),
+    showPicker: () => invoke(c.profiles.showPicker),
   },
   decks: {
-    list: () => invoke("decks:list"),
-    get: (id: string) => invoke("decks:get", { id }),
-    create: (input: unknown) => invoke("decks:create", input),
-    update: (input: unknown) => invoke("decks:update", input),
-    delete: (id: string) => invoke("decks:delete", { id }),
+    list: () => invoke(c.decks.list),
+    get: (id: string) => invoke(c.decks.get, { id }),
+    create: (input: unknown) => invoke(c.decks.create, input),
+    update: (input: unknown) => invoke(c.decks.update, input),
+    delete: (id: string) => invoke(c.decks.delete, { id }),
   },
   flashcards: {
-    list: (deckId: string) => invoke("flashcards:list", { deckId }),
-    listAll: () => invoke("flashcards:listAll"),
-    browse: (input: unknown) => invoke("flashcards:browse", input),
-    listTags: () => invoke("flashcards:listTags"),
+    list: (deckId: string) => invoke(c.flashcards.list, { deckId }),
+    listAll: () => invoke(c.flashcards.listAll),
+    browse: (input: unknown) => invoke(c.flashcards.browse, input),
+    listTags: () => invoke(c.flashcards.listTags),
     listDeckTags: (deckId: string) =>
-      invoke("flashcards:listDeckTags", { deckId }),
-    get: (id: string) => invoke("flashcards:get", { id }),
+      invoke(c.flashcards.listDeckTags, { deckId }),
+    get: (id: string) => invoke(c.flashcards.get, { id }),
     deleteConsequences: (id: string) =>
-      invoke("flashcards:deleteConsequences", { id }),
-    create: (input: unknown) => invoke("flashcards:create", input),
-    update: (input: unknown) => invoke("flashcards:update", input),
-    delete: (id: string) => invoke("flashcards:delete", { id }),
+      invoke(c.flashcards.deleteConsequences, { id }),
+    create: (input: unknown) => invoke(c.flashcards.create, input),
+    update: (input: unknown) => invoke(c.flashcards.update, input),
+    delete: (id: string) => invoke(c.flashcards.delete, { id }),
     archive: (id: string, archived: boolean) =>
-      invoke("flashcards:archive", { id, archived }),
+      invoke(c.flashcards.archive, { id, archived }),
   },
   review: {
-    queue: (deckId: string) => invoke("review:queue", { deckId }),
-    queueAll: () => invoke("review:queueAll"),
-    preview: (reviewUnitId: string) => invoke("review:preview", { reviewUnitId }),
+    queue: (deckId: string) => invoke(c.review.queue, { deckId }),
+    queueAll: () => invoke(c.review.queueAll),
+    preview: (reviewUnitId: string) => invoke(c.review.preview, { reviewUnitId }),
     rate: (reviewUnitId: string, rating: number) =>
-      invoke("review:rate", { reviewUnitId, rating }),
-    undo: (reviewUnitId: string) => invoke("review:undo", { reviewUnitId }),
+      invoke(c.review.rate, { reviewUnitId, rating }),
+    undo: (reviewUnitId: string) => invoke(c.review.undo, { reviewUnitId }),
   },
   graph: {
-    getGlobal: () => invoke("graph:getGlobal", {}),
+    getGlobal: () => invoke(c.graph.getGlobal, {}),
     addPrereq: (prereqId: string, dependentId: string) =>
-      invoke("graph:addPrereq", { prereqId, dependentId }),
+      invoke(c.graph.addPrereq, { prereqId, dependentId }),
     removePrereq: (prereqId: string, dependentId: string) =>
-      invoke("graph:removePrereq", { prereqId, dependentId }),
+      invoke(c.graph.removePrereq, { prereqId, dependentId }),
     saveLayout: (
       placements: { flashcardId: string; x: number; y: number }[],
-    ) => invoke("graph:saveLayout", { placements }),
+    ) => invoke(c.graph.saveLayout, { placements }),
   },
   settings: {
-    get: () => invoke("settings:get"),
-    update: (patch: unknown) => invoke("settings:update", patch),
-    getDeck: (deckId: string) => invoke("settings:getDeck", { deckId }),
+    get: () => invoke(c.settings.get),
+    update: (patch: unknown) => invoke(c.settings.update, patch),
+    getDeck: (deckId: string) => invoke(c.settings.getDeck, { deckId }),
     updateDeck: (deckId: string, patch: unknown) =>
-      invoke("settings:updateDeck", { deckId, patch }),
+      invoke(c.settings.updateDeck, { deckId, patch }),
   },
   mcp: {
-    getSetup: () => invoke("mcp:getSetup"),
-    getEnabled: () => invoke("mcp:getEnabled"),
-    setEnabled: (enabled: boolean) => invoke("mcp:setEnabled", { enabled }),
-    getStatus: () => invoke("mcp:getStatus"),
-    getPort: () => invoke("mcp:getPort"),
-    setPort: (port: number) => invoke("mcp:setPort", { port }),
-    retry: () => invoke("mcp:retry"),
+    getSetup: () => invoke(c.mcp.getSetup),
+    getEnabled: () => invoke(c.mcp.getEnabled),
+    setEnabled: (enabled: boolean) => invoke(c.mcp.setEnabled, { enabled }),
+    getStatus: () => invoke(c.mcp.getStatus),
+    getPort: () => invoke(c.mcp.getPort),
+    setPort: (port: number) => invoke(c.mcp.setPort, { port }),
+    retry: () => invoke(c.mcp.retry),
   },
   import: {
     analyzeAnki: (bytes: Uint8Array, fileName: string) =>
-      invoke("import:analyzeAnki", { bytes, fileName }),
-    commitAnki: (input: unknown) => invoke("import:commitAnki", input),
+      invoke(c.import.analyzeAnki, { bytes, fileName }),
+    commitAnki: (input: unknown) => invoke(c.import.commitAnki, input),
     createDeckWithFlashcards: (input: unknown) =>
-      invoke("import:createDeckWithFlashcards", input),
+      invoke(c.import.createDeckWithFlashcards, input),
   },
   data: {
-    export: () => invoke("data:export"),
-    restore: () => invoke("data:restore"),
+    export: () => invoke(c.data.export),
+    restore: () => invoke(c.data.restore),
   },
   onDataChanged: (cb: () => void) => {
     const listener = () => cb();
-    ipcRenderer.on("armin:data-changed", listener);
-    return () => ipcRenderer.removeListener("armin:data-changed", listener);
+    ipcRenderer.on(ipcEvents.dataChanged, listener);
+    return () => ipcRenderer.removeListener(ipcEvents.dataChanged, listener);
   },
-};
+} satisfies ArminApi;
 
 contextBridge.exposeInMainWorld("armin", api);
 contextBridge.exposeInMainWorld(
@@ -97,15 +103,17 @@ contextBridge.exposeInMainWorld(
   process.argv.includes("--armin-e2e") || process.env.ARMIN_E2E === "1",
 );
 
-contextBridge.exposeInMainWorld("arminShell", {
+const shell = {
   platform: process.platform,
-  minimize: () => invoke("shell:minimize"),
-  maximize: () => invoke("shell:maximize"),
-  close: () => invoke("shell:close"),
-  isMaximized: () => invoke("shell:isMaximized"),
+  minimize: () => invoke(c.shell.minimize),
+  maximize: () => invoke(c.shell.maximize),
+  close: () => invoke(c.shell.close),
+  isMaximized: () => invoke(c.shell.isMaximized),
   onMaximizedChange: (cb: (maximized: boolean) => void) => {
     const listener = (_event: unknown, maximized: boolean) => cb(maximized);
-    ipcRenderer.on("shell:maximized", listener);
-    return () => ipcRenderer.removeListener("shell:maximized", listener);
+    ipcRenderer.on(ipcEvents.shellMaximized, listener);
+    return () => ipcRenderer.removeListener(ipcEvents.shellMaximized, listener);
   },
-});
+} satisfies ArminShell;
+
+contextBridge.exposeInMainWorld("arminShell", shell);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
 import { GitBranch } from "lucide-react";
 import type { Viewport, XYPosition } from "@xyflow/react";
@@ -9,10 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
-import { deckKeys, graphKeys, invalidateCoreData } from "@/lib/armin-query";
+import { deckKeys, graphKeys } from "@/lib/armin-query";
 import { deckColor } from "@/lib/deck-color";
+import { useGraphCanvasEdits } from "@/lib/use-graph-canvas-edits";
 import { toUiGlobalGraph, type UiDeckGraph } from "@/types/view-models";
-import type { CardFormValues } from "@/components/flashcard-form-dialog";
 import type {
   FlashcardContent,
   FlashcardDeleteConsequences,
@@ -58,7 +58,6 @@ function readSavedViewport(): Viewport | undefined {
 
 export default function GlobalGraphPage() {
   const { focus } = useSearch({ from: "/graph" });
-  const queryClient = useQueryClient();
   const toast = useToast();
 
   const [initialViewport] = useState<Viewport | undefined>(() =>
@@ -116,9 +115,6 @@ export default function GlobalGraphPage() {
   const [deleteConsequences, setDeleteConsequences] =
     useState<FlashcardDeleteConsequences | null>(null);
   const [deleteConsequencesError, setDeleteConsequencesError] = useState(false);
-  const [nodePlacements, setNodePlacements] = useState<
-    Record<string, XYPosition>
-  >({});
 
   const [graphReady, setGraphReady] = useState(false);
   const [canvasMounted, setCanvasMounted] = useState(false);
@@ -200,135 +196,23 @@ export default function GlobalGraphPage() {
     ? (graph.nodes.find((n) => n.id === pendingConnectFrom)?.deckId ?? null)
     : null;
 
-  const createCard = useMutation({
-    mutationFn: (values: CardFormValues) => {
-      const deckId = inheritedDeckId ?? createDeckId;
-      if (!deckId) {
-        return Promise.reject(new Error("Pick a deck for this card."));
-      }
-      return window.armin.flashcards.create({ deckId, ...values });
-    },
-    onSuccess: (card) => {
-      if (pendingPlacement) {
-        setNodePlacements((current) => ({
-          ...current,
-          [card.id]: pendingPlacement,
-        }));
-        void window.armin.graph.saveLayout([
-          { flashcardId: card.id, x: pendingPlacement.x, y: pendingPlacement.y },
-        ]);
-      }
-      if (pendingConnectFrom) {
-        addPrereq.mutate({
-          prereqId: pendingConnectFrom,
-          dependentId: card.id,
-        });
-      }
-      invalidateCoreData(queryClient, card.deckId);
-      toast({ tone: "success", title: "Flashcard added to graph" });
-      closeDialog();
-    },
-    onError: () => toast({ tone: "error", title: "Couldn’t add flashcard" }),
+  const graphEdits = useGraphCanvasEdits({
+    graph,
+    setGraph,
+    createDeckId,
+    inheritedDeckId,
+    pendingPlacement,
+    pendingConnectFrom,
+    editingId,
+    closeDialog,
+    refetchGraph: () => void graphQuery.refetch(),
+    toast,
   });
-
-  const updateCard = useMutation({
-    mutationFn: (values: CardFormValues & { id: string }) =>
-      window.armin.flashcards.update(values),
-    onSuccess: (card) => {
-      // Invalidate the edited card's deck too, so its deck page / review queue
-      // don't show stale text, tags, or counts on return.
-      invalidateCoreData(queryClient, card?.deckId);
-      toast({ tone: "success", title: "Flashcard updated" });
-      closeDialog();
-    },
-    onError: () => toast({ tone: "error", title: "Couldn’t update flashcard" }),
-  });
-
-  const deleteCard = useMutation({
-    mutationFn: ({ id }: { id: string; deckId?: string }) =>
-      window.armin.flashcards.delete(id),
-    onSuccess: (_result, { deckId }) => {
-      // Refresh the deleted card's deck so its counts and review queue update.
-      invalidateCoreData(queryClient, deckId);
-      toast({ tone: "error", title: "Flashcard deleted" });
-    },
-    onError: () => {
-      toast({ tone: "error", title: "Couldn’t delete flashcard" });
-      void graphQuery.refetch();
-    },
-  });
-
-  const addPrereq = useMutation({
-    mutationFn: (edge: { prereqId: string; dependentId: string }) =>
-      window.armin.graph.addPrereq(edge.prereqId, edge.dependentId),
-    onSuccess: () => invalidateCoreData(queryClient),
-    onError: () => {
-      toast({ tone: "error", title: "Couldn’t link flashcards" });
-      void graphQuery.refetch();
-    },
-  });
-
-  const removePrereq = useMutation({
-    mutationFn: (edge: { prereqId: string; dependentId: string }) =>
-      window.armin.graph.removePrereq(edge.prereqId, edge.dependentId),
-    onSuccess: () => invalidateCoreData(queryClient),
-    onError: () => {
-      toast({ tone: "error", title: "Couldn’t remove link" });
-      void graphQuery.refetch();
-    },
-  });
-
-  const saveLayout = useMutation({
-    mutationFn: (placements: { flashcardId: string; x: number; y: number }[]) =>
-      window.armin.graph.saveLayout(placements),
-    onError: () => toast({ tone: "error", title: "Couldn’t save layout" }),
-  });
-
-  const saveCard = async (values: CardFormValues) => {
-    if (editingId) {
-      await updateCard.mutateAsync({ id: editingId, ...values });
-    } else {
-      await createCard.mutateAsync(values);
-    }
-  };
-
-  const handleGraphChange = (next: UiDeckGraph) => {
-    const previous = graph;
-    setGraph(next);
-
-    const previousNodeIds = new Set(previous.nodes.map((node) => node.id));
-    const nextNodeIds = new Set(next.nodes.map((node) => node.id));
-    for (const nodeId of previousNodeIds) {
-      if (!nextNodeIds.has(nodeId)) {
-        const deckId = previous.nodes.find((node) => node.id === nodeId)?.deckId;
-        deleteCard.mutate({ id: nodeId, deckId });
-      }
-    }
-
-    const edgeKey = (edge: UiDeckGraph["edges"][number]) =>
-      `${edge.prereqId}->${edge.dependentId}`;
-    const previousEdges = new Set(previous.edges.map(edgeKey));
-    const nextEdges = new Set(next.edges.map(edgeKey));
-
-    for (const edge of next.edges) {
-      if (!previousEdges.has(edgeKey(edge))) addPrereq.mutate(edge);
-    }
-    for (const edge of previous.edges) {
-      if (!nextEdges.has(edgeKey(edge))) removePrereq.mutate(edge);
-    }
-  };
 
   const confirmGraphDelete = async () => {
-    if (!deleteId) return;
-    const deckId = graph.nodes.find((node) => node.id === deleteId)?.deckId;
-    await deleteCard.mutateAsync({ id: deleteId, deckId });
-    setGraph((current) => ({
-      nodes: current.nodes.filter((node) => node.id !== deleteId),
-      edges: current.edges.filter(
-        (edge) => edge.prereqId !== deleteId && edge.dependentId !== deleteId,
-      ),
-    }));
-    setDeleteId(null);
+    if (await graphEdits.confirmGraphDelete(deleteId)) {
+      setDeleteId(null);
+    }
   };
 
   return (
@@ -378,14 +262,14 @@ export default function GlobalGraphPage() {
       {canvasMounted && (
         <PrerequisiteGraph
           graph={graph}
-          onGraphChange={handleGraphChange}
-          nodePlacements={nodePlacements}
+          onGraphChange={graphEdits.applyGraphChange}
+          nodePlacements={graphEdits.nodePlacements}
           decks={deckLensOptions}
           focusDeckId={focus ?? null}
           onCreateCardRequest={openCreate}
           onEditCardRequest={openEdit}
           onDeleteCardRequest={openDelete}
-          onPersistLayout={(placements) => saveLayout.mutate(placements)}
+          onPersistLayout={graphEdits.saveLayout}
           initialViewport={initialViewport}
           onViewportChange={persistViewport}
           onReady={() => setCanvasReady(true)}
@@ -401,7 +285,7 @@ export default function GlobalGraphPage() {
         reviewUnitId={editingId}
         initialType={editingId ? editingType : "basic"}
         initialContent={editingId ? editingContent : null}
-        onSubmit={saveCard}
+        onSubmit={graphEdits.saveCard}
         decks={inheritedDeckId ? undefined : decks}
         deckId={createDeckId}
         onDeckChange={setCreateDeckId}
@@ -439,7 +323,7 @@ export default function GlobalGraphPage() {
           </Button>
           <Button
             variant="destructive"
-            disabled={deleteCard.isPending || !deleteConsequences}
+            disabled={graphEdits.deletePending || !deleteConsequences}
             onClick={() => void confirmGraphDelete()}
           >
             Delete flashcard

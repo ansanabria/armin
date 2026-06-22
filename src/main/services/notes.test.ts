@@ -308,7 +308,7 @@ describe("deleteFlashcard", () => {
 
     const [bCard] = await cardsForNote(ctx, prereqB.id);
     await secureCard(ctx, bCard.id);
-    await graph.refreshLockedAfterPrereqSecured(ctx, prereqB.id);
+    await graph.refreshAfterPrerequisiteStateChange(ctx, prereqB.id);
 
     expect((await notes.getFlashcard(ctx, dependent.id))?.locked).toBe(false);
   });
@@ -337,11 +337,11 @@ describe("note-level securing", () => {
 
     const prereqCards = await cardsForNote(ctx, prereq.id);
     await secureCard(ctx, prereqCards[0].id);
-    await graph.refreshLockedAfterPrereqSecured(ctx, prereq.id);
+    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
 
     await secureCard(ctx, prereqCards[1].id);
-    await graph.refreshLockedAfterPrereqSecured(ctx, prereq.id);
+    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
   });
 });

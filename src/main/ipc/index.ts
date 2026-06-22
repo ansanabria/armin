@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from "electron";
-import { z } from "zod";
+import type { z } from "zod";
 import { getDb, initDb, deleteProfileData } from "../db";
 import { runMigrations } from "../db/migrate";
 import { setActiveProfileId } from "../profiles/active";
@@ -8,9 +8,6 @@ import type { ServiceContext } from "../services/context";
 import * as decks from "../services/decks";
 import * as flashcards from "../services/flashcards";
 import * as browse from "../services/browse";
-import { FLASHCARD_TYPES } from "../services/flashcard-types";
-import { BROWSE_SORT_KEYS } from "../../shared/browse";
-import { SCHEDULING_PRESET_VALUES } from "../../shared/scheduling-presets";
 import * as review from "../services/review";
 import * as graph from "../services/graph";
 import * as settings from "../services/settings";
@@ -27,37 +24,38 @@ import {
   openMainWindow,
   openProfilePicker,
 } from "../windows";
+import {
+  ipcCommands,
+  ipcEvents,
+  type IpcCommand,
+} from "../../shared/ipc-command-catalog";
 
 /** Notify all renderers that persisted data changed (e.g. via the MCP server). */
 export function notifyDataChanged() {
   for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send("armin:data-changed");
+    win.webContents.send(ipcEvents.dataChanged);
   }
 }
 
 type Handler = (payload: unknown) => unknown;
 
 function register<T extends z.ZodType>(
-  channel: string,
-  schema: T,
+  command: IpcCommand<T>,
   handler: (input: z.infer<T>) => unknown,
 ) {
-  const wrapped: Handler = (payload) => handler(schema.parse(payload));
-  ipcMain.handle(channel, (_event, payload) => wrapped(payload));
+  const wrapped: Handler = (payload) => handler(command.schema.parse(payload));
+  ipcMain.handle(command.channel, (_event, payload) => wrapped(payload));
 }
 
 function registerForProfile<T extends z.ZodType>(
-  channel: string,
-  schema: T,
+  command: IpcCommand<T>,
   handler: (ctx: ServiceContext, input: z.infer<T>) => unknown,
 ) {
-  ipcMain.handle(channel, async (event, payload) => {
+  ipcMain.handle(command.channel, async (event, payload) => {
     const ctx = await serviceContextForEvent(event);
-    return handler(ctx, schema.parse(payload));
+    return handler(ctx, command.schema.parse(payload));
   });
 }
-
-const id = z.object({ id: z.string() });
 
 const dbReady = new Set<string>();
 
@@ -88,30 +86,28 @@ export async function openProfile(id: string, name?: string) {
 }
 
 export function registerIpc() {
+  const c = ipcCommands;
+
   // --- profiles (local JSON store; per-profile data dirs come later) ---
-  register("profiles:list", z.void().optional(), () => profiles.listProfiles());
+  register(c.profiles.list, () => profiles.listProfiles());
   register(
-    "profiles:create",
-    z.object({ name: z.string().min(1) }),
+    c.profiles.create,
     ({ name }) => profiles.createProfile(name),
   );
   register(
-    "profiles:open",
-    z.object({ id: z.string(), name: z.string().optional() }),
+    c.profiles.open,
     ({ id, name }) => openProfile(id, name),
   );
-  register("profiles:getDefault", z.void().optional(), () =>
-    profiles.getDefaultProfileId(),
-  );
-  register("profiles:setDefault", id, ({ id }) => {
+  register(c.profiles.getDefault, () => profiles.getDefaultProfileId());
+  register(c.profiles.setDefault, ({ id }) => {
     profiles.setDefaultProfile(id);
     return { ok: true as const };
   });
-  register("profiles:clearDefault", z.void().optional(), () => {
+  register(c.profiles.clearDefault, () => {
     profiles.clearDefaultProfile();
     return { ok: true as const };
   });
-  register("profiles:delete", id, async ({ id }) => {
+  register(c.profiles.delete, async ({ id }) => {
     if (isProfileOpen(id)) {
       throw new Error("Close this profile's window before deleting it.");
     }
@@ -120,78 +116,52 @@ export function registerIpc() {
     dbReady.delete(id);
     return { ok: true as const };
   });
-  register("profiles:showPicker", z.void().optional(), () => {
+  register(c.profiles.showPicker, () => {
     openProfilePicker();
     return { ok: true as const };
   });
 
   // --- decks ---
-  registerForProfile("decks:list", z.void().optional(), (ctx) =>
-    decks.listDecks(ctx),
+  registerForProfile(c.decks.list, (ctx) => decks.listDecks(ctx));
+  registerForProfile(c.decks.get, (ctx, { id }) => decks.getDeck(ctx, id));
+  registerForProfile(c.decks.create, (ctx, input) =>
+    decks.createDeck(ctx, input),
   );
-  registerForProfile("decks:get", id, (ctx, { id }) => decks.getDeck(ctx, id));
-  registerForProfile(
-    "decks:create",
-    z.object({ name: z.string().min(1), description: z.string().nullish() }),
-    (ctx, input) => decks.createDeck(ctx, input),
+  registerForProfile(c.decks.update, (ctx, { id, ...patch }) =>
+    decks.updateDeck(ctx, id, patch),
   );
-  registerForProfile(
-    "decks:update",
-    z.object({
-      id: z.string(),
-      name: z.string().min(1).optional(),
-      description: z.string().nullish(),
-    }),
-    (ctx, { id, ...patch }) => decks.updateDeck(ctx, id, patch),
-  );
-  registerForProfile("decks:delete", id, async (ctx, { id }) => {
+  registerForProfile(c.decks.delete, async (ctx, { id }) => {
     await decks.deleteDeck(ctx, id);
     return { ok: true };
   });
 
   // --- flashcards (the authored unit) ---
   registerForProfile(
-    "flashcards:list",
-    z.object({ deckId: z.string() }),
+    c.flashcards.list,
     (ctx, { deckId }) => flashcards.listFlashcards(ctx, deckId),
   );
-  registerForProfile("flashcards:listAll", z.void().optional(), (ctx) =>
+  registerForProfile(c.flashcards.listAll, (ctx) =>
     flashcards.listAllFlashcards(ctx),
   );
   registerForProfile(
-    "flashcards:browse",
-    z.object({
-      offset: z.number().int().min(0),
-      limit: z.number().int().min(1).max(100),
-      sort: z.enum(BROWSE_SORT_KEYS),
-      state: z.number().int().min(0).max(3).optional(),
-      deckId: z.string().optional(),
-      tags: z.array(z.string()).optional(),
-    }),
+    c.flashcards.browse,
     (ctx, input) => browse.listBrowsePage(ctx, input),
   );
-  registerForProfile("flashcards:listTags", z.void().optional(), (ctx) =>
+  registerForProfile(c.flashcards.listTags, (ctx) =>
     browse.listAllTagNames(ctx),
   );
   registerForProfile(
-    "flashcards:listDeckTags",
-    z.object({ deckId: z.string() }),
+    c.flashcards.listDeckTags,
     (ctx, { deckId }) => browse.listDeckTagNames(ctx, deckId),
   );
-  registerForProfile("flashcards:get", id, (ctx, { id }) =>
+  registerForProfile(c.flashcards.get, (ctx, { id }) =>
     flashcards.getFlashcard(ctx, id),
   );
-  registerForProfile("flashcards:deleteConsequences", id, (ctx, { id }) =>
+  registerForProfile(c.flashcards.deleteConsequences, (ctx, { id }) =>
     flashcards.getDeleteConsequences(ctx, id),
   );
   registerForProfile(
-    "flashcards:create",
-    z.object({
-      deckId: z.string(),
-      type: z.enum(FLASHCARD_TYPES),
-      content: z.unknown(),
-      tags: z.array(z.string()).optional(),
-    }),
+    c.flashcards.create,
     (ctx, input) =>
       flashcards.createFlashcard({
         ctx,
@@ -202,22 +172,15 @@ export function registerIpc() {
       }),
   );
   registerForProfile(
-    "flashcards:update",
-    z.object({
-      id: z.string(),
-      type: z.enum(FLASHCARD_TYPES).optional(),
-      content: z.unknown().optional(),
-      tags: z.array(z.string()).optional(),
-    }),
+    c.flashcards.update,
     (ctx, { id, ...patch }) => flashcards.updateFlashcard(ctx, id, patch),
   );
-  registerForProfile("flashcards:delete", id, async (ctx, { id }) => {
+  registerForProfile(c.flashcards.delete, async (ctx, { id }) => {
     await flashcards.deleteFlashcard(ctx, id);
     return { ok: true };
   });
   registerForProfile(
-    "flashcards:archive",
-    z.object({ id: z.string(), archived: z.boolean() }),
+    c.flashcards.archive,
     async (ctx, { id, archived }) => {
       const flashcard = await flashcards.setArchived(ctx, id, archived);
       notifyDataChanged();
@@ -227,43 +190,21 @@ export function registerIpc() {
 
   // --- import ---
   register(
-    "import:analyzeAnki",
-    z.object({
-      bytes: z.instanceof(Uint8Array),
-      fileName: z.string(),
-    }),
+    c.import.analyzeAnki,
     ({ bytes, fileName }) => analyzeAnkiPackage(bytes, fileName),
   );
   registerForProfile(
-    "import:commitAnki",
-    z.object({
-      importId: z.string(),
-      deckName: z.string().min(1),
-      keepScheduling: z.boolean(),
-      deckStrategy: z.enum(["single", "separate"]),
-    }),
+    c.import.commitAnki,
     (ctx, input) => commitAnkiImport(ctx, input),
   );
   registerForProfile(
-    "import:createDeckWithFlashcards",
-    z.object({
-      name: z.string().min(1),
-      description: z.string().nullish(),
-      flashcards: z
-        .array(
-          z.object({
-            front: z.string().min(1),
-            back: z.string().min(1),
-            tags: z.array(z.string()).optional(),
-          }),
-        )
-        .min(1),
-    }),
+    c.import.createDeckWithFlashcards,
     (ctx, input) => decks.createDeckWithFlashcards(ctx, input),
   );
 
   // --- data export / restore ---
-  ipcMain.handle("data:export", async (event) => {
+  ipcMain.handle(c.data.export.channel, async (event, payload) => {
+    c.data.export.schema.parse(payload);
     const ctx = await serviceContextForEvent(event);
     const profileName = profiles.getProfile(ctx.profileId)?.name ?? "Armin";
     const { fileName, bytes, deckCount, flashcardCount } =
@@ -293,7 +234,8 @@ export function registerIpc() {
 
   // Restore runs from the profile-picker window, which has no profile context:
   // it creates a brand-new profile from the chosen backup archive.
-  ipcMain.handle("data:restore", async (event) => {
+  ipcMain.handle(c.data.restore.channel, async (event, payload) => {
+    c.data.restore.schema.parse(payload);
     const win = BrowserWindow.fromWebContents(event.sender);
     const options = {
       title: "Restore from backup",
@@ -321,30 +263,23 @@ export function registerIpc() {
 
   // --- review ---
   registerForProfile(
-    "review:queue",
-    z.object({ deckId: z.string() }),
+    c.review.queue,
     (ctx, { deckId }) => review.getQueue(ctx, deckId),
   );
-  registerForProfile("review:queueAll", z.void().optional(), (ctx) =>
+  registerForProfile(c.review.queueAll, (ctx) =>
     review.getGlobalQueue(ctx),
   );
   registerForProfile(
-    "review:preview",
-    z.object({ reviewUnitId: z.string() }),
+    c.review.preview,
     (ctx, { reviewUnitId }) => review.previewReviewUnit(ctx, reviewUnitId),
   );
   registerForProfile(
-    "review:rate",
-    z.object({
-      reviewUnitId: z.string(),
-      rating: z.number().int().min(1).max(4),
-    }),
+    c.review.rate,
     (ctx, { reviewUnitId, rating }) =>
       review.rateReviewUnit(ctx, reviewUnitId, rating as 1 | 2 | 3 | 4),
   );
   registerForProfile(
-    "review:undo",
-    z.object({ reviewUnitId: z.string() }),
+    c.review.undo,
     async (ctx, { reviewUnitId }) => {
       const result = await review.undoReview(ctx, reviewUnitId);
       notifyDataChanged();
@@ -353,36 +288,25 @@ export function registerIpc() {
   );
 
   // --- graph ---
-  registerForProfile("graph:getGlobal", z.object({}), (ctx) =>
+  registerForProfile(c.graph.getGlobal, (ctx) =>
     graph.getGlobalGraph(ctx),
   );
   registerForProfile(
-    "graph:addPrereq",
-    z.object({ prereqId: z.string(), dependentId: z.string() }),
+    c.graph.addPrereq,
     async (ctx, { prereqId, dependentId }) => {
       await graph.addPrereq(ctx, prereqId, dependentId);
       return { ok: true };
     },
   );
   registerForProfile(
-    "graph:removePrereq",
-    z.object({ prereqId: z.string(), dependentId: z.string() }),
+    c.graph.removePrereq,
     async (ctx, { prereqId, dependentId }) => {
       await graph.removePrereq(ctx, prereqId, dependentId);
       return { ok: true };
     },
   );
   registerForProfile(
-    "graph:saveLayout",
-    z.object({
-      placements: z.array(
-        z.object({
-          flashcardId: z.string(),
-          x: z.number(),
-          y: z.number(),
-        }),
-      ),
-    }),
+    c.graph.saveLayout,
     async (ctx, { placements }) => {
       await graph.saveGlobalLayout(ctx, placements);
       return { ok: true };
@@ -390,17 +314,12 @@ export function registerIpc() {
   );
 
   // --- mcp ---
-  registerForProfile("mcp:getSetup", z.void().optional(), (ctx) =>
+  registerForProfile(c.mcp.getSetup, (ctx) =>
     mcp.getMcpSetup(ctx.profileId),
   );
+  register(c.mcp.getEnabled, () => getAppSettings().mcpEnabled);
   register(
-    "mcp:getEnabled",
-    z.void().optional(),
-    () => getAppSettings().mcpEnabled,
-  );
-  register(
-    "mcp:setEnabled",
-    z.object({ enabled: z.boolean() }),
+    c.mcp.setEnabled,
     async ({ enabled }) => {
       // Apply the server change first, then persist — so a failed bind (e.g.
       // the port is in use) never leaves mcpEnabled=true on disk, which would
@@ -411,11 +330,10 @@ export function registerIpc() {
       return { enabled };
     },
   );
-  register("mcp:getStatus", z.void().optional(), () => mcp.getMcpStatus());
-  register("mcp:getPort", z.void().optional(), () => mcp.getMcpPort());
+  register(c.mcp.getStatus, () => mcp.getMcpStatus());
+  register(c.mcp.getPort, () => mcp.getMcpPort());
   register(
-    "mcp:setPort",
-    z.object({ port: z.number().int().min(1024).max(65535) }),
+    c.mcp.setPort,
     async ({ port }) => {
       setMcpPort(port);
       if (getAppSettings().mcpEnabled) {
@@ -425,73 +343,45 @@ export function registerIpc() {
       return mcp.getMcpStatus();
     },
   );
-  register("mcp:retry", z.void().optional(), async () => {
+  register(c.mcp.retry, async () => {
     await startEmbeddedMcpServer();
     return mcp.getMcpStatus();
   });
 
   // --- settings ---
-  registerForProfile("settings:get", z.void().optional(), (ctx) =>
+  registerForProfile(c.settings.get, (ctx) =>
     settings.getSettings(ctx),
   );
   registerForProfile(
-    "settings:update",
-    z.object({
-      requestRetention: z.number().optional(),
-      maximumInterval: z.number().int().optional(),
-      enableFuzz: z.boolean().optional(),
-      enableShortTerm: z.boolean().optional(),
-      learningSteps: z.string().optional(),
-      relearningSteps: z.string().optional(),
-      weights: z.string().nullish(),
-      prereqStabilityFloor: z.number().optional(),
-      newReviewUnitsPerDay: z.number().int().min(0).optional(),
-      keepSiblingReviewUnitsTogether: z.boolean().optional(),
-      schedulingPreset: z.enum(SCHEDULING_PRESET_VALUES).optional(),
-    }),
+    c.settings.update,
     (ctx, patch) => settings.updateSettings(ctx, patch),
   );
   registerForProfile(
-    "settings:getDeck",
-    z.object({ deckId: z.string() }),
+    c.settings.getDeck,
     (ctx, { deckId }) => settings.getDeckSettings(ctx, deckId),
   );
   registerForProfile(
-    "settings:updateDeck",
-    z.object({
-      deckId: z.string(),
-      patch: z.object({
-        requestRetention: z.number().nullable().optional(),
-        maximumInterval: z.number().int().nullable().optional(),
-        enableFuzz: z.boolean().nullable().optional(),
-        enableShortTerm: z.boolean().nullable().optional(),
-        learningSteps: z.string().nullable().optional(),
-        relearningSteps: z.string().nullable().optional(),
-        weights: z.string().nullable().optional(),
-        prereqStabilityFloor: z.number().nullable().optional(),
-        keepSiblingReviewUnitsTogether: z.boolean().nullable().optional(),
-      }),
-    }),
+    c.settings.updateDeck,
     (ctx, { deckId, patch }) => settings.updateDeckSettings(ctx, deckId, patch),
   );
 
   // --- shell (custom title bar controls) ---
-  register("shell:minimize", z.void().optional(), () => {
+  register(c.shell.minimize, () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const win = BrowserWindow.getFocusedWindow();
     win?.minimize();
   });
-  register("shell:maximize", z.void().optional(), () => {
+  register(c.shell.maximize, () => {
     const win = BrowserWindow.getFocusedWindow();
     if (!win) return { maximized: false };
     if (win.isMaximized()) win.unmaximize();
     else win.maximize();
     return { maximized: win.isMaximized() };
   });
-  register("shell:close", z.void().optional(), () => {
+  register(c.shell.close, () => {
     BrowserWindow.getFocusedWindow()?.close();
   });
-  register("shell:isMaximized", z.void().optional(), () => {
+  register(c.shell.isMaximized, () => {
     return BrowserWindow.getFocusedWindow()?.isMaximized() ?? false;
   });
 }
