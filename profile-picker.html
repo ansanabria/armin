@@ -5,28 +5,7 @@
     <meta name="color-scheme" content="light dark" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
     <title>Armin — Open profile</title>
-    <script>
-      (function () {
-        try {
-          var key = "armin-theme-preference";
-          var pref = localStorage.getItem(key);
-          if (pref === "light") pref = "flexoki-light";
-          var resolved =
-            pref === "flexoki-dark"
-              ? "dark"
-              : pref === "flexoki-light"
-                ? "light"
-                : window.matchMedia("(prefers-color-scheme: dark)").matches
-                  ? "dark"
-                  : "light";
-          document.documentElement.dataset.theme = resolved;
-          document.documentElement.style.colorScheme = resolved;
-        } catch (e) {
-          document.documentElement.dataset.theme = "light";
-          document.documentElement.style.colorScheme = "light";
-        }
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body spellcheck="false">
     <div id="root"></div>
