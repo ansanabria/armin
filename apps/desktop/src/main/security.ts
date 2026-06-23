@@ -2,14 +2,15 @@ import { app, session } from "electron";
 
 // Production renderers load bundled, static assets over file://, so they can run
 // under a tight policy: only same-origin scripts, inline styles (Tailwind/React
-// inject style attributes), and data: images (base images and occlusion cards are
-// stored as data URLs). No 'unsafe-eval', no remote origins.
+// inject style attributes), data: images (base images and occlusion cards are
+// stored as data URLs), and data: fonts (Vite can inline font assets). No
+// 'unsafe-eval', no remote origins.
 const PROD_CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
-  "font-src 'self'",
+  "font-src 'self' data:",
   "connect-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
@@ -27,7 +28,7 @@ const DEV_CSP = [
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
-  "font-src 'self'",
+  "font-src 'self' data:",
   "connect-src 'self' ws: wss:",
   "object-src 'none'",
   "base-uri 'self'",
