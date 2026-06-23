@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { CheckCircle2, AlertTriangle, Check, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,8 +91,10 @@ export function CramSession({
   const [typed, setTyped] = useState("");
 
   // Seed (and reset) the drill: clear progress, surface the initially-available
-  // units in a shuffled order.
-  useEffect(() => {
+  // units in a shuffled order. Runs in a layout effect so the queue is filled
+  // before paint — otherwise the empty queue renders as a one-frame "Pool
+  // cleared" flash the instant the pool finishes loading.
+  useLayoutEffect(() => {
     if (isLoading || isError) return;
     const start = new Set<string>();
     setState({ cleared: start, queue: shuffle(activeUnitIds(index, start)) });
