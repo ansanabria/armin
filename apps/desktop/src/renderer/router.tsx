@@ -105,29 +105,33 @@ export const router = createRouter({
   routeTree,
   history: createHashHistory(),
   scrollRestoration: true,
-  defaultViewTransition: {
-    // Tag each navigation with a direction so the content can slide the way the
-    // user is moving through the app. CSS keys off these via
-    // `:active-view-transition-type(forward|backward)`. Same-rank navigations
-    // (and the first load) return no type and fall back to the neutral fade.
-    types: ({ fromLocation, toLocation }) => {
-      const toPath = toLocation.pathname;
-      const fromPath = fromLocation?.pathname;
-      const toDeck = isDeckDetail(toPath);
-      const fromDeck = fromPath ? isDeckDetail(fromPath) : false;
-      // Opening a deck rises up; going back out of it drops down. Switching
-      // directly between two decks falls through to the fade, and leaving a deck
-      // to go deeper (e.g. its review) keeps the horizontal forward slide.
-      if (toDeck && !fromDeck) return ["deck-enter"];
-      if (fromDeck && !toDeck && routeRank(toPath) < routeRank(fromPath!)) {
-        return ["deck-leave"];
-      }
-      const from = fromPath ? routeRank(fromPath) : -1;
-      const to = routeRank(toPath);
-      if (from === -1 || from === to) return [];
-      return to > from ? ["forward"] : ["backward"];
-    },
-  },
+  defaultViewTransition: window.__ARMIN_E2E__
+    ? false
+    : {
+        // Tag each navigation with a direction so the content can slide the way the
+        // user is moving through the app. CSS keys off these via
+        // `:active-view-transition-type(forward|backward)`. Same-rank navigations
+        // return no type and fall back to the neutral fade.
+        types: ({ fromLocation, toLocation }) => {
+          const toPath = toLocation.pathname;
+          const fromPath = fromLocation?.pathname;
+          if (!fromPath || fromPath === toPath) return false;
+
+          const toDeck = isDeckDetail(toPath);
+          const fromDeck = isDeckDetail(fromPath);
+          // Opening a deck rises up; going back out of it drops down. Switching
+          // directly between two decks falls through to the fade, and leaving a deck
+          // to go deeper (e.g. its review) keeps the horizontal forward slide.
+          if (toDeck && !fromDeck) return ["deck-enter"];
+          if (fromDeck && !toDeck && routeRank(toPath) < routeRank(fromPath!)) {
+            return ["deck-leave"];
+          }
+          const from = routeRank(fromPath);
+          const to = routeRank(toPath);
+          if (from === to) return [];
+          return to > from ? ["forward"] : ["backward"];
+        },
+      },
 });
 
 declare module "@tanstack/react-router" {

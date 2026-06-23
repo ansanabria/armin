@@ -444,14 +444,14 @@ function DeckTile({
           to="/deck/$deckId"
           params={{ deckId: deck.id }}
           aria-label={`Open deck: ${deck.name}`}
-          className="absolute inset-0 z-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="absolute inset-0 z-10 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         />
-        <div className="pointer-events-none relative z-10 flex flex-1 flex-col">
+        <div className="pointer-events-none relative z-0 flex flex-1 flex-col">
           <div className="flex items-start justify-between gap-2">
             <h2 className="min-w-0 flex-1 font-serif text-lg font-semibold text-ink">
               {deck.name}
             </h2>
-            <div className="pointer-events-auto shrink-0">
+            <div className="pointer-events-auto relative z-20 shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
