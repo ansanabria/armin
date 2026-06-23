@@ -35,12 +35,13 @@ packages.
 Run these before opening a release PR or creating a release tag:
 
 ```bash
-npm run icons
+npm run icons --workspace apps/desktop
 npm run lint
-npm run test
-npm run test:mcp
-npm run test:e2e:build
-npm run test:e2e
+npm run test --workspace apps/desktop
+npm run test:mcp --workspace apps/desktop
+npm run test:e2e:build --workspace apps/desktop
+npm run check:package --workspace apps/desktop
+npm run test:e2e --workspace apps/desktop
 ```
 
 ## Versioning

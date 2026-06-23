@@ -164,7 +164,7 @@ Fast local default for most changes:
 ```bash
 npm run typecheck
 npm run lint
-npm test
+npm run test --workspace apps/desktop
 ```
 
 When main, preload, shared, or Electron packaging changes:
@@ -172,22 +172,24 @@ When main, preload, shared, or Electron packaging changes:
 ```bash
 npm run typecheck
 npm run lint
-npm test
-npm run package
+npm run test --workspace apps/desktop
+npm run package --workspace apps/desktop
+npm run check:package --workspace apps/desktop
 ```
 
 When user journeys, profile windows, import/export dialogs, or Electron wiring
 changes:
 
 ```bash
-npm run test:e2e:build
-npm run test:e2e
+npm run test:e2e:build --workspace apps/desktop
+npm run check:package --workspace apps/desktop
+npm run test:e2e --workspace apps/desktop
 ```
 
 For MCP changes:
 
 ```bash
-npm run test:mcp
+npm run test:mcp --workspace apps/desktop
 ```
 
 Also run relevant service tests when an MCP tool depends on service behavior.

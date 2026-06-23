@@ -17,21 +17,7 @@
     "packages/*"
   ],
   "scripts": {
-    "start": "npm run start --workspace apps/desktop --",
-    "package": "npm run package --workspace apps/desktop --",
-    "make": "npm run make --workspace apps/desktop --",
-    "publish": "npm run publish --workspace apps/desktop --",
-    "mcp": "npm run mcp --workspace apps/desktop --",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspace apps/desktop --",
-    "test:mcp": "npm run test:mcp --workspace apps/desktop --",
-    "test:e2e": "npm run test:e2e --workspace apps/desktop --",
-    "test:e2e:headed": "npm run test:e2e:headed --workspace apps/desktop --",
-    "test:e2e:build": "npm run test:e2e:build --workspace apps/desktop --",
-    "bench:deck": "npm run bench:deck --workspace apps/desktop --",
-    "db:generate": "npm run db:generate --workspace apps/desktop --",
-    "db:studio": "npm run db:studio --workspace apps/desktop --",
-    "icons": "npm run icons --workspace apps/desktop --",
+    "typecheck": "npm run typecheck --workspace apps/desktop --",
     "lint": "eslint --ext .ts,.tsx .",
     "format": "prettier --write ."
   },
