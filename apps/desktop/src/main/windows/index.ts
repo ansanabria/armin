@@ -200,7 +200,6 @@ export async function openMainWindow(profileId: string, profileName?: string) {
   }
 
   const { isMac, isLinux } = shellOptions();
-  const isFirstMainWindow = !hasOpenMainWindows();
 
   const win = new BrowserWindow({
     width: 1200,
@@ -242,10 +241,6 @@ export async function openMainWindow(profileId: string, profileName?: string) {
   loadMain(win);
 
   registerWindowShortcuts(win);
-
-  if (!app.isPackaged && isFirstMainWindow) {
-    win.webContents.openDevTools({ mode: "right" });
-  }
 
   return win;
 }
