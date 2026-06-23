@@ -2,6 +2,8 @@ import * as React from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 
 import { cn } from "@/lib/utils";
+import { Tooltip } from "@/components/ui/tooltip";
+import { useIsTruncated } from "@/components/ui/truncated-label";
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react";
 
 const Select = SelectPrimitive.Root;
@@ -114,21 +116,38 @@ function SelectItem({
   children,
   ...props
 }: SelectPrimitive.Item.Props) {
+  const { ref, truncated } = useIsTruncated<HTMLSpanElement>();
+
+  // Only string labels can be surfaced verbatim in a tooltip when clipped.
+  const tooltipText = typeof children === "string" ? children : undefined;
+
+  const text = (
+    <span ref={ref} className="block min-w-0 truncate">
+      {children}
+    </span>
+  );
+
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "relative flex w-full min-w-0 cursor-pointer items-center gap-1.5 py-1 pr-8 pl-1.5 text-sm outline-hidden select-none focus:bg-surface-sunken focus:text-ink data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        "relative flex w-full min-w-0 cursor-pointer items-center gap-1.5 px-1.5 py-1 text-sm outline-hidden select-none focus:bg-surface-sunken focus:text-ink data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       {...props}
     >
       <SelectPrimitive.ItemText className="flex min-w-0 flex-1 gap-2">
-        <span className="block min-w-0 truncate">{children}</span>
+        {truncated && tooltipText ? (
+          <Tooltip content={tooltipText} side="right">
+            {text}
+          </Tooltip>
+        ) : (
+          text
+        )}
       </SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator
         render={
-          <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />
+          <span className="pointer-events-none flex size-4 shrink-0 items-center justify-center" />
         }
       >
         <CheckIcon className="pointer-events-none" />

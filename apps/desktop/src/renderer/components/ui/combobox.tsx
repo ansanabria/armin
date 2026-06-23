@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Combobox } from "@base-ui/react/combobox";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TruncatedLabel } from "@/components/ui/truncated-label";
 
 export type ComboboxOption = { value: string; label: string };
 
@@ -52,13 +53,15 @@ export function SearchableSelect({
         )}
       >
         <Combobox.Value>
-          {(val: ComboboxOption | null) => (
-            <span
-              className={cn("line-clamp-1 text-left", !val && "text-muted")}
-            >
-              {val ? val.label : placeholder}
-            </span>
-          )}
+          {(val: ComboboxOption | null) =>
+            val ? (
+              <TruncatedLabel label={val.label} />
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-left text-muted">
+                {placeholder}
+              </span>
+            )
+          }
         </Combobox.Value>
         <Combobox.Icon className="flex">
           <ChevronDown className="pointer-events-none size-4 shrink-0 text-muted" />
@@ -87,12 +90,12 @@ export function SearchableSelect({
                 <Combobox.Item
                   key={item.value}
                   value={item}
-                  className="relative flex w-full cursor-pointer items-center gap-1.5 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-none select-none data-[highlighted]:bg-surface-sunken data-[highlighted]:text-ink"
+                  className="relative flex w-full cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1.5 text-sm outline-none select-none data-[highlighted]:bg-surface-sunken data-[highlighted]:text-ink"
                 >
-                  <Combobox.ItemIndicator className="absolute right-2 flex size-4 items-center justify-center">
+                  <TruncatedLabel label={item.label} side="right" />
+                  <Combobox.ItemIndicator className="flex size-4 shrink-0 items-center justify-center">
                     <Check className="size-4" />
                   </Combobox.ItemIndicator>
-                  <span className="line-clamp-1">{item.label}</span>
                 </Combobox.Item>
               )}
             </Combobox.List>
@@ -161,15 +164,13 @@ export function SearchableMultiSelect({
           className,
         )}
       >
-        <span
-          className={cn(
-            "line-clamp-1 text-left",
-            selected.length === 0 && "text-muted",
-          )}
-          title={selected.length > 0 ? triggerLabel : undefined}
-        >
-          {triggerLabel}
-        </span>
+        {selected.length === 0 ? (
+          <span className="min-w-0 flex-1 truncate text-left text-muted">
+            {triggerLabel}
+          </span>
+        ) : (
+          <TruncatedLabel label={triggerLabel} />
+        )}
         <Combobox.Icon className="flex">
           <ChevronDown className="pointer-events-none size-4 shrink-0 text-muted" />
         </Combobox.Icon>
@@ -197,12 +198,12 @@ export function SearchableMultiSelect({
                 <Combobox.Item
                   key={item.value}
                   value={item}
-                  className="relative flex w-full cursor-pointer items-center gap-1.5 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-none select-none data-[highlighted]:bg-surface-sunken data-[highlighted]:text-ink"
+                  className="relative flex w-full cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1.5 text-sm outline-none select-none data-[highlighted]:bg-surface-sunken data-[highlighted]:text-ink"
                 >
-                  <Combobox.ItemIndicator className="absolute right-2 flex size-4 items-center justify-center">
+                  <TruncatedLabel label={item.label} side="right" />
+                  <Combobox.ItemIndicator className="flex size-4 shrink-0 items-center justify-center">
                     <Check className="size-4" />
                   </Combobox.ItemIndicator>
-                  <span className="line-clamp-1">{item.label}</span>
                 </Combobox.Item>
               )}
             </Combobox.List>
