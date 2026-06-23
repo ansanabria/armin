@@ -87,6 +87,7 @@ async function createDeck(page: Page, name: string, description?: string) {
     .getByRole("button", { name: "Create deck" })
     .dispatchEvent("click");
   await expect(dialog).toBeHidden();
+  await page.waitForTimeout(300);
 
   await expect(page.getByRole("link", { name })).toBeVisible();
   const deckId = await page.evaluate(async (deckName) => {
@@ -98,7 +99,11 @@ async function createDeck(page: Page, name: string, description?: string) {
 }
 
 async function openDeck(page: Page, name: string) {
-  await page.getByRole("link", { name }).first().dispatchEvent("click");
+  const deckLink = page
+    .getByRole("link", { name: `Open deck: ${name}` })
+    .first();
+  await deckLink.focus();
+  await page.keyboard.press("Enter");
   await expect(page.getByText("All decks")).toBeVisible();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
 }

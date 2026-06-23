@@ -146,7 +146,7 @@ export function Dialog({
       <div
         className={cn(
           "absolute inset-0 cursor-pointer bg-bg/90",
-          exiting ? "animate-fade-out" : "animate-fade-in",
+          exiting ? "pointer-events-none animate-fade-out" : "animate-fade-in",
         )}
         onClick={onClose}
         aria-hidden
