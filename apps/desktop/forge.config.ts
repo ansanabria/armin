@@ -11,6 +11,11 @@ import { MakerAppImage } from "@reforged/maker-appimage";
 
 const prerelease = process.env.RELEASE_PRERELEASE !== "false";
 
+// The native runtime dependency closure: better-sqlite3 plus its two pure-JS
+// deps. Both the asar `ignore` keep-list and the `packageAfterCopy` hook derive
+// from this single list so the packaged set stays in sync.
+const runtimeNativeModules = ["better-sqlite3", "bindings", "file-uri-to-path"];
+
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
@@ -26,9 +31,7 @@ const config: ForgeConfig = {
       const keep = [
         "/.vite",
         "/drizzle",
-        "/node_modules/better-sqlite3",
-        "/node_modules/bindings",
-        "/node_modules/file-uri-to-path",
+        ...runtimeNativeModules.map((name) => `/node_modules/${name}`),
       ];
       return !keep.some(
         (prefix) => file === prefix || file.startsWith(`${prefix}/`),
@@ -119,11 +122,6 @@ const config: ForgeConfig = {
     // AutoUnpackNatives plugin then extracts the .node from the asar. require
     // resolution finds them whether they are hoisted to root or installed local.
     packageAfterCopy: async (_config, buildPath) => {
-      const runtimeNativeModules = [
-        "better-sqlite3",
-        "bindings",
-        "file-uri-to-path",
-      ];
       for (const name of runtimeNativeModules) {
         const src = path.dirname(require.resolve(`${name}/package.json`));
         const dest = path.join(buildPath, "node_modules", name);
