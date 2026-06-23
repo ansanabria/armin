@@ -7,6 +7,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CramSession, type CramMode } from "@/components/cram-session";
 import { cramKeys, deckKeys, flashcardKeys } from "@/lib/armin-query";
+import { withViewTransition } from "@/lib/view-transition";
 import { toUiReviewUnit } from "@/types/view-models";
 import type { CramCombine } from "../../main/services/cram";
 import { cn } from "@/lib/utils";
@@ -196,7 +197,10 @@ export default function CramPage() {
         }
         doneAction={
           <div className="flex flex-wrap justify-center gap-2">
-            <Button variant="outline" onClick={() => setScope(null)}>
+            <Button
+              variant="outline"
+              onClick={() => withViewTransition(() => setScope(null))}
+            >
               Change scope
             </Button>
             <Link to="/">
@@ -224,12 +228,14 @@ export default function CramPage() {
   };
 
   const start = () =>
-    setScope({
-      deckIds: selectedDeckIds,
-      tags: selectedTags,
-      combine,
-      mode,
-    });
+    withViewTransition(() =>
+      setScope({
+        deckIds: selectedDeckIds,
+        tags: selectedTags,
+        combine,
+        mode,
+      }),
+    );
 
   return (
     <div className="mx-auto max-w-2xl">
