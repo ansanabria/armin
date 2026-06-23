@@ -7,7 +7,7 @@ databases by running the SQL files in `drizzle/` with Drizzle's SQLite migrator.
 
 1. Update the current schema in `src/main/db/schema.ts`.
 2. Generate a descriptively named migration for ordinary schema changes:
-   `npm run db:generate -- --name=<descriptive_snake_case_name>`.
+   `npm run db:generate --workspace apps/desktop -- --name=<descriptive_snake_case_name>`.
 3. Review the generated SQL before committing it.
 4. Commit Drizzle's generated snapshot and journal changes with the SQL whenever
    `drizzle-kit generate` creates them.
@@ -16,10 +16,11 @@ databases by running the SQL files in `drizzle/` with Drizzle's SQLite migrator.
    user history that generated DDL would lose.
 6. Add an isolated old-shape migration test for every hand-authored or materially
    hand-edited migration.
-7. Run `npm run typecheck`, `npm run lint`, and `npm test`.
+7. Run `npm run typecheck`, `npm run lint`, and `npm run test --workspace apps/desktop`.
 
 When a change touches migration discovery, packaging, or the bundled `drizzle/`
-folder, also run `npm run package`.
+folder, also run `npm run package --workspace apps/desktop` and
+`npm run check:package --workspace apps/desktop`.
 
 Agents may edit generated SQL directly when the semantic mapping is obvious from
 the code and domain model. If the mapping is ambiguous, ask before writing the
@@ -49,17 +50,17 @@ generated.
 
 Migration names should always describe the schema or data change. Use snake_case
 names, not generated fantasy names. Agents must pass `--name` when running
-`npm run db:generate`, for example:
+`npm run db:generate --workspace apps/desktop`, for example:
 
 ```bash
-npm run db:generate -- --name=add_deck_scheduling_overrides
+npm run db:generate --workspace apps/desktop -- --name=add_deck_scheduling_overrides
 ```
 
 For custom manual migrations, use Drizzle's custom migration generation with a
 descriptive name:
 
 ```bash
-npm run db:generate -- --custom --name=backfill_flashcard_content
+npm run db:generate --workspace apps/desktop -- --custom --name=backfill_flashcard_content
 ```
 
 Backup and restore compatibility also uses the journal entry count as the local

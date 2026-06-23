@@ -20,7 +20,9 @@ Consequences: the entire desktop app moved from the repo root into `apps/desktop
 with all Forge/Vite/Drizzle/test path references updated. Documentation became
 multi-context: a root `CONTEXT-MAP.md` indexes per-context `CONTEXT.md` and
 `docs/adr/`; the study glossary and its 12 ADRs moved under `apps/desktop`;
-system-wide decisions live in root `docs/adr/`. Root convenience scripts (`start`,
-`test`, `lint`, `typecheck`, `package`) delegate to `apps/desktop`.
+system-wide decisions live in root `docs/adr/`. Root scripts stay repo-wide;
+project-specific scripts such as Electron packaging, E2E, database generation,
+icons, and MCP live in `apps/desktop/package.json` and are invoked with npm's
+`--workspace apps/desktop` flag from the repo root when needed.
 `apps/sync-server` and `packages/sync-contract` exist as empty placeholders; the
 `apps/*` and `packages/*` globs absorb future workspaces automatically.

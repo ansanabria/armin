@@ -25,8 +25,11 @@ exists specifically to strip those ~35 packages. The cost is that the three-item
 list is a manual snapshot of `better-sqlite3`'s runtime closure: if a future
 `better-sqlite3` release changes its runtime deps, the list goes stale and the
 packaged app fails at first database open — a failure that only surfaces in
-packaged builds, not in dev. The packaged E2E run is the backstop, since it opens
-a Profile database against the real packaged app.
+packaged builds, not in dev. Static packaged-artifact checks are the native
+packaging backstop: they assert the app bundle contains the expected migrations
+and only the curated native runtime modules, with `better-sqlite3`'s `.node`
+files unpacked outside the asar. User-flow E2E remains focused on Electron,
+preload, IPC, renderer, and SQLite service wiring.
 
 We evaluated eliminating the native module entirely via Node's built-in
 `node:sqlite`. The runtime is ready — Electron 41 (Node 24) exposes `node:sqlite`

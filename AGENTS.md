@@ -19,7 +19,7 @@ System-wide decisions live in the root `docs/adr/`. See `docs/agents/domain.md`.
 ## Notes
 
 - The project context is described in @README.md . Always read the file when starting a new session.
-- The repository is a monorepo: the desktop app lives in `apps/desktop/`, with placeholders for `apps/sync-server/` and `packages/sync-contract/`. Common commands (`start`, `test`, `typecheck`, `package`, `lint`) run from the repo root and delegate to `apps/desktop`.
+- The repository is a monorepo: the desktop app lives in `apps/desktop/`, with placeholders for `apps/sync-server/` and `packages/sync-contract/`. Keep project-specific scripts in each workspace package; from the repo root, run desktop commands with `--workspace apps/desktop`.
 - Testing philosophy and validation tiers are described in @apps/desktop/docs/testing.md . Read it before adding or changing tests.
 - Migration workflow is described in @apps/desktop/docs/migrations.md . Read it before changing @apps/desktop/src/main/db/schema.ts or files under @apps/desktop/drizzle/ .
 - Migration names must be descriptive. Pass a snake_case `--name` to Drizzle instead of accepting generated fantasy names.

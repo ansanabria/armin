@@ -98,14 +98,14 @@ jobs:
         run: npm ci
 
       - name: Build icons
-        run: npm run icons
+        run: npm run icons --workspace apps/desktop
 
       - name: Record publish start time
         shell: bash
         run: echo "PUBLISH_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Publish artifacts
-        run: npm run publish
+        run: npm run publish --workspace apps/desktop
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
