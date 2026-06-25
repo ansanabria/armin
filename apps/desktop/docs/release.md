@@ -52,8 +52,11 @@ Use semver with at most one prerelease suffix:
 - Official beta: `0.2.0-beta`, tagged as `v0.2.0-beta`.
 - Official stable: `0.2.0`, tagged as `v0.2.0`.
 
-Bump the semver (`MAJOR.MINOR.PATCH`) for each release. Do not append numeric
-prerelease suffixes such as `0.2.0-alpha.1` or `0.2.0-beta.1`.
+Bump the `MAJOR.MINOR.PATCH` base version for each new set of changes. A single
+base version is shared across its prerelease stages: `0.3.0-alpha` (dogfood) and
+`0.3.0-beta` (official prerelease) both carry the `0.3.0` base before the `0.3.0`
+stable release. Do not append numeric prerelease suffixes such as `0.3.0-alpha.1`
+or `0.3.0-beta.1`.
 
 Include the `package.json` version bump in the PR from `development` to `master`
 when possible, so the merged commit and release tag are traceable together.
