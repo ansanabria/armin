@@ -4,6 +4,12 @@ Armin is a local-first, spaced-repetition flashcard app for desktop. It's built 
 
 For more on the philosophy of what inspired this type of thinking, read this Justin Skycak's article on [learning prerequisites](https://www.justinmath.com/the-importance-of-learning-your-prerequisites/).
 
+<!-- Visuals: add a screenshot/GIF of the review flow and the prerequisite graph,
+     then uncomment the lines below. See docs/assets/README.md for guidance.
+![Armin review session](docs/assets/review.png)
+![Armin prerequisite graph](docs/assets/graph.png)
+-->
+
 ## What it is
 
 A desktop study app where you create decks and cards (like Anki), connect cards by
@@ -116,4 +122,12 @@ and validation commands used in this codebase.
 
 ## Contributions
 
-I'm not accepting contributions at the moment. If you try the app and find issues, file them in the Issues tab.
+Bug reports and feature requests are very welcome — file them in the
+[Issues tab](https://github.com/ansanabria/armin/issues). They're the most useful
+thing you can send at this stage.
+
+Code pull requests aren't being accepted yet: the domain model and internal
+contracts are still moving quickly. This will open up as the project stabilizes.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details, and
+[SECURITY.md](SECURITY.md) to report a vulnerability privately. Participation is
+governed by our [Code of Conduct](CODE_OF_CONDUCT.md).

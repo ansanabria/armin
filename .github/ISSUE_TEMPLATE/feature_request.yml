@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an idea or improvement for Armin
+labels: ["needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. Note that code pull requests aren't being accepted yet
+        (see [CONTRIBUTING.md](https://github.com/ansanabria/armin/blob/master/CONTRIBUTING.md));
+        opening an issue is the right way to propose a change.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the need, not just a proposed solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+      description: Your idea for how Armin could address it.
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+      description: Anything you've tried or considered.
+    validations:
+      required: false

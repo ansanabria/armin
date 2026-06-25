@@ -98,6 +98,8 @@ out/
 .cursor/
 .opencode/
 .claude/worktrees/
+.impeccable/
+.agents/skills/impeccable/
 
 # Production build
 dist/
