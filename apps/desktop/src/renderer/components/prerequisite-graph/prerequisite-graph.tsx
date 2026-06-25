@@ -807,7 +807,7 @@ function PrerequisiteGraphCanvas({
                       </button>
                     )}
                   </div>
-                  <div className="max-h-64 overflow-y-auto">
+                  <div className="armin-scrollbar max-h-64 overflow-y-auto">
                     {decks.map((deck) => (
                       <DropdownMenuCheckboxItem
                         key={deck.id}
