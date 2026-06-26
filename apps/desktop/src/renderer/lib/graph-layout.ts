@@ -15,10 +15,22 @@ type Placed<T extends Record<string, unknown>> = {
   position: { x: number; y: number };
 };
 
-/** Group node ids into connected components, treating edges as undirected. */
-function connectedComponents(nodeIds: string[], edges: Edge[]): string[][] {
+type Component<T extends Record<string, unknown>> = {
+  nodes: Node<T>[];
+  edges: Edge[];
+};
+
+/** Group nodes into connected components, treating edges as undirected. */
+function connectedComponents<T extends Record<string, unknown>>(
+  nodes: Node<T>[],
+  edges: Edge[],
+): Component<T>[] {
   const parent = new Map<string, string>();
-  for (const id of nodeIds) parent.set(id, id);
+  const nodeById = new Map<string, Node<T>>();
+  for (const node of nodes) {
+    parent.set(node.id, node.id);
+    nodeById.set(node.id, node);
+  }
 
   const find = (id: string): string => {
     let root = id;
@@ -45,12 +57,18 @@ function connectedComponents(nodeIds: string[], edges: Edge[]): string[][] {
     }
   }
 
-  const groups = new Map<string, string[]>();
-  for (const id of nodeIds) {
+  const groups = new Map<string, Component<T>>();
+  for (const node of nodes) {
+    const id = node.id;
     const root = find(id);
     const group = groups.get(root);
-    if (group) group.push(id);
-    else groups.set(root, [id]);
+    if (group) group.nodes.push(node);
+    else groups.set(root, { nodes: [node], edges: [] });
+  }
+
+  for (const edge of edges) {
+    if (!nodeById.has(edge.source) || !nodeById.has(edge.target)) continue;
+    groups.get(find(edge.source))?.edges.push(edge);
   }
 
   return [...groups.values()];
@@ -61,6 +79,14 @@ function layoutComponent<T extends Record<string, unknown>>(
   nodes: Node<T>[],
   edges: Edge[],
 ): { placements: Placed<T>[]; width: number; height: number } {
+  if (nodes.length === 1 && edges.length === 0) {
+    return {
+      placements: [{ node: nodes[0], position: { x: 0, y: 0 } }],
+      width: CARD_NODE_WIDTH,
+      height: CARD_NODE_HEIGHT,
+    };
+  }
+
   const g = new graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({ rankdir: "TB", nodesep: NODE_SEP, ranksep: RANK_SEP });
@@ -110,17 +136,9 @@ export function layoutGraph<T extends Record<string, unknown>>(
 ): { nodes: Node<T>[]; edges: Edge[] } {
   if (nodes.length === 0) return { nodes, edges };
 
-  const nodeIds = nodes.map((n) => n.id);
-  const components = connectedComponents(nodeIds, edges);
-
-  const laidOut = components.map((ids) => {
-    const idSet = new Set(ids);
-    const subNodes = nodes.filter((n) => idSet.has(n.id));
-    const subEdges = edges.filter(
-      (e) => idSet.has(e.source) && idSet.has(e.target),
-    );
-    return layoutComponent(subNodes, subEdges);
-  });
+  const laidOut = connectedComponents(nodes, edges).map((component) =>
+    layoutComponent(component.nodes, component.edges),
+  );
 
   // Pack components into rows, wrapping once a row exceeds a target width that
   // keeps the overall arrangement roughly square.

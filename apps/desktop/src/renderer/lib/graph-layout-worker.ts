@@ -8,17 +8,18 @@ export type GraphLayoutWorkerNode = {
 };
 
 export type GraphLayoutWorkerEdge = {
-  id: string;
   source: string;
   target: string;
 };
 
 export type GraphLayoutWorkerRequest = {
+  requestId: number;
   nodes: GraphLayoutWorkerNode[];
   edges: GraphLayoutWorkerEdge[];
 };
 
 export type GraphLayoutWorkerResponse = {
+  requestId: number;
   placements: { flashcardId: string; x: number; y: number }[];
   timing: { startedAt: number; finishedAt: number; durationMs: number };
 };
@@ -37,7 +38,7 @@ export function computeGraphLayoutResponse(
     }),
   );
   const flowEdges: Edge[] = request.edges.map((edge) => ({
-    id: edge.id,
+    id: `${edge.source}-${edge.target}`,
     source: edge.source,
     target: edge.target,
   }));
@@ -48,6 +49,7 @@ export function computeGraphLayoutResponse(
   const finishedAt = now();
 
   return {
+    requestId: request.requestId,
     placements: nodes
       .filter((node) => unplacedIds.has(node.id))
       .map((node) => ({

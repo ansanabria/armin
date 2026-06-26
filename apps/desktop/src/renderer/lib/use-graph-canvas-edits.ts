@@ -91,7 +91,11 @@ export function useGraphCanvasEdits({
           [card.id]: pendingPlacement,
         }));
         saveLayout.mutate([
-          { flashcardId: card.id, x: pendingPlacement.x, y: pendingPlacement.y },
+          {
+            flashcardId: card.id,
+            x: pendingPlacement.x,
+            y: pendingPlacement.y,
+          },
         ]);
       }
       if (pendingConnectFrom) {
@@ -143,11 +147,14 @@ export function useGraphCanvasEdits({
     const previous = graph;
     setGraph(next);
 
+    const previousNodeById = new Map(
+      previous.nodes.map((node) => [node.id, node]),
+    );
     const previousNodeIds = new Set(previous.nodes.map((node) => node.id));
     const nextNodeIds = new Set(next.nodes.map((node) => node.id));
     for (const nodeId of previousNodeIds) {
       if (!nextNodeIds.has(nodeId)) {
-        const deckId = previous.nodes.find((node) => node.id === nodeId)?.deckId;
+        const deckId = previousNodeById.get(nodeId)?.deckId;
         deleteCard.mutate({ id: nodeId, deckId });
       }
     }

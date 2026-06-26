@@ -22,6 +22,12 @@ export const EDGE_MARKER_END_ACCENT = {
   color: "var(--color-accent)",
 } as const;
 
+export type EdgeEmphasis = "active" | "dimmed" | null;
+
+export type GraphFlowEdgeData = { emphasis: EdgeEmphasis };
+
+export type GraphFlowEdge = Edge<GraphFlowEdgeData>;
+
 export function makeFlowEdge(prereqId: string, dependentId: string): Edge {
   return {
     id: `${prereqId}-${dependentId}`,
@@ -33,25 +39,31 @@ export function makeFlowEdge(prereqId: string, dependentId: string): Edge {
       stroke: EDGE_STROKE,
       strokeWidth: 1.5,
     },
-  } as Edge;
+    data: { emphasis: null },
+  } as GraphFlowEdge;
 }
-
-export type EdgeEmphasis = "active" | "dimmed" | null;
 
 /**
  * Restyle an edge for the selection lens: edges incident to the selected node
  * paint accent, the rest fade back. Returns a new edge so React Flow re-renders.
  */
 export function styleEdgeForEmphasis(edge: Edge, emphasis: EdgeEmphasis): Edge {
+  if (
+    (edge.data as Partial<GraphFlowEdgeData> | undefined)?.emphasis === emphasis
+  ) {
+    return edge;
+  }
   if (emphasis === "active") {
     return {
       ...edge,
+      data: { ...edge.data, emphasis },
       markerEnd: EDGE_MARKER_END_ACCENT,
       style: { stroke: EDGE_STROKE_ACCENT, strokeWidth: 2 },
     };
   }
   return {
     ...edge,
+    data: { ...edge.data, emphasis },
     markerEnd: EDGE_MARKER_END,
     style: {
       stroke: EDGE_STROKE,
@@ -133,11 +145,18 @@ export function refreshNodeData(
   edges: UiDeckGraph["edges"],
 ): CardFlowNode[] {
   const incidentNodeIds = incidentNodeIdsOf(edges);
-  return nodes.map((node) => ({
-    ...node,
-    data: {
-      ...node.data,
-      isIsolated: !incidentNodeIds.has(node.id),
-    },
-  }));
+  let changed = false;
+  const nextNodes = nodes.map((node) => {
+    const isIsolated = !incidentNodeIds.has(node.id);
+    if (node.data.isIsolated === isIsolated) return node;
+    changed = true;
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        isIsolated,
+      },
+    };
+  });
+  return changed ? nextNodes : nodes;
 }
