@@ -501,6 +501,7 @@ export async function getDeckGraph(
     .where(eq(flashcards.deckId, deckId))
     .all();
   const ids = deckFlashcards.map((n) => n.id);
+  const idSet = new Set(ids);
 
   const stateRows = ids.length
     ? db
@@ -521,16 +522,15 @@ export async function getDeckGraph(
   }
 
   const edges = ids.length
-    ? (
-        db
-          .select({
-            prereqId: flashcardPrereqs.prereqId,
-            dependentId: flashcardPrereqs.dependentId,
-          })
-          .from(flashcardPrereqs)
-          .where(inArray(flashcardPrereqs.dependentId, ids))
-          .all()
-      ).filter((e) => ids.includes(e.prereqId))
+    ? db
+        .select({
+          prereqId: flashcardPrereqs.prereqId,
+          dependentId: flashcardPrereqs.dependentId,
+        })
+        .from(flashcardPrereqs)
+        .where(inArray(flashcardPrereqs.dependentId, ids))
+        .all()
+        .filter((e) => idSet.has(e.prereqId))
     : [];
 
   const nodes = deckFlashcards.map((flashcard) => {

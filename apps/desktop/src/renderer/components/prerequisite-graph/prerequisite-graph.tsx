@@ -34,7 +34,11 @@ import {
   X,
 } from "lucide-react";
 import type { UiDeckGraph } from "@/types/view-models";
-import { wouldCreateCycle } from "@/lib/graph-cycle";
+import {
+  createGraphCycleIndex,
+  graphEdgeKey,
+  wouldCreateCycleIndexed,
+} from "@/lib/graph-cycle";
 import {
   EDGE_MARKER_END,
   EDGE_STROKE,
@@ -106,31 +110,6 @@ type PrerequisiteGraphProps = {
   onViewportChange?: (viewport: Viewport) => void;
   onReady?: () => void;
 };
-
-/**
- * Decide how each node reads against the current selection + search lens.
- * Selection wins: a selected card and its direct neighbors stay lit even when a
- * search would otherwise dim them, so connections are always legible. Otherwise
- * a node is dimmed only when it falls outside an active search.
- */
-function nodeEmphasisFor(
-  node: UiDeckGraph["nodes"][number],
-  opts: {
-    selectedId: string | null;
-    neighborIds: Set<string>;
-    query: string;
-  },
-): NodeEmphasis {
-  const { selectedId, neighborIds, query } = opts;
-  if (selectedId) {
-    if (node.id === selectedId) return "active";
-    if (neighborIds.has(node.id)) return "connected";
-    return "dimmed";
-  }
-  if (query === "") return null;
-  const inScope = `${node.front} ${node.back}`.toLowerCase().includes(query);
-  return inScope ? null : "dimmed";
-}
 
 function savedPositionsOf(graph: UiDeckGraph): Map<string, XYPosition> {
   const map = new Map<string, XYPosition>();
@@ -320,6 +299,8 @@ function PrerequisiteGraphCanvas({
   const didSyncEdges = useRef(false);
   const didSyncNodeData = useRef(false);
   const backgroundLaidOutIds = useRef(new Set<string>());
+  const layoutWorker = useRef<Worker | null>(null);
+  const layoutRequestId = useRef(0);
   const cancelReadySignal = useRef<(() => void) | null>(null);
   const [menu, setMenu] = useState<MenuState>(null);
   const [connectMenu, setConnectMenu] = useState<ConnectMenuState>(null);
@@ -367,6 +348,8 @@ function PrerequisiteGraphCanvas({
   useEffect(
     () => () => {
       cancelReadySignal.current?.();
+      layoutWorker.current?.terminate();
+      layoutWorker.current = null;
     },
     [],
   );
@@ -374,6 +357,10 @@ function PrerequisiteGraphCanvas({
   const nodeById = useMemo(
     () => new Map(graph.nodes.map((n) => [n.id, n])),
     [graph.nodes],
+  );
+  const graphIndex = useMemo(
+    () => createGraphCycleIndex(graph.edges),
+    [graph.edges],
   );
 
   // Incrementally add/remove nodes as the underlying deck changes, preserving
@@ -390,10 +377,11 @@ function PrerequisiteGraphCanvas({
     );
 
     if (removed.length > 0) {
-      setNodes((current) => current.filter((n) => !removed.includes(n.id)));
+      const removedIds = new Set(removed);
+      setNodes((current) => current.filter((n) => !removedIds.has(n.id)));
       setEdges((current) =>
         current.filter(
-          (e) => !removed.includes(e.source) && !removed.includes(e.target),
+          (e) => !removedIds.has(e.source) && !removedIds.has(e.target),
         ),
       );
     }
@@ -451,7 +439,10 @@ function PrerequisiteGraphCanvas({
       const additions = graph.edges
         .filter((e) => !currentIds.has(`${e.prereqId}-${e.dependentId}`))
         .map((e) => makeFlowEdge(e.prereqId, e.dependentId));
-      return additions.length > 0 ? [...kept, ...additions] : kept;
+      if (additions.length === 0 && kept.length === current.length) {
+        return current;
+      }
+      return [...kept, ...additions];
     });
   }, [graph.edges, setEdges]);
 
@@ -460,27 +451,42 @@ function PrerequisiteGraphCanvas({
       didSyncNodeData.current = true;
       return;
     }
-    setNodes((current) =>
-      refreshNodeData(
-        current.map((node) => {
-          const source = nodeById.get(node.id);
-          if (!source) return node;
-          return {
-            ...node,
-            data: {
-              front: graphNodePreview(source.front),
-              back: graphNodePreview(source.back),
-              type: source.type,
-              state: source.state,
-              locked: source.locked,
-              isIsolated: node.data.isIsolated,
-              emphasis: node.data.emphasis,
-            },
-          };
-        }),
+    setNodes((current) => {
+      let changed = false;
+      const updated = current.map((node) => {
+        const source = nodeById.get(node.id);
+        if (!source) return node;
+        const front = graphNodePreview(source.front);
+        const back = graphNodePreview(source.back);
+        if (
+          node.data.front === front &&
+          node.data.back === back &&
+          node.data.type === source.type &&
+          node.data.state === source.state &&
+          node.data.locked === source.locked
+        ) {
+          return node;
+        }
+        changed = true;
+        return {
+          ...node,
+          data: {
+            front,
+            back,
+            type: source.type,
+            state: source.state,
+            locked: source.locked,
+            isIsolated: node.data.isIsolated,
+            emphasis: node.data.emphasis,
+          },
+        };
+      });
+      const withIsolation = refreshNodeData(
+        changed ? updated : current,
         graph.edges,
-      ),
-    );
+      );
+      return changed || withIsolation !== current ? withIsolation : current;
+    });
   }, [graph.edges, nodeById, setNodes]);
   const query = search.trim().toLowerCase();
 
@@ -503,29 +509,36 @@ function PrerequisiteGraphCanvas({
     if (unplacedIds.length === 0) return;
 
     let cancelled = false;
-    let worker: Worker | null = null;
     const cancelScheduled = scheduleGraphWork(() => {
       if (cancelled) return;
       markGraphPerf("backgroundLayout:start");
-      worker = new Worker(
-        new URL("../../lib/graph-layout.worker.ts", import.meta.url),
-        { type: "module" },
-      );
+      const worker =
+        layoutWorker.current ??
+        new Worker(
+          new URL("../../lib/graph-layout.worker.ts", import.meta.url),
+          {
+            type: "module",
+          },
+        );
+      layoutWorker.current = worker;
+      const requestId = ++layoutRequestId.current;
       const request: GraphLayoutWorkerRequest = {
+        requestId,
         nodes: nodesRef.current.map((node) => ({
           id: node.id,
           position: node.position,
           placed: placedIds.has(node.id),
         })),
         edges: graph.edges.map((edge) => ({
-          id: `${edge.prereqId}-${edge.dependentId}`,
           source: edge.prereqId,
           target: edge.dependentId,
         })),
       };
 
       worker.onmessage = (event: MessageEvent<GraphLayoutWorkerResponse>) => {
-        if (cancelled) return;
+        if (cancelled || event.data.requestId !== layoutRequestId.current) {
+          return;
+        }
         const placements = event.data.placements;
         if (placements.length > 0) {
           for (const placement of placements) {
@@ -550,13 +563,11 @@ function PrerequisiteGraphCanvas({
           "backgroundLayout:start",
           "backgroundLayout:end",
         );
-        worker?.terminate();
-        worker = null;
       };
 
       worker.onerror = () => {
-        worker?.terminate();
-        worker = null;
+        worker.terminate();
+        if (layoutWorker.current === worker) layoutWorker.current = null;
       };
 
       worker.postMessage(request);
@@ -565,7 +576,6 @@ function PrerequisiteGraphCanvas({
     return () => {
       cancelled = true;
       cancelScheduled();
-      worker?.terminate();
     };
   }, [
     graph.edges,
@@ -587,53 +597,76 @@ function PrerequisiteGraphCanvas({
         if (e.dependentId === selectedId) neighborIds.add(e.prereqId);
       }
     }
+    const searchMatches = new Map<string, boolean>();
+    if (query !== "") {
+      for (const node of graph.nodes) {
+        searchMatches.set(
+          node.id,
+          `${node.front} ${node.back}`.toLowerCase().includes(query),
+        );
+      }
+    }
 
-    setNodes((current) =>
-      current.map((node) => {
+    setNodes((current) => {
+      let changed = false;
+      const nextNodes = current.map((node) => {
         const source = nodeById.get(node.id);
         if (!source) return node;
-        const emphasis = nodeEmphasisFor(source, {
-          selectedId,
-          neighborIds,
-          query,
-        });
+        let emphasis: NodeEmphasis;
+        if (selectedId) {
+          if (source.id === selectedId) emphasis = "active";
+          else if (neighborIds.has(source.id)) emphasis = "connected";
+          else emphasis = "dimmed";
+        } else if (query === "" || searchMatches.get(source.id)) {
+          emphasis = null;
+        } else {
+          emphasis = "dimmed";
+        }
         if (node.data.emphasis === emphasis) return node;
+        changed = true;
         return { ...node, data: { ...node.data, emphasis } };
-      }),
-    );
+      });
+      return changed ? nextNodes : current;
+    });
 
     const lensActive = query !== "";
     const inScope = (id: string) => {
-      const n = nodeById.get(id);
-      return (
-        !!n &&
-        nodeEmphasisFor(n, {
-          selectedId: null,
-          neighborIds,
-          query,
-        }) === null
-      );
+      if (!nodeById.has(id)) return false;
+      return query === "" || searchMatches.get(id) === true;
     };
-    setEdges((current) =>
-      current.map((edge) => {
+    setEdges((current) => {
+      let changed = false;
+      const nextEdges = current.map((edge) => {
+        let next: Edge;
         if (selectedId) {
-          return styleEdgeForEmphasis(
+          next = styleEdgeForEmphasis(
             edge,
             edge.source === selectedId || edge.target === selectedId
               ? "active"
               : "dimmed",
           );
-        }
-        if (lensActive) {
-          return styleEdgeForEmphasis(
+        } else if (lensActive) {
+          next = styleEdgeForEmphasis(
             edge,
             inScope(edge.source) && inScope(edge.target) ? null : "dimmed",
           );
+        } else {
+          next = styleEdgeForEmphasis(edge, null);
         }
-        return styleEdgeForEmphasis(edge, null);
-      }),
-    );
-  }, [selectedId, query, nodeById, graph.edges, setNodes, setEdges]);
+        if (next !== edge) changed = true;
+        return next;
+      });
+      return changed ? nextEdges : current;
+    });
+  }, [
+    selectedId,
+    query,
+    nodeById,
+    graph.nodes,
+    graph.edges,
+    setNodes,
+    setEdges,
+  ]);
 
   const onSelectionChange: OnSelectionChangeFunc = useCallback(
     ({ nodes: selectedNodes }) => {
@@ -683,16 +716,12 @@ function PrerequisiteGraphCanvas({
     (connection) => {
       const { source, target } = connection;
       if (!source || !target || source === target) return false;
-      if (
-        graph.edges.some(
-          (e) => e.prereqId === source && e.dependentId === target,
-        )
-      ) {
+      if (graphIndex.edgeKeys.has(graphEdgeKey(source, target))) {
         return false;
       }
-      return !wouldCreateCycle(graph.edges, source, target);
+      return !wouldCreateCycleIndexed(graphIndex, source, target);
     },
-    [graph.edges],
+    [graphIndex],
   );
 
   const onConnect = useCallback(
@@ -705,15 +734,11 @@ function PrerequisiteGraphCanvas({
         return;
       }
 
-      if (
-        graph.edges.some(
-          (e) => e.prereqId === source && e.dependentId === target,
-        )
-      ) {
+      if (graphIndex.edgeKeys.has(graphEdgeKey(source, target))) {
         return;
       }
 
-      if (wouldCreateCycle(graph.edges, source, target)) {
+      if (wouldCreateCycleIndexed(graphIndex, source, target)) {
         onConnectError?.("That link would create a cycle.");
         return;
       }
@@ -722,7 +747,7 @@ function PrerequisiteGraphCanvas({
       setEdges((current) => addEdge(flowEdge, current));
       syncEdges([...graph.edges, { prereqId: source, dependentId: target }]);
     },
-    [graph, onConnectError, setEdges, syncEdges],
+    [graph, graphIndex, onConnectError, setEdges, syncEdges],
   );
 
   const onConnectStart: OnConnectStart = useCallback((_, params) => {
