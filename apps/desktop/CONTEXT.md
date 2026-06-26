@@ -12,9 +12,10 @@ can copy, move, or delete. Multiple profiles can be open at once.
 _Avoid_: Account, user, login
 
 **Deck**:
-A named collection of flashcards used to organize material. Decks group and
-label; they do not bound the prerequisite graph.
-_Avoid_: Course, folder, set
+A named, isolated study space for a set of flashcards and their prerequisite
+relationships. A flashcard's prerequisites and dependents belong to the same
+deck.
+_Avoid_: Course, folder, set, label
 
 **Flashcard**:
 The authored unit a user creates and edits. It owns the content, tags,
@@ -39,7 +40,7 @@ _Avoid_: Child, subcard
 
 **Prerequisite graph**:
 The directed knowledge structure formed by prerequisite relationships between
-flashcards. Intended to span decks; currently constrained to a single deck.
+flashcards within a deck.
 _Avoid_: Tree
 
 **Frontier**:

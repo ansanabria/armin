@@ -10,6 +10,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Tag, Layers, AlertTriangle, Library, CircleDot } from "lucide-react";
 import { FlashcardFormDialog } from "@/components/flashcard-form-dialog";
 import { FlashcardTile } from "@/components/flashcard-tile";
+import { MoveFlashcardDialog } from "@/components/move-flashcard-dialog";
 import { SortControl } from "@/components/sort-control";
 import {
   SearchableMultiSelect,
@@ -53,6 +54,7 @@ export default function BrowsePage() {
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<UiBrowseFlashcard | null>(null);
+  const [moveTarget, setMoveTarget] = useState<UiBrowseFlashcard | null>(null);
 
   const browseFilters = useMemo((): BrowseQueryFilters => {
     const filters: BrowseQueryFilters = { sort };
@@ -400,6 +402,7 @@ export default function BrowsePage() {
                         params: { deckId: card.deckId },
                       })
                     }
+                    onMove={() => setMoveTarget(card)}
                     onArchiveToggle={() =>
                       void archiveCard.mutateAsync({
                         card,
@@ -447,6 +450,11 @@ export default function BrowsePage() {
         initialContent={editing?.content ?? null}
         initialTags={editing?.tags ?? []}
         onSubmit={saveCard}
+      />
+      <MoveFlashcardDialog
+        flashcard={moveTarget}
+        open={Boolean(moveTarget)}
+        onClose={() => setMoveTarget(null)}
       />
     </div>
   );

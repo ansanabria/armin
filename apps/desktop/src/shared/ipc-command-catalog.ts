@@ -100,6 +100,10 @@ export const ipcCommands = {
       ipcChannels.flashcards.deleteConsequences.channel,
       id,
     ),
+    moveConsequences: command(
+      ipcChannels.flashcards.moveConsequences.channel,
+      id,
+    ),
     create: command(
       ipcChannels.flashcards.create.channel,
       z.object({
@@ -122,6 +126,10 @@ export const ipcCommands = {
     archive: command(
       ipcChannels.flashcards.archive.channel,
       z.object({ id: z.string(), archived: z.boolean() }),
+    ),
+    move: command(
+      ipcChannels.flashcards.move.channel,
+      z.object({ id: z.string(), targetDeckId: z.string() }),
     ),
   },
   import: {
@@ -195,12 +203,18 @@ export const ipcCommands = {
     ),
   },
   graph: {
-    getGlobal: command(ipcChannels.graph.getGlobal.channel, z.object({})),
+    getDeck: command(
+      ipcChannels.graph.getDeck.channel,
+      z.object({ deckId: z.string() }),
+    ),
     addPrereq: command(ipcChannels.graph.addPrereq.channel, graphEdge),
     removePrereq: command(ipcChannels.graph.removePrereq.channel, graphEdge),
     saveLayout: command(
       ipcChannels.graph.saveLayout.channel,
-      z.object({ placements: z.array(graphLayoutPlacement) }),
+      z.object({
+        deckId: z.string(),
+        placements: z.array(graphLayoutPlacement),
+      }),
     ),
   },
   mcp: {

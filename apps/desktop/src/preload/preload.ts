@@ -39,11 +39,15 @@ const api = {
     get: (id: string) => invoke(c.flashcards.get, { id }),
     deleteConsequences: (id: string) =>
       invoke(c.flashcards.deleteConsequences, { id }),
+    moveConsequences: (id: string) =>
+      invoke(c.flashcards.moveConsequences, { id }),
     create: (input: unknown) => invoke(c.flashcards.create, input),
     update: (input: unknown) => invoke(c.flashcards.update, input),
     delete: (id: string) => invoke(c.flashcards.delete, { id }),
     archive: (id: string, archived: boolean) =>
       invoke(c.flashcards.archive, { id, archived }),
+    move: (id: string, targetDeckId: string) =>
+      invoke(c.flashcards.move, { id, targetDeckId }),
   },
   review: {
     queue: (deckId: string) => invoke(c.review.queue, { deckId }),
@@ -58,13 +62,15 @@ const api = {
     pool: (input: unknown) => invoke(c.cram.pool, input),
   },
   graph: {
-    getGlobal: () => invoke(c.graph.getGlobal, {}),
+    getDeck: (deckId: string) => invoke(c.graph.getDeck, { deckId }),
     addPrereq: (prereqId: string, dependentId: string) =>
       invoke(c.graph.addPrereq, { prereqId, dependentId }),
     removePrereq: (prereqId: string, dependentId: string) =>
       invoke(c.graph.removePrereq, { prereqId, dependentId }),
-    saveLayout: (placements: { flashcardId: string; x: number; y: number }[]) =>
-      invoke(c.graph.saveLayout, { placements }),
+    saveLayout: (
+      deckId: string,
+      placements: { flashcardId: string; x: number; y: number }[],
+    ) => invoke(c.graph.saveLayout, { deckId, placements }),
   },
   settings: {
     get: () => invoke(c.settings.get),

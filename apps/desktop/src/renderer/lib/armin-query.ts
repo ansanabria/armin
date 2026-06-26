@@ -32,7 +32,8 @@ export const cramKeys = {
 };
 
 export const graphKeys = {
-  global: ["graph", "global"] as const,
+  all: ["graph"] as const,
+  deck: (deckId: string) => ["graph", deckId] as const,
 };
 
 export const settingsKeys = {
@@ -51,7 +52,7 @@ export function invalidateCoreData(queryClient: QueryClient, deckId?: string) {
   void queryClient.invalidateQueries({ queryKey: ["flashcards", "browse"] });
   void queryClient.invalidateQueries({ queryKey: flashcardKeys.tags });
   void queryClient.invalidateQueries({ queryKey: reviewKeys.all });
-  void queryClient.invalidateQueries({ queryKey: graphKeys.global });
+  void queryClient.invalidateQueries({ queryKey: graphKeys.all });
 
   if (deckId) {
     void queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) });

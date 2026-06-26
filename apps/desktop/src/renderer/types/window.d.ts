@@ -20,6 +20,7 @@ export type {
   DeckWithStats,
   FlashcardWithMeta,
   FlashcardDeleteConsequences,
+  FlashcardMoveConsequences,
   BrowseFlashcard,
   FlashcardType,
   FlashcardContent,
@@ -28,5 +29,4 @@ export type {
   CramPool,
   CramScope,
   DeckGraph,
-  GlobalGraph,
 } from "../../shared/armin-api";

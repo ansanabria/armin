@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { FlashcardFormDialog } from "@/components/flashcard-form-dialog";
 import { DeckSettingsDialog } from "@/components/deck-settings-dialog";
 import { FlashcardTile } from "@/components/flashcard-tile";
+import { MoveFlashcardDialog } from "@/components/move-flashcard-dialog";
 import { SortControl } from "@/components/sort-control";
 import { SearchableMultiSelect } from "@/components/ui/combobox";
 import { FLASHCARD_SORT_OPTIONS, type FlashcardSortKey } from "@/lib/sort-flashcards";
@@ -46,6 +47,7 @@ export default function DeckPage() {
   const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editing, setEditing] = useState<UiFlashcard | null>(null);
+  const [moveTarget, setMoveTarget] = useState<UiFlashcard | null>(null);
   const [sort, setSort] = useState<FlashcardSortKey>("due-soon");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
 
@@ -288,7 +290,7 @@ export default function DeckPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link to="/graph" search={{ focus: deck.id }}>
+          <Link to="/deck/$deckId/graph" params={{ deckId: deck.id }}>
             <Button variant="outline">
               <Share2 className="h-4 w-4" /> Graph
             </Button>
@@ -390,6 +392,7 @@ export default function DeckPage() {
                     key={card.id}
                     card={card}
                     onOpen={() => openEdit(card)}
+                    onMove={() => setMoveTarget(card)}
                     onArchiveToggle={() =>
                       void archiveCard.mutateAsync({
                         id: card.id,
@@ -445,6 +448,11 @@ export default function DeckPage() {
         deckName={deck.name}
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+      />
+      <MoveFlashcardDialog
+        flashcard={moveTarget}
+        open={Boolean(moveTarget)}
+        onClose={() => setMoveTarget(null)}
       />
     </div>
   );

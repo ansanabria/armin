@@ -8,7 +8,7 @@ import RootLayout from "./routes/__root";
 import DecksPage from "./routes/decks";
 import BrowsePage from "./routes/browse";
 import DeckPage from "./routes/deck";
-import GlobalGraphPage from "./routes/graph";
+import DeckGraphPage from "./routes/graph";
 import ReviewPage from "./routes/review";
 import ReviewsPage from "./routes/reviews";
 import CramPage from "./routes/cram";
@@ -36,11 +36,8 @@ const deckRoute = createRoute({
 
 const graphRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/graph",
-  component: GlobalGraphPage,
-  validateSearch: (search: Record<string, unknown>) => ({
-    focus: typeof search.focus === "string" ? search.focus : undefined,
-  }),
+  path: "/deck/$deckId/graph",
+  component: DeckGraphPage,
 });
 
 const reviewRoute = createRoute({
@@ -80,23 +77,22 @@ const routeTree = rootRoute.addChildren([
 
 /**
  * Left-to-right position of each page, mirroring the header nav order
- * (Decks → Browse → Graph → Cram → Settings). Drill-in and session routes are
+ * (Decks → Browse → Cram → Settings). Drill-in and session routes are
  * slotted next to their parent section. The rank drives the directional view
  * transition: navigating to a higher rank slides forward, lower slides back.
  */
 function routeRank(pathname: string): number {
   if (pathname === "/") return 0; // Decks
   if (pathname.startsWith("/deck/") && pathname.endsWith("/review")) return 5;
-  if (pathname.startsWith("/deck/")) return 1; // a deck's detail
+  if (pathname.startsWith("/deck/")) return 1; // a deck's detail or its graph
   if (pathname.startsWith("/browse")) return 2;
-  if (pathname.startsWith("/graph")) return 3;
   if (pathname.startsWith("/cram")) return 4;
   if (pathname.startsWith("/review")) return 5; // all-decks review session
   if (pathname.startsWith("/settings")) return 6;
   return 0;
 }
 
-/** A deck's detail page (`/deck/$deckId`), not its review session. */
+/** A deck's detail page or its graph (`/deck/$deckId`), not its review session. */
 function isDeckDetail(pathname: string): boolean {
   return pathname.startsWith("/deck/") && !pathname.endsWith("/review");
 }

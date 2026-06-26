@@ -8,7 +8,6 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import { StateBadge, type ReviewState } from "@/components/ui/badge";
-import { MarkdownContent } from "@/components/ui/markdown-content";
 import { FlashcardTypeBadge } from "@/components/flashcard-type-badge";
 import type { FlashcardType } from "../../../shared/flashcard-types";
 import { cn } from "@/lib/utils";
@@ -29,8 +28,6 @@ export type CardNodeData = {
   state: ReviewState;
   locked: boolean;
   isIsolated: boolean;
-  deckName: string;
-  deckColor: string;
   emphasis: NodeEmphasis;
 };
 
@@ -65,7 +62,7 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
   return (
     <div
       className={cn(
-        "group relative w-[240px] overflow-hidden border border-border bg-surface px-3.5 py-3 pl-4 transition-[opacity,border-color,box-shadow] duration-150",
+        "group relative w-[240px] overflow-hidden border border-border bg-surface px-3.5 py-3 transition-[opacity,border-color,box-shadow] duration-150",
         isActive
           ? "border-accent ring-2 ring-accent/30"
           : isConnected
@@ -75,13 +72,6 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
         isDimmed && "opacity-35",
       )}
     >
-      {/* Deck lens: left color stripe (decorative — the deck chip is the cue). */}
-      <span
-        aria-hidden
-        className="absolute inset-y-0 left-0 w-1"
-        style={{ backgroundColor: data.deckColor }}
-      />
-
       {SIDES.map(({ id, position }) => (
         <Handle
           key={id}
@@ -95,14 +85,6 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <StateBadge state={data.state} locked={data.locked} />
         <FlashcardTypeBadge type={data.type} />
-        <span className="inline-flex items-center gap-1 text-[0.625rem] font-medium text-muted">
-          <span
-            aria-hidden
-            className="h-1.5 w-1.5 rounded-full"
-            style={{ backgroundColor: data.deckColor }}
-          />
-          {data.deckName}
-        </span>
         {data.isIsolated && (
           <span className="text-[0.625rem] font-medium uppercase tracking-wide text-muted">
             Isolated
@@ -110,17 +92,13 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
         )}
       </div>
 
-      <MarkdownContent
-        content={data.front}
-        images="placeholder"
-        className="line-clamp-2 text-[0.8125rem] font-semibold leading-snug text-ink"
-      />
+      <p className="line-clamp-2 whitespace-pre-wrap break-words text-[0.8125rem] font-semibold leading-snug text-ink">
+        {data.front}
+      </p>
       {data.back && (
-        <MarkdownContent
-          content={data.back}
-          images="placeholder"
-          className="mt-1 line-clamp-2 border-t border-border/60 pt-1.5 text-[0.6875rem] leading-snug text-muted"
-        />
+        <p className="mt-1 line-clamp-2 whitespace-pre-wrap break-words border-t border-border/60 pt-1.5 text-[0.6875rem] leading-snug text-muted">
+          {data.back}
+        </p>
       )}
     </div>
   );

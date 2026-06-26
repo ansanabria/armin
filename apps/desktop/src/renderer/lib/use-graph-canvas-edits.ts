@@ -17,6 +17,7 @@ type GraphLayoutPlacement = { flashcardId: string; x: number; y: number };
 type UseGraphCanvasEditsInput = {
   graph: UiDeckGraph;
   setGraph: Dispatch<SetStateAction<UiDeckGraph>>;
+  deckId: string;
   createDeckId: string | null;
   inheritedDeckId: string | null;
   pendingPlacement: XYPosition | null;
@@ -34,6 +35,7 @@ function edgeKey(edge: GraphEdge) {
 export function useGraphCanvasEdits({
   graph,
   setGraph,
+  deckId,
   createDeckId,
   inheritedDeckId,
   pendingPlacement,
@@ -70,7 +72,7 @@ export function useGraphCanvasEdits({
 
   const saveLayout = useMutation({
     mutationFn: (placements: GraphLayoutPlacement[]) =>
-      window.armin.graph.saveLayout(placements),
+      window.armin.graph.saveLayout(deckId, placements),
     onError: () => toast({ tone: "error", title: "Couldn’t save layout" }),
   });
 

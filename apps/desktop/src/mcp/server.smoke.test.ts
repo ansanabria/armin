@@ -267,10 +267,13 @@ describe("MCP stdio server", () => {
       imported.flashcards as Array<{ clientId: string; id: string }>
     ).find((c) => c.clientId === "next")!.id;
 
-    await client!.callTool({
+    // Cross-deck prerequisites are rejected: the prereq lives in the first deck
+    // while `nextId` lives in the hierarchy deck.
+    const crossDeck = await client!.callTool({
       name: "add_prerequisite",
       arguments: { prereqId: reviewUnitId, dependentId: nextId },
     });
+    expect((crossDeck as { isError?: boolean }).isError).toBe(true);
 
     const listed = parseToolText(
       await client!.callTool({
@@ -288,14 +291,26 @@ describe("MCP stdio server", () => {
     );
     expect((fetched.flashcard as { front: string }).front).toBe("Base");
 
+    // get_graph is deck-scoped and requires a deck id.
+    const missingDeck = await client!.callTool({
+      name: "get_graph",
+      arguments: {},
+    });
+    expect((missingDeck as { isError?: boolean }).isError).toBe(true);
+
     const graph = parseToolText(
       await client!.callTool({
         name: "get_graph",
-        arguments: {},
+        arguments: { deckId: hierarchyDeckId },
       }),
     );
     const edges = (graph.graph as { edges: unknown[] }).edges;
     expect(edges.length).toBeGreaterThanOrEqual(1);
+    // Only the hierarchy deck's flashcards are returned.
+    const graphNodes = (graph.graph as { nodes: { id: string }[] }).nodes;
+    expect(graphNodes.map((n) => n.id).sort()).toEqual(
+      [baseId, nextId].sort(),
+    );
 
     const allDecks = parseToolText(
       await client!.callTool({ name: "list_decks", arguments: {} }),

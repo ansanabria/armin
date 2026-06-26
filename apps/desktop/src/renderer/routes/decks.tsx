@@ -446,7 +446,7 @@ function DeckTile({
           aria-label={`Open deck: ${deck.name}`}
           className="absolute inset-0 z-10 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         />
-        <div className="pointer-events-none relative z-0 flex flex-1 flex-col">
+        <div className="pointer-events-none relative z-20 flex flex-1 flex-col">
           <div className="flex items-start justify-between gap-2">
             <h2 className="min-w-0 flex-1 font-serif text-lg font-semibold text-ink">
               {deck.name}

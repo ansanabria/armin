@@ -63,6 +63,9 @@ const dbReady = new Set<string>();
 async function ensureDbReady(profileId: string) {
   if (dbReady.has(profileId)) return;
   await initDb(profileId);
+  // runMigrations recomputes denormalized lock/scheduling state when migrations
+  // actually run (e.g. 0015 dropping cross-deck prerequisite edges), so no
+  // separate repair is needed here.
   await runMigrations(profileId);
   dbReady.add(profileId);
 }
@@ -161,6 +164,9 @@ export function registerIpc() {
   registerForProfile(c.flashcards.deleteConsequences, (ctx, { id }) =>
     flashcards.getDeleteConsequences(ctx, id),
   );
+  registerForProfile(c.flashcards.moveConsequences, (ctx, { id }) =>
+    flashcards.getMoveConsequences(ctx, id),
+  );
   registerForProfile(
     c.flashcards.create,
     (ctx, input) =>
@@ -184,6 +190,14 @@ export function registerIpc() {
     c.flashcards.archive,
     async (ctx, { id, archived }) => {
       const flashcard = await flashcards.setArchived(ctx, id, archived);
+      notifyDataChanged();
+      return flashcard;
+    },
+  );
+  registerForProfile(
+    c.flashcards.move,
+    async (ctx, { id, targetDeckId }) => {
+      const flashcard = await flashcards.moveFlashcard(ctx, id, targetDeckId);
       notifyDataChanged();
       return flashcard;
     },
@@ -291,9 +305,9 @@ export function registerIpc() {
   // --- cram ---
   registerForProfile(c.cram.pool, (ctx, scope) => cram.getCramPool(ctx, scope));
 
-  // --- graph ---
-  registerForProfile(c.graph.getGlobal, (ctx) =>
-    graph.getGlobalGraph(ctx),
+  // --- graph (deck-scoped per ADR-0015) ---
+  registerForProfile(c.graph.getDeck, (ctx, { deckId }) =>
+    graph.getDeckGraph(ctx, deckId),
   );
   registerForProfile(
     c.graph.addPrereq,
@@ -311,8 +325,8 @@ export function registerIpc() {
   );
   registerForProfile(
     c.graph.saveLayout,
-    async (ctx, { placements }) => {
-      await graph.saveGlobalLayout(ctx, placements);
+    async (ctx, { deckId, placements }) => {
+      await graph.saveLayout(ctx, deckId, placements);
       return { ok: true };
     },
   );

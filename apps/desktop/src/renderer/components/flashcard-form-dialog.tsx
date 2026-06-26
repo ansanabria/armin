@@ -45,9 +45,9 @@ type CardFormDialogProps = {
   initialTags?: string[];
   onSubmit: (values: CardFormValues) => void | Promise<void>;
   /**
-   * When the caller can't infer the deck (e.g. adding on the global graph's blank
-   * canvas), pass the deck list + selected deck to render a deck picker in create
-   * mode. Omit when the deck is already known (deck page, connected add).
+   * When the caller can't infer the deck, pass the deck list + selected deck to
+   * render a deck picker in create mode. Omit when the deck is already known
+   * (deck page, deck graph, connected add).
    */
   decks?: { id: string; name: string }[];
   deckId?: string | null;

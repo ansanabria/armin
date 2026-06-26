@@ -24,9 +24,10 @@ new material lands on knowledge you've already secured.
 
 - **Local-first.** Everything works offline; your data lives on your machine. No account, no server required.
 - **Spaced-repetition done right.** FSRS schedules each card based on your recall performance.
-- **Hierarchical knowledge.** Cards form a prerequisite graph. You review the
-  prerequisites first, then unlock and learn what builds on them. A visual canvas
-  lets you see and edit the graph of connections between cards.
+- **Hierarchical knowledge.** Within a deck, cards form a prerequisite graph. You
+  review the prerequisites first, then unlock and learn what builds on them. Each
+  deck has its own visual canvas that lets you see and edit the connections
+  between its cards; prerequisites never cross deck boundaries.
 - **Simple UI & UX.** Creating decks, cards, and tags should be fast, and reviewing
   should be keyboard-driven and frictionless.
 - **AI-assisted card creation.** Armin exposes a local MCP server, so you can use

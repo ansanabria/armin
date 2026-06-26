@@ -22,8 +22,8 @@ import {
   type XYPosition,
 } from "@xyflow/react";
 import {
+  ArrowLeft,
   LayoutGrid,
-  Layers,
   Maximize,
   Minus,
   Pencil,
@@ -39,19 +39,20 @@ import {
   EDGE_MARKER_END,
   EDGE_STROKE,
   graphToFlowElements,
+  graphNodePreview,
+  incidentNodeIdsOf,
   makeFlowEdge,
   refreshNodeData,
   styleEdgeForEmphasis,
   toFlowNode,
 } from "@/lib/graph-flow";
 import { layoutGraph } from "@/lib/graph-layout";
+import type {
+  GraphLayoutWorkerRequest,
+  GraphLayoutWorkerResponse,
+} from "@/lib/graph-layout-worker";
 import { cn } from "@/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { TruncatedLabel } from "@/components/ui/truncated-label";
 import { FloatingEdge } from "./floating-edge";
 import {
   FlashcardNode,
@@ -63,6 +64,16 @@ import { GraphContextMenu } from "./graph-context-menu";
 
 const nodeTypes = { card: FlashcardNode };
 const edgeTypes = { floating: FloatingEdge };
+const fitViewOptions = { padding: 0.2, maxZoom: 1 };
+const connectionLineStyle = {
+  stroke: "var(--color-accent)",
+  strokeWidth: 1.5,
+};
+const defaultEdgeOptions = {
+  type: "floating",
+  style: { stroke: EDGE_STROKE, strokeWidth: 1.5 },
+  markerEnd: EDGE_MARKER_END,
+};
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
@@ -77,15 +88,13 @@ type ConnectMenuState = {
   sourceId: string;
 } | null;
 
-type DeckLensOption = { id: string; name: string; color: string };
-
 type PrerequisiteGraphProps = {
   graph: UiDeckGraph;
+  deckName?: string;
+  onBack?: () => void;
   onGraphChange: (graph: UiDeckGraph) => void;
   onConnectError?: (message: string) => void;
   nodePlacements?: Record<string, XYPosition>;
-  decks?: DeckLensOption[];
-  focusDeckId?: string | null;
   onCreateCardRequest?: (
     flowPosition: XYPosition,
     connectFromNodeId?: string,
@@ -99,11 +108,10 @@ type PrerequisiteGraphProps = {
 };
 
 /**
- * Decide how each node reads against the current selection + deck/search lens.
+ * Decide how each node reads against the current selection + search lens.
  * Selection wins: a selected card and its direct neighbors stay lit even when a
- * deck filter or search would otherwise dim them, so connections are always
- * legible. Otherwise a node is dimmed only when it falls outside an active
- * filter.
+ * search would otherwise dim them, so connections are always legible. Otherwise
+ * a node is dimmed only when it falls outside an active search.
  */
 function nodeEmphasisFor(
   node: UiDeckGraph["nodes"][number],
@@ -111,20 +119,16 @@ function nodeEmphasisFor(
     selectedId: string | null;
     neighborIds: Set<string>;
     query: string;
-    focusedDeckIds: Set<string>;
   },
 ): NodeEmphasis {
-  const { selectedId, neighborIds, query, focusedDeckIds } = opts;
+  const { selectedId, neighborIds, query } = opts;
   if (selectedId) {
     if (node.id === selectedId) return "active";
     if (neighborIds.has(node.id)) return "connected";
     return "dimmed";
   }
-  const inScope =
-    (focusedDeckIds.size === 0 || focusedDeckIds.has(node.deckId)) &&
-    (query === "" ||
-      `${node.front} ${node.back}`.toLowerCase().includes(query));
-  if (focusedDeckIds.size === 0 && query === "") return null;
+  if (query === "") return null;
+  const inScope = `${node.front} ${node.back}`.toLowerCase().includes(query);
   return inScope ? null : "dimmed";
 }
 
@@ -136,6 +140,53 @@ function savedPositionsOf(graph: UiDeckGraph): Map<string, XYPosition> {
     }
   }
   return map;
+}
+
+function markGraphPerf(name: string) {
+  if (!import.meta.env.DEV && !window.__ARMIN_E2E__) return;
+  performance.mark(`armin:graph:${name}`);
+}
+
+function measureGraphPerf(name: string, start: string, end: string) {
+  if (!import.meta.env.DEV && !window.__ARMIN_E2E__) return;
+  try {
+    performance.measure(
+      `armin:graph:${name}`,
+      `armin:graph:${start}`,
+      `armin:graph:${end}`,
+    );
+  } catch {
+    // Marks are best-effort in development.
+  }
+}
+
+function scheduleGraphWork(work: () => void) {
+  if ("requestIdleCallback" in window) {
+    const id = window.requestIdleCallback(work, { timeout: 500 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = globalThis.setTimeout(work, 0);
+  return () => globalThis.clearTimeout(id);
+}
+
+function afterCanvasPaint(work: () => void) {
+  let done = false;
+  let inner = 0;
+  const run = () => {
+    if (done) return;
+    done = true;
+    work();
+  };
+  const outer = requestAnimationFrame(() => {
+    inner = requestAnimationFrame(run);
+  });
+  const timeout = window.setTimeout(run, 250);
+  return () => {
+    done = true;
+    cancelAnimationFrame(outer);
+    cancelAnimationFrame(inner);
+    window.clearTimeout(timeout);
+  };
 }
 
 function PaneDoubleClickListener({
@@ -249,11 +300,11 @@ function ZoomControl() {
 
 function PrerequisiteGraphCanvas({
   graph,
+  deckName,
+  onBack,
   onGraphChange,
   onConnectError,
   nodePlacements,
-  decks,
-  focusDeckId,
   onCreateCardRequest,
   onEditCardRequest,
   onDeleteCardRequest,
@@ -265,34 +316,20 @@ function PrerequisiteGraphCanvas({
   const { screenToFlowPosition, fitView } = useReactFlow();
   const knownNodeIds = useRef(new Set(graph.nodes.map((n) => n.id)));
   const connectFrom = useRef<string | null>(null);
-  const nodeIdsKey = graph.nodes.map((n) => n.id).join(",");
-  const nodeContentKey = graph.nodes
-    .map((n) => `${n.id}:${n.front}:${n.back}:${n.state}:${n.locked}`)
-    .join("|");
-  const edgeKey = graph.edges
-    .map((e) => `${e.prereqId}->${e.dependentId}`)
-    .join("|");
+  const didSyncNodes = useRef(false);
+  const didSyncEdges = useRef(false);
+  const didSyncNodeData = useRef(false);
+  const backgroundLaidOutIds = useRef(new Set<string>());
+  const cancelReadySignal = useRef<(() => void) | null>(null);
   const [menu, setMenu] = useState<MenuState>(null);
   const [connectMenu, setConnectMenu] = useState<ConnectMenuState>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [interactive, setInteractive] = useState(false);
 
-  // Selection + deck/search lens. The selected card lights up itself, its edges,
-  // and its direct neighbors; the deck filter and search dim everything outside
-  // their scope.
+  // Selection + search lens. The selected card lights up itself, its edges, and
+  // its direct neighbors; search dims everything outside its scope.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [focusedDeckIds, setFocusedDeckIds] = useState<Set<string>>(() =>
-    focusDeckId ? new Set([focusDeckId]) : new Set(),
-  );
-  const [deckMenuOpen, setDeckMenuOpen] = useState(false);
-
-  // Mirror the URL's focused deck into the filter whenever it changes, so the
-  // sidebar Graph link (focus cleared) and deck-page links (focus set) can both
-  // update or clear the deck lens. Manual deck toggles don't touch focusDeckId,
-  // so they aren't clobbered by this effect.
-  useEffect(() => {
-    setFocusedDeckIds(focusDeckId ? new Set([focusDeckId]) : new Set());
-  }, [focusDeckId]);
 
   // Build the initial canvas once, synchronously, from the graph the parent
   // hands us (it gates mount until the deck has loaded). Computing this at mount
@@ -303,9 +340,16 @@ function PrerequisiteGraphCanvas({
     edges: Edge[];
   } | null>(null);
   if (!initialElements.current) {
+    markGraphPerf("graphToFlowElements:start");
     initialElements.current = graphToFlowElements(
       graph,
       savedPositionsOf(graph),
+    );
+    markGraphPerf("graphToFlowElements:end");
+    measureGraphPerf(
+      "graphToFlowElements",
+      "graphToFlowElements:start",
+      "graphToFlowElements:end",
     );
   }
 
@@ -320,9 +364,25 @@ function PrerequisiteGraphCanvas({
   const nodesRef = useRef(nodes);
   nodesRef.current = nodes;
 
+  useEffect(
+    () => () => {
+      cancelReadySignal.current?.();
+    },
+    [],
+  );
+
+  const nodeById = useMemo(
+    () => new Map(graph.nodes.map((n) => [n.id, n])),
+    [graph.nodes],
+  );
+
   // Incrementally add/remove nodes as the underlying deck changes, preserving
   // the positions of cards that are already on the canvas.
   useEffect(() => {
+    if (!didSyncNodes.current) {
+      didSyncNodes.current = true;
+      return;
+    }
     const currentIds = new Set(graph.nodes.map((n) => n.id));
     const added = graph.nodes.filter((n) => !knownNodeIds.current.has(n.id));
     const removed = [...knownNodeIds.current].filter(
@@ -343,6 +403,7 @@ function PrerequisiteGraphCanvas({
         x: window.innerWidth / 2,
         y: window.innerHeight / 2,
       });
+      const incidentNodeIds = incidentNodeIdsOf(graph.edges);
 
       setNodes((current) => [
         ...current,
@@ -354,7 +415,7 @@ function PrerequisiteGraphCanvas({
           const placement = saved ?? nodePlacements?.[node.id];
           return toFlowNode(
             node,
-            graph.edges,
+            incidentNodeIds,
             placement ?? {
               x: fallback.x + index * 32,
               y: fallback.y + index * 32,
@@ -366,7 +427,6 @@ function PrerequisiteGraphCanvas({
 
     knownNodeIds.current = currentIds;
   }, [
-    nodeIdsKey,
     graph.edges,
     graph.nodes,
     nodePlacements,
@@ -378,6 +438,10 @@ function PrerequisiteGraphCanvas({
   // Keep the rendered edges in sync with the persisted prerequisite edges so
   // arrows survive a reload of the graph.
   useEffect(() => {
+    if (!didSyncEdges.current) {
+      didSyncEdges.current = true;
+      return;
+    }
     setEdges((current) => {
       const desiredIds = new Set(
         graph.edges.map((e) => `${e.prereqId}-${e.dependentId}`),
@@ -389,25 +453,27 @@ function PrerequisiteGraphCanvas({
         .map((e) => makeFlowEdge(e.prereqId, e.dependentId));
       return additions.length > 0 ? [...kept, ...additions] : kept;
     });
-  }, [edgeKey, graph.edges, setEdges]);
+  }, [graph.edges, setEdges]);
 
   useEffect(() => {
+    if (!didSyncNodeData.current) {
+      didSyncNodeData.current = true;
+      return;
+    }
     setNodes((current) =>
       refreshNodeData(
         current.map((node) => {
-          const source = graph.nodes.find((n) => n.id === node.id);
+          const source = nodeById.get(node.id);
           if (!source) return node;
           return {
             ...node,
             data: {
-              front: source.front,
-              back: source.back,
+              front: graphNodePreview(source.front),
+              back: graphNodePreview(source.back),
               type: source.type,
               state: source.state,
               locked: source.locked,
               isIsolated: node.data.isIsolated,
-              deckName: source.deckName,
-              deckColor: source.deckColor,
               emphasis: node.data.emphasis,
             },
           };
@@ -415,13 +481,100 @@ function PrerequisiteGraphCanvas({
         graph.edges,
       ),
     );
-  }, [nodeContentKey, graph.edges, graph.nodes, setNodes]);
-
-  const nodeById = useMemo(
-    () => new Map(graph.nodes.map((n) => [n.id, n])),
-    [graph.nodes],
-  );
+  }, [graph.edges, nodeById, setNodes]);
   const query = search.trim().toLowerCase();
+
+  useEffect(() => {
+    if (!interactive || graph.nodes.length === 0) return;
+    const placedIds = new Set(
+      graph.nodes
+        .filter(
+          (node) =>
+            (node.x != null && node.y != null) || nodePlacements?.[node.id],
+        )
+        .map((node) => node.id),
+    );
+    const unplacedIds = graph.nodes
+      .filter(
+        (node) =>
+          !placedIds.has(node.id) && !backgroundLaidOutIds.current.has(node.id),
+      )
+      .map((node) => node.id);
+    if (unplacedIds.length === 0) return;
+
+    let cancelled = false;
+    let worker: Worker | null = null;
+    const cancelScheduled = scheduleGraphWork(() => {
+      if (cancelled) return;
+      markGraphPerf("backgroundLayout:start");
+      worker = new Worker(
+        new URL("../../lib/graph-layout.worker.ts", import.meta.url),
+        { type: "module" },
+      );
+      const request: GraphLayoutWorkerRequest = {
+        nodes: nodesRef.current.map((node) => ({
+          id: node.id,
+          position: node.position,
+          placed: placedIds.has(node.id),
+        })),
+        edges: graph.edges.map((edge) => ({
+          id: `${edge.prereqId}-${edge.dependentId}`,
+          source: edge.prereqId,
+          target: edge.dependentId,
+        })),
+      };
+
+      worker.onmessage = (event: MessageEvent<GraphLayoutWorkerResponse>) => {
+        if (cancelled) return;
+        const placements = event.data.placements;
+        if (placements.length > 0) {
+          for (const placement of placements) {
+            backgroundLaidOutIds.current.add(placement.flashcardId);
+          }
+          const placementById = new Map(
+            placements.map((placement) => [placement.flashcardId, placement]),
+          );
+          setNodes((current) =>
+            current.map((node) => {
+              const placement = placementById.get(node.id);
+              return placement
+                ? { ...node, position: { x: placement.x, y: placement.y } }
+                : node;
+            }),
+          );
+          onPersistLayout?.(placements);
+        }
+        markGraphPerf("backgroundLayout:end");
+        measureGraphPerf(
+          "backgroundLayout",
+          "backgroundLayout:start",
+          "backgroundLayout:end",
+        );
+        worker?.terminate();
+        worker = null;
+      };
+
+      worker.onerror = () => {
+        worker?.terminate();
+        worker = null;
+      };
+
+      worker.postMessage(request);
+    });
+
+    return () => {
+      cancelled = true;
+      cancelScheduled();
+      worker?.terminate();
+    };
+  }, [
+    graph.edges,
+    graph.nodes,
+    interactive,
+    nodePlacements,
+    onPersistLayout,
+    setNodes,
+  ]);
 
   // Re-derive selection/filter emphasis for every node and edge whenever the
   // selection or lens changes. Selected card + its incident edges + direct
@@ -443,14 +596,13 @@ function PrerequisiteGraphCanvas({
           selectedId,
           neighborIds,
           query,
-          focusedDeckIds,
         });
         if (node.data.emphasis === emphasis) return node;
         return { ...node, data: { ...node.data, emphasis } };
       }),
     );
 
-    const lensActive = focusedDeckIds.size > 0 || query !== "";
+    const lensActive = query !== "";
     const inScope = (id: string) => {
       const n = nodeById.get(id);
       return (
@@ -459,7 +611,6 @@ function PrerequisiteGraphCanvas({
           selectedId: null,
           neighborIds,
           query,
-          focusedDeckIds,
         }) === null
       );
     };
@@ -482,7 +633,7 @@ function PrerequisiteGraphCanvas({
         return styleEdgeForEmphasis(edge, null);
       }),
     );
-  }, [selectedId, query, focusedDeckIds, nodeById, graph.edges, setNodes, setEdges]);
+  }, [selectedId, query, nodeById, graph.edges, setNodes, setEdges]);
 
   const onSelectionChange: OnSelectionChangeFunc = useCallback(
     ({ nodes: selectedNodes }) => {
@@ -490,15 +641,6 @@ function PrerequisiteGraphCanvas({
     },
     [],
   );
-
-  const toggleDeckFocus = useCallback((deckId: string) => {
-    setFocusedDeckIds((current) => {
-      const next = new Set(current);
-      if (next.has(deckId)) next.delete(deckId);
-      else next.add(deckId);
-      return next;
-    });
-  }, []);
 
   const persistLayout = useCallback(
     (flowNodes: CardFlowNode[]) => {
@@ -682,7 +824,8 @@ function PrerequisiteGraphCanvas({
             label: "Delete flashcard",
             icon: <Trash2 className="h-4 w-4" />,
             variant: "destructive" as const,
-            onClick: () => onDeleteCardRequest?.(menu.nodeId) ?? deleteNode(menu.nodeId),
+            onClick: () =>
+              onDeleteCardRequest?.(menu.nodeId) ?? deleteNode(menu.nodeId),
           },
         ]
       : [];
@@ -719,14 +862,26 @@ function PrerequisiteGraphCanvas({
         onSelectionChange={onSelectionChange}
         onMoveEnd={(_, viewport) => onViewportChange?.(viewport)}
         onInit={() => {
+          markGraphPerf("reactFlow:onInit");
           // The initial frame (fitView/defaultViewport) is applied during init;
           // wait for it to paint before signalling ready, so the canvas is only
           // revealed once it's framed — never in an intermediate unframed state.
-          requestAnimationFrame(() => requestAnimationFrame(() => onReady?.()));
+          cancelReadySignal.current?.();
+          cancelReadySignal.current = afterCanvasPaint(() => {
+            cancelReadySignal.current = null;
+            markGraphPerf("interactive:end");
+            measureGraphPerf(
+              "interactive",
+              "routeRender:start",
+              "interactive:end",
+            );
+            setInteractive(true);
+            onReady?.();
+          });
         }}
         defaultViewport={initialViewport}
         fitView={!initialViewport}
-        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
+        fitViewOptions={fitViewOptions}
         connectionMode={ConnectionMode.Loose}
         connectionRadius={36}
         minZoom={MIN_ZOOM}
@@ -737,15 +892,8 @@ function PrerequisiteGraphCanvas({
         elementsSelectable
         deleteKeyCode={null}
         proOptions={{ hideAttribution: true }}
-        connectionLineStyle={{
-          stroke: "var(--color-accent)",
-          strokeWidth: 1.5,
-        }}
-        defaultEdgeOptions={{
-          type: "floating",
-          style: { stroke: EDGE_STROKE, strokeWidth: 1.5 },
-          markerEnd: EDGE_MARKER_END,
-        }}
+        connectionLineStyle={connectionLineStyle}
+        defaultEdgeOptions={defaultEdgeOptions}
       >
         <Background
           variant={BackgroundVariant.Cross}
@@ -758,6 +906,26 @@ function PrerequisiteGraphCanvas({
         </Panel>
         <Panel position="top-left">
           <div className="flex items-center gap-2">
+            {(onBack || deckName) && (
+              <button
+                type="button"
+                onClick={onBack}
+                disabled={!onBack}
+                aria-label={deckName ? `Back to ${deckName}` : "Back to deck"}
+                className="flex h-8 items-center gap-1.5 border border-border bg-surface px-2 text-xs font-medium text-ink shadow-overlay transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default disabled:hover:bg-surface"
+              >
+                {onBack && (
+                  <ArrowLeft className="h-3.5 w-3.5 shrink-0 text-muted" />
+                )}
+                {deckName && (
+                  <TruncatedLabel
+                    label={deckName}
+                    side="bottom"
+                    className="max-w-44"
+                  />
+                )}
+              </button>
+            )}
             <div className="flex h-8 items-center gap-1.5 border border-border bg-surface px-2 shadow-overlay focus-within:ring-2 focus-within:ring-accent">
               <Search className="h-3.5 w-3.5 shrink-0 text-muted" />
               <input
@@ -778,55 +946,6 @@ function PrerequisiteGraphCanvas({
                 </button>
               )}
             </div>
-
-            {decks && decks.length > 0 && (
-              <DropdownMenu open={deckMenuOpen} onOpenChange={setDeckMenuOpen}>
-                <DropdownMenuTrigger
-                  className={cn(
-                    "inline-flex h-8 items-center gap-1.5 border border-border bg-surface px-2.5 text-xs font-medium shadow-overlay transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                    focusedDeckIds.size > 0 ? "text-accent" : "text-ink",
-                  )}
-                >
-                  <Layers className="h-3.5 w-3.5" />
-                  {focusedDeckIds.size > 0
-                    ? `${focusedDeckIds.size} deck${focusedDeckIds.size === 1 ? "" : "s"}`
-                    : "Decks"}
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <div className="flex items-center justify-between px-1.5 py-1">
-                    <span className="text-[0.625rem] font-medium uppercase tracking-wide text-muted">
-                      Focus decks
-                    </span>
-                    {focusedDeckIds.size > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setFocusedDeckIds(new Set())}
-                        className="text-[0.625rem] font-medium text-accent hover:text-accent-deep"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  <div className="armin-scrollbar max-h-64 overflow-y-auto">
-                    {decks.map((deck) => (
-                      <DropdownMenuCheckboxItem
-                        key={deck.id}
-                        checked={focusedDeckIds.has(deck.id)}
-                        onCheckedChange={() => toggleDeckFocus(deck.id)}
-                        className="text-xs"
-                      >
-                        <span
-                          aria-hidden
-                          className="h-2 w-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: deck.color }}
-                        />
-                        <span className="flex-1 truncate">{deck.name}</span>
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
           </div>
         </Panel>
         <Panel position="top-right">
