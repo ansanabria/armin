@@ -1,15 +1,9 @@
 import { MarkerType, type Edge } from "@xyflow/react";
 import type { UiDeckGraph } from "@/types/view-models";
-import { isIsolatedNode } from "@/lib/graph-cycle";
-import {
-  CARD_NODE_HEIGHT,
-  CARD_NODE_WIDTH,
-  layoutGraph,
-} from "@/lib/graph-layout";
-import type {
-  CardFlowNode,
-  CardNodeData,
-} from "@/components/prerequisite-graph/flashcard-node";
+import { CARD_NODE_HEIGHT, CARD_NODE_WIDTH } from "@/lib/graph-layout";
+import type { CardFlowNode } from "@/components/prerequisite-graph/flashcard-node";
+
+const CARD_PREVIEW_LIMIT = 240;
 
 export const EDGE_STROKE = "var(--color-border-strong)";
 export const EDGE_STROKE_ACCENT = "var(--color-accent)";
@@ -67,9 +61,35 @@ export function styleEdgeForEmphasis(edge: Edge, emphasis: EdgeEmphasis): Edge {
   };
 }
 
+export function incidentNodeIdsOf(edges: UiDeckGraph["edges"]): Set<string> {
+  const incident = new Set<string>();
+  for (const edge of edges) {
+    incident.add(edge.prereqId);
+    incident.add(edge.dependentId);
+  }
+  return incident;
+}
+
+function fallbackPositionFor(index: number) {
+  const columns = 5;
+  const column = index % columns;
+  const row = Math.floor(index / columns);
+
+  return {
+    x: column * (CARD_NODE_WIDTH + 48),
+    y: row * (CARD_NODE_HEIGHT + 56),
+  };
+}
+
+export function graphNodePreview(value: string) {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (compact.length <= CARD_PREVIEW_LIMIT) return compact;
+  return `${compact.slice(0, CARD_PREVIEW_LIMIT - 1).trimEnd()}…`;
+}
+
 export function toFlowNode(
   node: UiDeckGraph["nodes"][number],
-  edges: UiDeckGraph["edges"],
+  incidentNodeIds: Set<string>,
   position = { x: 0, y: 0 },
 ): CardFlowNode {
   return {
@@ -81,14 +101,12 @@ export function toFlowNode(
     initialWidth: CARD_NODE_WIDTH,
     initialHeight: CARD_NODE_HEIGHT,
     data: {
-      front: node.front,
-      back: node.back,
+      front: graphNodePreview(node.front),
+      back: graphNodePreview(node.back),
       type: node.type,
       state: node.state,
       locked: node.locked,
-      isIsolated: isIsolatedNode(node.id, edges),
-      deckName: node.deckName,
-      deckColor: node.deckColor,
+      isIsolated: !incidentNodeIds.has(node.id),
       emphasis: null,
     },
   };
@@ -98,43 +116,28 @@ export function graphToFlowElements(
   graph: UiDeckGraph,
   savedPositions?: Map<string, { x: number; y: number }>,
 ): { nodes: CardFlowNode[]; edges: Edge[] } {
-  const nodes: CardFlowNode[] = graph.nodes.map((n) =>
-    toFlowNode(n, graph.edges, savedPositions?.get(n.id) ?? { x: 0, y: 0 }),
+  const incidentNodeIds = incidentNodeIdsOf(graph.edges);
+  const nodes: CardFlowNode[] = graph.nodes.map((n, index) =>
+    toFlowNode(
+      n,
+      incidentNodeIds,
+      savedPositions?.get(n.id) ?? fallbackPositionFor(index),
+    ),
   );
   const edges = graph.edges.map((e) => makeFlowEdge(e.prereqId, e.dependentId));
-
-  // Every card already has a saved position — render it exactly as left.
-  const allPlaced =
-    graph.nodes.length > 0 &&
-    graph.nodes.every((n) => savedPositions?.has(n.id));
-  if (allPlaced) return { nodes, edges };
-
-  // Otherwise auto-layout, then re-apply any saved positions so previously
-  // placed cards stay put while brand-new ones get a sensible dagre slot.
-  const laidOut = layoutGraph<CardNodeData>(nodes, edges) as {
-    nodes: CardFlowNode[];
-    edges: Edge[];
-  };
-  if (!savedPositions || savedPositions.size === 0) return laidOut;
-
-  return {
-    nodes: laidOut.nodes.map((node) => {
-      const saved = savedPositions.get(node.id);
-      return saved ? { ...node, position: saved } : node;
-    }),
-    edges: laidOut.edges,
-  };
+  return { nodes, edges };
 }
 
 export function refreshNodeData(
   nodes: CardFlowNode[],
   edges: UiDeckGraph["edges"],
 ): CardFlowNode[] {
+  const incidentNodeIds = incidentNodeIdsOf(edges);
   return nodes.map((node) => ({
     ...node,
     data: {
       ...node.data,
-      isIsolated: isIsolatedNode(node.id, edges),
+      isIsolated: !incidentNodeIds.has(node.id),
     },
   }));
 }

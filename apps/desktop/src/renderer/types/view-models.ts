@@ -1,10 +1,9 @@
 import type { ReviewState } from "@/components/ui/badge";
-import { deckColor } from "@/lib/deck-color";
 import type {
   BrowseFlashcard,
   FlashcardContent,
   FlashcardType,
-  GlobalGraph,
+  DeckGraph,
   DeckWithStats,
   FlashcardWithMeta,
   ReviewQueueItem,
@@ -46,8 +45,6 @@ export type UiReviewUnit = {
 export type UiGraphNode = {
   id: string;
   deckId: string;
-  deckName: string;
-  deckColor: string;
   front: string;
   back: string;
   type: FlashcardType;
@@ -141,16 +138,11 @@ export function toUiReviewUnit(item: ReviewQueueItem): UiReviewUnit {
   };
 }
 
-export function toUiGlobalGraph(
-  graph: GlobalGraph,
-  decks: DeckWithStats[],
-): UiDeckGraph {
-  const deckNameById = new Map(decks.map((deck) => [deck.id, deck.name]));
+export function toUiDeckGraph(graph: DeckGraph, deckId: string): UiDeckGraph {
   return {
     nodes: graph.nodes.map((node) => ({
       ...node,
-      deckName: deckNameById.get(node.deckId) ?? "Unknown deck",
-      deckColor: deckColor(node.deckId),
+      deckId,
       state: node.state as ReviewState,
     })),
     edges: graph.edges,

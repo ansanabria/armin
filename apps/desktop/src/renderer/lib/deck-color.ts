@@ -1,5 +1,5 @@
 /**
- * Deterministic per-deck color for the global graph's deck lens.
+ * Deterministic per-deck color used to tint a deck's flashcards and graph nodes.
  *
  * Decks have no stored color, so we derive a stable one from the deck id. The
  * palette is the Flexoki 400-level accent ramp (reads on both warm paper and the

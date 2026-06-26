@@ -41,6 +41,7 @@
     "check:package": "node scripts/check-package.mjs",
     "prebench:deck": "npm run native:node",
     "bench:deck": "tsx scripts/benchmark-deck-load.ts",
+    "bench:graph": "tsx scripts/benchmark-graph-flow.ts",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "icons": "node scripts/build-logo-svg.mjs && node scripts/generate-icons.mjs"

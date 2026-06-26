@@ -1,5 +1,13 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { Layers, Pencil, Trash2, EllipsisVertical, Archive, ArchiveRestore } from "lucide-react";
+import {
+  Layers,
+  Pencil,
+  Trash2,
+  Ellipsis,
+  Archive,
+  ArchiveRestore,
+  FolderInput,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -49,6 +57,7 @@ function CardActionItems({
   onOpen,
   onDelete,
   onGoToDeck,
+  onMove,
   onArchiveToggle,
   archived,
   Item,
@@ -57,6 +66,7 @@ function CardActionItems({
   onOpen: () => void;
   onDelete: () => void;
   onGoToDeck?: () => void;
+  onMove?: () => void;
   onArchiveToggle?: () => void;
   archived?: boolean;
   Item: typeof DropdownMenuItem;
@@ -72,6 +82,12 @@ function CardActionItems({
         <Item onClick={onGoToDeck}>
           <Layers className="h-4 w-4" />
           Go to deck
+        </Item>
+      )}
+      {onMove && (
+        <Item onClick={onMove}>
+          <FolderInput className="h-4 w-4" />
+          Move to deck…
         </Item>
       )}
       {onArchiveToggle && (
@@ -112,12 +128,14 @@ function CardActionsMenu({
   onOpen,
   onDelete,
   onGoToDeck,
+  onMove,
   onArchiveToggle,
   archived,
 }: {
   onOpen: () => void;
   onDelete: () => void;
   onGoToDeck?: () => void;
+  onMove?: () => void;
   onArchiveToggle?: () => void;
   archived?: boolean;
 }) {
@@ -130,17 +148,18 @@ function CardActionsMenu({
               variant="ghost"
               size="icon-sm"
               aria-label="Flashcard actions"
-              className="shrink-0"
+              className="-mr-2 shrink-0"
             />
           }
         >
-          <EllipsisVertical className="h-4 w-4" />
+          <Ellipsis className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-40">
           <CardActionItems
             onOpen={onOpen}
             onDelete={onDelete}
             onGoToDeck={onGoToDeck}
+            onMove={onMove}
             onArchiveToggle={onArchiveToggle}
             archived={archived}
             Item={DropdownMenuItem}
@@ -157,6 +176,7 @@ export const FlashcardTile = memo(function FlashcardTile({
   onOpen,
   onDelete,
   onGoToDeck,
+  onMove,
   onArchiveToggle,
   loadDeleteConsequences,
   deckName,
@@ -166,6 +186,8 @@ export const FlashcardTile = memo(function FlashcardTile({
   onDelete: () => void | Promise<void>;
   /** When set (e.g. on Browse), adds a menu item to open the card's deck. */
   onGoToDeck?: () => void;
+  /** When set, adds a menu item to move the card into another deck. */
+  onMove?: () => void;
   /** Toggle archive state for this card. */
   onArchiveToggle?: () => void | Promise<void>;
   loadDeleteConsequences?: (
@@ -297,6 +319,7 @@ export const FlashcardTile = memo(function FlashcardTile({
                   onOpen={onOpen}
                   onDelete={openDeleteConfirm}
                   onGoToDeck={onGoToDeck}
+                  onMove={onMove}
                   onArchiveToggle={
                     onArchiveToggle
                       ? () => void onArchiveToggle()
@@ -332,6 +355,7 @@ export const FlashcardTile = memo(function FlashcardTile({
                   onOpen={onOpen}
                   onDelete={openDeleteConfirm}
                   onGoToDeck={onGoToDeck}
+                  onMove={onMove}
                   onArchiveToggle={
                     onArchiveToggle
                       ? () => void onArchiveToggle()
@@ -397,6 +421,7 @@ export const FlashcardTile = memo(function FlashcardTile({
             onOpen={onOpen}
             onDelete={openDeleteConfirm}
             onGoToDeck={onGoToDeck}
+            onMove={onMove}
             onArchiveToggle={
               onArchiveToggle ? () => void onArchiveToggle() : undefined
             }

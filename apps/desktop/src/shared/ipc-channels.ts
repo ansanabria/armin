@@ -32,10 +32,12 @@ export const ipcChannels = {
     listDeckTags: channel("flashcards:listDeckTags"),
     get: channel("flashcards:get"),
     deleteConsequences: channel("flashcards:deleteConsequences"),
+    moveConsequences: channel("flashcards:moveConsequences"),
     create: channel("flashcards:create"),
     update: channel("flashcards:update"),
     delete: channel("flashcards:delete"),
     archive: channel("flashcards:archive"),
+    move: channel("flashcards:move"),
   },
   import: {
     analyzeAnki: channel("import:analyzeAnki"),
@@ -57,7 +59,7 @@ export const ipcChannels = {
     pool: channel("cram:pool"),
   },
   graph: {
-    getGlobal: channel("graph:getGlobal"),
+    getDeck: channel("graph:getDeck"),
     addPrereq: channel("graph:addPrereq"),
     removePrereq: channel("graph:removePrereq"),
     saveLayout: channel("graph:saveLayout"),

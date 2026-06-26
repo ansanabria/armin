@@ -1,4 +1,4 @@
-import { count, eq, inArray, min, max, sql } from "drizzle-orm";
+import { count, eq, inArray, min, max, or, sql } from "drizzle-orm";
 import { schema } from "../db";
 import type { ReviewUnit, Flashcard } from "../db/schema";
 import {
@@ -18,11 +18,13 @@ import {
 import type { ServiceContext } from "./context";
 import {
   getDependentIds,
+  getPrereqIds,
   refreshAfterPrerequisiteStateChange,
   refreshDependentSubgraph,
 } from "./graph";
 
-const { reviewUnits, reviewLogs, flashcards, flashcardTags, tags } = schema;
+const { reviewUnits, reviewLogs, flashcards, flashcardPrereqs, flashcardTags, tags, decks } =
+  schema;
 
 /**
  * A flashcard plus the derived data the UI needs: tags, lock state, a
@@ -58,6 +60,11 @@ export type FlashcardDeleteConsequences = {
   reviewLogCount: number;
   firstReviewAt: Date | null;
   lastReviewAt: Date | null;
+};
+
+export type FlashcardMoveConsequences = {
+  prerequisiteCount: number;
+  dependentCount: number;
 };
 
 function normalizeTag(tag: string) {
@@ -528,4 +535,89 @@ export async function setArchived(
   await refreshAfterPrerequisiteStateChange(ctx, flashcardId);
 
   return withFlashcardMeta(ctx, { ...flashcard, archived });
+}
+
+/**
+ * Summarize the prerequisite edges a move would delete. Prerequisites are edges
+ * pointing into this flashcard; dependents are edges pointing out of it. Both are
+ * severed when the flashcard leaves its deck, because edges can't cross decks.
+ */
+export async function getMoveConsequences(
+  ctx: ServiceContext,
+  id: string,
+): Promise<FlashcardMoveConsequences> {
+  const [prereqIds, dependentIds] = await Promise.all([
+    getPrereqIds(ctx, id),
+    getDependentIds(ctx, id),
+  ]);
+  return {
+    prerequisiteCount: prereqIds.length,
+    dependentCount: dependentIds.length,
+  };
+}
+
+/**
+ * Move a flashcard to another deck. Because prerequisite edges can't cross deck
+ * boundaries, every incoming and outgoing edge is deleted, the generated review
+ * units follow the flashcard's deck, the saved canvas position is cleared, and
+ * lock state is recomputed for the moved flashcard and its former dependents.
+ */
+export async function moveFlashcard(
+  ctx: ServiceContext,
+  id: string,
+  targetDeckId: string,
+): Promise<FlashcardWithMeta | undefined> {
+  const current = ctx.db
+    .select()
+    .from(flashcards)
+    .where(eq(flashcards.id, id))
+    .get();
+  if (!current) return undefined;
+
+  // Same-deck move is a no-op: don't sever the deck's own edges.
+  if (current.deckId === targetDeckId) {
+    return withFlashcardMeta(ctx, current);
+  }
+
+  const targetDeck = ctx.db
+    .select({ id: decks.id })
+    .from(decks)
+    .where(eq(decks.id, targetDeckId))
+    .get();
+  if (!targetDeck) {
+    throw new Error(`Deck not found: ${targetDeckId}`);
+  }
+
+  // Capture former dependents before the edges are deleted, so their lock state
+  // can be recomputed once the moved flashcard no longer secures them.
+  const dependentIds = await getDependentIds(ctx, id);
+  const now = new Date();
+
+  const moved = ctx.db.transaction((tx) => {
+    tx.delete(flashcardPrereqs)
+      .where(
+        or(
+          eq(flashcardPrereqs.prereqId, id),
+          eq(flashcardPrereqs.dependentId, id),
+        ),
+      )
+      .run();
+    const updated = tx
+      .update(flashcards)
+      .set({ deckId: targetDeckId, posX: null, posY: null, updatedAt: now })
+      .where(eq(flashcards.id, id))
+      .returning()
+      .get();
+    tx.update(reviewUnits)
+      .set({ deckId: targetDeckId, updatedAt: now })
+      .where(eq(reviewUnits.flashcardId, id))
+      .run();
+    return updated!;
+  });
+
+  // The moved flashcard lost its incoming prerequisites; its former dependents
+  // lost it as a prerequisite. Recompute both plus their transitive dependents.
+  await refreshDependentSubgraph(ctx, [id, ...dependentIds]);
+
+  return withFlashcardMeta(ctx, moved);
 }

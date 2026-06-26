@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { GitBranch } from "lucide-react";
 import type { Viewport, XYPosition } from "@xyflow/react";
 import { FlashcardFormDialog } from "@/components/flashcard-form-dialog";
@@ -10,9 +10,8 @@ import { Dialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { useToast } from "@/components/ui/toast";
 import { deckKeys, graphKeys } from "@/lib/armin-query";
-import { deckColor } from "@/lib/deck-color";
 import { useGraphCanvasEdits } from "@/lib/use-graph-canvas-edits";
-import { toUiGlobalGraph, type UiDeckGraph } from "@/types/view-models";
+import { toUiDeckGraph, type UiDeckGraph } from "@/types/view-models";
 import type {
   FlashcardContent,
   FlashcardDeleteConsequences,
@@ -20,7 +19,43 @@ import type {
 } from "@/types/window";
 import { cn } from "@/lib/utils";
 
-const viewportStorageKey = "armin:graph-viewport:global";
+function markGraphPerf(name: string) {
+  if (!import.meta.env.DEV && !window.__ARMIN_E2E__) return;
+  performance.mark(`armin:graph:${name}`);
+}
+
+function measureGraphPerf(name: string, start: string, end: string) {
+  if (!import.meta.env.DEV && !window.__ARMIN_E2E__) return;
+  try {
+    performance.measure(
+      `armin:graph:${name}`,
+      `armin:graph:${start}`,
+      `armin:graph:${end}`,
+    );
+  } catch {
+    // Marks are best-effort in development.
+  }
+}
+
+function afterRoutePaint(work: () => void) {
+  let done = false;
+  let inner = 0;
+  const run = () => {
+    if (done) return;
+    done = true;
+    work();
+  };
+  const outer = requestAnimationFrame(() => {
+    inner = requestAnimationFrame(run);
+  });
+  const timeout = window.setTimeout(run, 100);
+  return () => {
+    done = true;
+    cancelAnimationFrame(outer);
+    cancelAnimationFrame(inner);
+    window.clearTimeout(timeout);
+  };
+}
 
 function plural(count: number, singular: string, pluralForm = `${singular}s`) {
   return `${count} ${count === 1 ? singular : pluralForm}`;
@@ -38,9 +73,9 @@ function formatReviewHistory(consequences: FlashcardDeleteConsequences | null) {
   return `${plural(consequences.reviewLogCount, "review log")} across ${plural(consequences.reviewUnitCount, "review unit")} will be destroyed${span}.`;
 }
 
-function readSavedViewport(): Viewport | undefined {
+function readSavedViewport(storageKey: string): Viewport | undefined {
   try {
-    const raw = localStorage.getItem(viewportStorageKey);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return undefined;
     const parsed = JSON.parse(raw) as Partial<Viewport>;
     if (
@@ -56,12 +91,19 @@ function readSavedViewport(): Viewport | undefined {
   return undefined;
 }
 
-export default function GlobalGraphPage() {
-  const { focus } = useSearch({ from: "/graph" });
+export default function DeckGraphPage() {
+  const { deckId } = useParams({ from: "/deck/$deckId/graph" });
+  const navigate = useNavigate();
   const toast = useToast();
+  const markedRouteRender = useRef(false);
+  if (!markedRouteRender.current) {
+    markedRouteRender.current = true;
+    markGraphPerf("routeRender:start");
+  }
 
+  const viewportStorageKey = `armin:graph-viewport:${deckId}`;
   const [initialViewport] = useState<Viewport | undefined>(() =>
-    readSavedViewport(),
+    readSavedViewport(viewportStorageKey),
   );
 
   const persistViewport = (viewport: Viewport) => {
@@ -72,30 +114,30 @@ export default function GlobalGraphPage() {
     }
   };
 
-  const decksQuery = useQuery({
-    queryKey: deckKeys.all,
-    queryFn: () => window.armin.decks.list(),
-  });
-  const graphQuery = useQuery({
-    queryKey: graphKeys.global,
-    queryFn: () => window.armin.graph.getGlobal(),
+  const deckQuery = useQuery({
+    queryKey: deckKeys.detail(deckId),
+    queryFn: () => window.armin.decks.get(deckId),
   });
 
-  const decks = useMemo(() => decksQuery.data ?? [], [decksQuery.data]);
-  const persistedGraph = useMemo(
-    () =>
-      graphQuery.data ? toUiGlobalGraph(graphQuery.data, decks) : null,
-    [graphQuery.data, decks],
-  );
-  const deckLensOptions = useMemo(
-    () =>
-      decks.map((deck) => ({
-        id: deck.id,
-        name: deck.name,
-        color: deckColor(deck.id),
-      })),
-    [decks],
-  );
+  const graphQuery = useQuery({
+    queryKey: graphKeys.deck(deckId),
+    queryFn: async () => {
+      markGraphPerf("getDeck:start");
+      const graph = await window.armin.graph.getDeck(deckId);
+      markGraphPerf("getDeck:end");
+      measureGraphPerf("getDeck", "getDeck:start", "getDeck:end");
+      return graph;
+    },
+  });
+
+  const persistedGraph = useMemo(() => {
+    if (!graphQuery.data) return null;
+    markGraphPerf("toUiDeckGraph:start");
+    const graph = toUiDeckGraph(graphQuery.data, deckId);
+    markGraphPerf("toUiDeckGraph:end");
+    measureGraphPerf("toUiDeckGraph", "toUiDeckGraph:start", "toUiDeckGraph:end");
+    return graph;
+  }, [graphQuery.data, deckId]);
 
   const [graph, setGraph] = useState<UiDeckGraph>({ nodes: [], edges: [] });
   const [open, setOpen] = useState(false);
@@ -110,7 +152,6 @@ export default function GlobalGraphPage() {
   const [pendingConnectFrom, setPendingConnectFrom] = useState<string | null>(
     null,
   );
-  const [createDeckId, setCreateDeckId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteConsequences, setDeleteConsequences] =
     useState<FlashcardDeleteConsequences | null>(null);
@@ -127,13 +168,6 @@ export default function GlobalGraphPage() {
     }
   }, [persistedGraph]);
 
-  // Default the deck picker to the first deck once decks load.
-  useEffect(() => {
-    if (createDeckId === null && decks.length > 0) {
-      setCreateDeckId(decks[0].id);
-    }
-  }, [createDeckId, decks]);
-
   // Once the data is in, let the loading screen paint a frame before mounting
   // the canvas. Building the graph (dagre layout + ReactFlow + every node) is a
   // heavy synchronous burst that blocks the main thread, so deferring it keeps
@@ -141,14 +175,10 @@ export default function GlobalGraphPage() {
   // page.
   useEffect(() => {
     if (!graphReady || canvasMounted) return;
-    let inner = 0;
-    const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => setCanvasMounted(true));
+    return afterRoutePaint(() => {
+      markGraphPerf("reactFlow:mount");
+      setCanvasMounted(true);
     });
-    return () => {
-      cancelAnimationFrame(outer);
-      cancelAnimationFrame(inner);
-    };
   }, [graphReady, canvasMounted]);
 
   const closeDialog = () => setOpen(false);
@@ -190,17 +220,12 @@ export default function GlobalGraphPage() {
       .catch(() => setDeleteConsequencesError(true));
   };
 
-  // Adding from a drag inherits the source card's deck; a blank-canvas add uses
-  // the deck chosen in the dialog.
-  const inheritedDeckId = pendingConnectFrom
-    ? (graph.nodes.find((n) => n.id === pendingConnectFrom)?.deckId ?? null)
-    : null;
-
   const graphEdits = useGraphCanvasEdits({
     graph,
     setGraph,
-    createDeckId,
-    inheritedDeckId,
+    deckId,
+    createDeckId: deckId,
+    inheritedDeckId: deckId,
     pendingPlacement,
     pendingConnectFrom,
     editingId,
@@ -262,10 +287,12 @@ export default function GlobalGraphPage() {
       {canvasMounted && (
         <PrerequisiteGraph
           graph={graph}
+          deckName={deckQuery.data?.name}
+          onBack={() =>
+            void navigate({ to: "/deck/$deckId", params: { deckId } })
+          }
           onGraphChange={graphEdits.applyGraphChange}
           nodePlacements={graphEdits.nodePlacements}
-          decks={deckLensOptions}
-          focusDeckId={focus ?? null}
           onCreateCardRequest={openCreate}
           onEditCardRequest={openEdit}
           onDeleteCardRequest={openDelete}
@@ -286,9 +313,7 @@ export default function GlobalGraphPage() {
         initialType={editingId ? editingType : "basic"}
         initialContent={editingId ? editingContent : null}
         onSubmit={graphEdits.saveCard}
-        decks={inheritedDeckId ? undefined : decks}
-        deckId={createDeckId}
-        onDeckChange={setCreateDeckId}
+        deckId={deckId}
       />
       <Dialog
         open={Boolean(deleteId)}

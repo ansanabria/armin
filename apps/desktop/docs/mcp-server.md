@@ -26,6 +26,11 @@ Available tools:
 - `list_open_profiles`
 - `select_profile`
 
+Prerequisite graphs are bound to a single deck. `get_graph` requires a `deckId`
+and returns only that deck's flashcards and edges. `add_prerequisite` rejects an
+edge whose two flashcards live in different decks, so connect cards only within
+the same deck.
+
 ## Embedded server
 
 Open Armin and select the profile you want the agent to write to. Armin starts

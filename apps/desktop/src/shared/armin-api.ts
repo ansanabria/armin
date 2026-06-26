@@ -9,12 +9,13 @@ import type {
 import type {
   BrowseFlashcard,
   FlashcardDeleteConsequences,
+  FlashcardMoveConsequences,
   FlashcardWithMeta,
 } from "../main/services/flashcards";
 import type { FlashcardContent, FlashcardType } from "./flashcard-types";
 import type { PreviewOption, ReviewQueueItem } from "../main/services/review";
 import type { CramPool, CramScope } from "../main/services/cram";
-import type { DeckGraph, GlobalGraph } from "../main/services/graph";
+import type { DeckGraph } from "../main/services/graph";
 import type { McpSetup } from "./mcp";
 import type {
   AnkiAnalysis,
@@ -70,6 +71,7 @@ export interface ArminApi {
     listDeckTags(deckId: string): Promise<string[]>;
     get(id: string): Promise<FlashcardWithMeta | undefined>;
     deleteConsequences(id: string): Promise<FlashcardDeleteConsequences>;
+    moveConsequences(id: string): Promise<FlashcardMoveConsequences>;
     create(input: {
       deckId: string;
       type: FlashcardType;
@@ -87,6 +89,10 @@ export interface ArminApi {
       id: string,
       archived: boolean,
     ): Promise<FlashcardWithMeta | undefined>;
+    move(
+      id: string,
+      targetDeckId: string,
+    ): Promise<FlashcardWithMeta | undefined>;
   };
   review: {
     queue(deckId: string): Promise<ReviewQueueItem[]>;
@@ -99,10 +105,11 @@ export interface ArminApi {
     pool(scope: CramScope): Promise<CramPool>;
   };
   graph: {
-    getGlobal(): Promise<GlobalGraph>;
+    getDeck(deckId: string): Promise<DeckGraph>;
     addPrereq(prereqId: string, dependentId: string): Promise<{ ok: true }>;
     removePrereq(prereqId: string, dependentId: string): Promise<{ ok: true }>;
     saveLayout(
+      deckId: string,
       placements: { flashcardId: string; x: number; y: number }[],
     ): Promise<{ ok: true }>;
   };
@@ -201,6 +208,7 @@ export type {
   DeckWithStats,
   FlashcardWithMeta,
   FlashcardDeleteConsequences,
+  FlashcardMoveConsequences,
   BrowseFlashcard,
   FlashcardType,
   FlashcardContent,
@@ -209,5 +217,4 @@ export type {
   CramPool,
   CramScope,
   DeckGraph,
-  GlobalGraph,
 };

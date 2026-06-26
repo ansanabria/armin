@@ -28,12 +28,11 @@ function basic(
 }
 
 describe("prerequisite edges", () => {
-  it("allows a secured prerequisite in one deck to unlock a dependent in another", async () => {
-    const ctx = await makeContext("edge-cross-deck");
-    const prereqDeck = await decks.createDeck(ctx, { name: "Prereqs" });
-    const dependentDeck = await decks.createDeck(ctx, { name: "Dependents" });
-    const prereq = await basic(ctx, prereqDeck.id, "P", "P");
-    const dependent = await basic(ctx, dependentDeck.id, "D", "D");
+  it("allows prerequisite edges within the same deck", async () => {
+    const ctx = await makeContext("edge-same-deck");
+    const deck = await decks.createDeck(ctx, { name: "Deck" });
+    const prereq = await basic(ctx, deck.id, "P", "P");
+    const dependent = await basic(ctx, deck.id, "D", "D");
 
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
@@ -52,12 +51,27 @@ describe("prerequisite edges", () => {
     expect(isPendingSchedule(dependentCard)).toBe(false);
   });
 
-  it("prevents cycles across deck boundaries", async () => {
-    const ctx = await makeContext("edge-cross-deck-cycle");
-    const firstDeck = await decks.createDeck(ctx, { name: "First" });
-    const secondDeck = await decks.createDeck(ctx, { name: "Second" });
-    const first = await basic(ctx, firstDeck.id, "A", "A");
-    const second = await basic(ctx, secondDeck.id, "B", "B");
+  it("rejects prerequisite edges across deck boundaries", async () => {
+    const ctx = await makeContext("edge-cross-deck");
+    const prereqDeck = await decks.createDeck(ctx, { name: "Prereqs" });
+    const dependentDeck = await decks.createDeck(ctx, { name: "Dependents" });
+    const prereq = await basic(ctx, prereqDeck.id, "P", "P");
+    const dependent = await basic(ctx, dependentDeck.id, "D", "D");
+
+    await expect(
+      graph.addPrereq(ctx, prereq.id, dependent.id),
+    ).rejects.toThrow(
+      "Prerequisites can only connect flashcards in the same deck.",
+    );
+
+    expect(await graph.getPrereqIds(ctx, dependent.id)).toEqual([]);
+  });
+
+  it("still prevents cycles within a deck", async () => {
+    const ctx = await makeContext("edge-cycle");
+    const deck = await decks.createDeck(ctx, { name: "Deck" });
+    const first = await basic(ctx, deck.id, "A", "A");
+    const second = await basic(ctx, deck.id, "B", "B");
 
     await graph.addPrereq(ctx, first.id, second.id);
 
@@ -133,13 +147,12 @@ describe("prerequisite edges", () => {
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
   });
 
-  it("uses the dependent deck's prerequisite stability floor and refreshes on change", async () => {
+  it("uses the deck's prerequisite stability floor and refreshes on change", async () => {
     const ctx = await makeContext("edge-deck-floor");
     await settings.updateSettings(ctx, { prereqStabilityFloor: 2 });
-    const prereqDeck = await decks.createDeck(ctx, { name: "Prereqs" });
-    const dependentDeck = await decks.createDeck(ctx, { name: "Dependents" });
-    const prereq = await basic(ctx, prereqDeck.id, "P", "P");
-    const dependent = await basic(ctx, dependentDeck.id, "D", "D");
+    const deck = await decks.createDeck(ctx, { name: "Deck" });
+    const prereq = await basic(ctx, deck.id, "P", "P");
+    const dependent = await basic(ctx, deck.id, "D", "D");
 
     await graph.addPrereq(ctx, prereq.id, dependent.id);
     await securePrereq(ctx, prereq.id);
@@ -147,13 +160,13 @@ describe("prerequisite edges", () => {
 
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
 
-    await settings.updateDeckSettings(ctx, dependentDeck.id, {
+    await settings.updateDeckSettings(ctx, deck.id, {
       prereqStabilityFloor: 3,
     });
 
     expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
 
-    await settings.updateDeckSettings(ctx, dependentDeck.id, {
+    await settings.updateDeckSettings(ctx, deck.id, {
       prereqStabilityFloor: null,
     });
 
@@ -270,64 +283,5 @@ describe("canvas layout", () => {
     });
     const dependentNode = result.nodes.find((node) => node.id === dependent.id);
     expect(dependentNode?.locked).toBe(true);
-  });
-});
-
-describe("global graph", () => {
-  it("returns flashcards and edges across every deck, tagged by deck", async () => {
-    const ctx = await makeContext("global-graph");
-    const algebra = await decks.createDeck(ctx, { name: "Algebra" });
-    const calculus = await decks.createDeck(ctx, { name: "Calculus" });
-    const prereq = await basic(
-      ctx,
-      algebra.id,
-      "Vectors",
-      "Magnitude + direction",
-    );
-    const dependent = await basic(
-      ctx,
-      calculus.id,
-      "Gradient",
-      "Vector of partials",
-    );
-    // A cross-deck edge: the prereq lives in Algebra, the dependent in Calculus.
-    await graph.addPrereq(ctx, prereq.id, dependent.id);
-
-    const result = await graph.getGlobalGraph(ctx);
-
-    expect(result.nodes.map((n) => n.id).sort()).toEqual(
-      [prereq.id, dependent.id].sort(),
-    );
-    expect(result.nodes.find((n) => n.id === prereq.id)?.deckId).toBe(
-      algebra.id,
-    );
-    expect(result.nodes.find((n) => n.id === dependent.id)?.deckId).toBe(
-      calculus.id,
-    );
-    expect(result.edges).toEqual([
-      { prereqId: prereq.id, dependentId: dependent.id },
-    ]);
-  });
-
-  it("saveGlobalLayout persists positions regardless of deck", async () => {
-    const ctx = await makeContext("global-layout");
-    const first = await decks.createDeck(ctx, { name: "First" });
-    const second = await decks.createDeck(ctx, { name: "Second" });
-    const a = await basic(ctx, first.id, "A", "A");
-    const b = await basic(ctx, second.id, "B", "B");
-
-    await graph.saveGlobalLayout(ctx, [
-      { flashcardId: a.id, x: 10, y: 20 },
-      { flashcardId: b.id, x: 30, y: 40 },
-    ]);
-
-    expect(await flashcards.getFlashcard(ctx, a.id)).toMatchObject({
-      posX: 10,
-      posY: 20,
-    });
-    expect(await flashcards.getFlashcard(ctx, b.id)).toMatchObject({
-      posX: 30,
-      posY: 40,
-    });
   });
 });

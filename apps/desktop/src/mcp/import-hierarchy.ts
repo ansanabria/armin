@@ -5,12 +5,8 @@ import {
   isFlashcardType,
   type FlashcardType,
 } from "../main/services/flashcard-types";
-import { getDeck, listDecks } from "../main/services/decks";
-import {
-  getDeckGraph,
-  getGlobalGraph,
-  refreshLockedForDeck,
-} from "../main/services/graph";
+import { getDeck } from "../main/services/decks";
+import { getDeckGraph, refreshLockedForDeck } from "../main/services/graph";
 import type { ServiceContext } from "../main/services/context";
 import { createFlashcardRecord } from "../main/services/flashcards";
 
@@ -194,17 +190,5 @@ export async function readDeckGraph(ctx: ServiceContext, deckId: string) {
   return {
     deck,
     graph: await getDeckGraph(ctx, deckId),
-  };
-}
-
-/**
- * The whole prerequisite graph across every deck. Each node carries its
- * `deckId`, and the deck list is returned alongside so a deck id can be mapped
- * to a name — decks are a grouping lens, not a boundary (ADR 0009).
- */
-export async function readGlobalGraph(ctx: ServiceContext) {
-  return {
-    decks: await listDecks(ctx),
-    graph: await getGlobalGraph(ctx),
   };
 }
