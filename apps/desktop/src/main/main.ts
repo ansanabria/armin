@@ -8,11 +8,10 @@ import { startEmbeddedMcpServer, stopEmbeddedMcpServer } from "./mcp-http";
 import { applyContentSecurityPolicy } from "./security";
 import { getAppSettings } from "./services/app-settings";
 import * as profiles from "./services/profiles";
+import { configureUserDataPath } from "./user-data";
 import { openProfilePicker } from "./windows";
 
-if (process.env.ARMIN_DATA_DIR) {
-  app.setPath("userData", process.env.ARMIN_DATA_DIR);
-}
+configureUserDataPath(app);
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
