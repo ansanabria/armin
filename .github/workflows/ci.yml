@@ -33,7 +33,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
       - name: Build icons
-        run: npm run icons
+        run: npm run icons --workspace apps/desktop
 
       - name: Lint
         run: npm run lint
@@ -42,27 +42,24 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm run test
+        run: npm run test --workspace apps/desktop
 
       - name: Test MCP server
-        run: npm run test:mcp
+        run: npm run test:mcp --workspace apps/desktop
 
       - name: Build Electron app for E2E
-        run: npm run test:e2e:build
+        run: npm run test:e2e:build --workspace apps/desktop
 
-      # electron-forge can exit 0 without packaging anything (e.g. the
-      # yauzl@2 silent failure on Node 24.16+, electron/forge#4277), so
-      # assert the packaged app actually exists.
       - name: Check packaged app output
-        run: test -x out/Armin-linux-x64/Armin
+        run: npm run check:package --workspace apps/desktop
 
       - name: Run E2E tests
-        run: xvfb-run --auto-servernum npm run test:e2e
+        run: xvfb-run --auto-servernum npm run test:e2e --workspace apps/desktop
 
       - name: Upload E2E artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: test-results/
+          path: apps/desktop/test-results/
           if-no-files-found: ignore
