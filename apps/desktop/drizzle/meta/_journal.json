@@ -1,0 +1,118 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1780601925113,
+      "tag": "0000_moaning_ser_duncan",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1780859046241,
+      "tag": "0001_bouncy_mariko_yashida",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781000000000,
+      "tag": "0002_deck_perf_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1781100000000,
+      "tag": "0003_card_locked_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1781200000000,
+      "tag": "0004_card_positions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781300000000,
+      "tag": "0005_notes_split",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781400000000,
+      "tag": "0006_cloze_drop_c_prefix",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1781500000000,
+      "tag": "0007_card_archived_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781600000000,
+      "tag": "0008_rename_notes_to_flashcards",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1781700000000,
+      "tag": "0009_keep_sibling_review_units_together",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1781800000000,
+      "tag": "0010_basic_reversed_forward_subkey",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1781900000000,
+      "tag": "0011_image_occlusion_card_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1782000000000,
+      "tag": "0012_scheduling_preset_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1782100000000,
+      "tag": "0013_grounded_scheduling_presets",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1782200000000,
+      "tag": "0014_deck_scheduling_overrides",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1782300000000,
+      "tag": "0015_delete_cross_deck_prereq_edges",
+      "breakpoints": true
+    }
+  ]
+}

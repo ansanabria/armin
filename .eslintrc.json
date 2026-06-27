@@ -19,8 +19,10 @@
     "@typescript-eslint/no-non-null-assertion": "off"
   },
   "ignorePatterns": [
-    "vite.*.config.mts",
-    "forge.config.ts",
-    "drizzle.config.ts"
+    "**/vite.*.config.mts",
+    "**/forge.config.ts",
+    "**/drizzle.config.ts",
+    "**/out/**",
+    "**/dist/**"
   ]
 }

@@ -1,0 +1,3 @@
+# better-sqlite3 ABI switches per runtime
+
+Armin uses `better-sqlite3` from both plain Node workflows and Electron workflows, but the native addon is compiled against different ABIs in those runtimes. We keep a single `node_modules` install and explicitly rebuild `better-sqlite3` for the command target: Node-facing tests, MCP, and benchmarks run `npm rebuild better-sqlite3`, while Electron start, package, make, publish, and E2E flows run `electron-rebuild` and rely on Electron Forge's native-module rebuild plus auto-unpack behavior. We chose this over maintaining separate native artifact paths because it follows the standard Electron native-module model while making Armin's dual-runtime switching visible in package scripts.

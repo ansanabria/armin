@@ -97,7 +97,11 @@ out/
 # Agent tooling
 .cursor/
 .opencode/
+.codex
 .claude/worktrees/
+.impeccable/
+.agents/skills/impeccable/
+docs/plans/
 
 # Production build
 dist/

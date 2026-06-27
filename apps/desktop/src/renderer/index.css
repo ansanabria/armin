@@ -1,0 +1,728 @@
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/source-serif-4";
+@import "@fontsource-variable/jetbrains-mono";
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./styles/flexoki-palette.css";
+@import "./styles/flexoki-theme.css";
+
+/* ------------------------------------------------------------------ *
+ * Armin design tokens — Flexoki semantic aliases for Tailwind.
+ * Light/dark values live in flexoki-theme.css. See DESIGN.md.
+ * ------------------------------------------------------------------ */
+@theme inline {
+  --color-paper: var(--armin-surface);
+  --color-bg-2: var(--armin-bg-2);
+  --color-ui: var(--armin-border);
+  --color-ui-2: var(--armin-border-strong);
+  --color-ui-3: var(--armin-ui-3);
+
+  --color-bg: var(--armin-bg);
+  --color-surface: var(--armin-surface);
+  --color-surface-sunken: var(--armin-surface-sunken);
+  --color-border: var(--armin-border);
+  --color-border-strong: var(--armin-border-strong);
+
+  --color-ink: var(--armin-ink);
+  --color-muted: var(--armin-muted);
+  --color-faint: var(--armin-faint);
+
+  --color-accent: var(--armin-accent);
+  --color-accent-deep: var(--armin-accent-deep);
+  --color-accent-tint: var(--armin-accent-tint);
+  --color-on-accent: var(--armin-on-accent);
+
+  --color-again: var(--armin-again);
+  --color-again-deep: var(--armin-again-deep);
+  --color-hard: var(--armin-hard);
+  --color-hard-deep: var(--armin-hard-deep);
+  --color-good: var(--armin-good);
+  --color-good-deep: var(--armin-good-deep);
+  --color-easy: var(--armin-easy);
+  --color-easy-deep: var(--armin-easy-deep);
+
+  --color-new: var(--armin-new);
+  --color-new-bg: var(--armin-new-bg);
+  --color-learning: var(--armin-learning);
+  --color-learning-bg: var(--armin-learning-bg);
+  --color-review: var(--armin-review);
+  --color-review-bg: var(--armin-review-bg);
+  --color-relearning: var(--armin-relearning);
+  --color-relearning-bg: var(--armin-relearning-bg);
+
+  --shadow-overlay: var(--armin-shadow-overlay);
+
+  /* Radii — sharp corners throughout */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+
+  /* Type */
+  --font-sans:
+    "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, Helvetica, Arial, sans-serif;
+  --font-serif:
+    "Source Serif 4 Variable", "Source Serif 4", Georgia, "Times New Roman",
+    serif;
+  --font-mono:
+    "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular,
+    Menlo, monospace;
+
+  /* Motion */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  *,
+  *::before,
+  *::after {
+    border-radius: 0 !important;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-tint);
+    color: var(--color-accent-deep);
+  }
+
+  a[href],
+  button:not(:disabled),
+  label[for],
+  select:not(:disabled),
+  summary,
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="link"]:not([aria-disabled="true"]),
+  [role="switch"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Motion. Every animation has a reduced-motion fallback below.
+ * ------------------------------------------------------------------ */
+@layer utilities {
+  @keyframes a-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes a-rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes a-pop {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  @keyframes a-fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes a-pop-out {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
+  }
+  @keyframes a-flip-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes a-bar-in {
+    from {
+      opacity: 0;
+      transform: translateY(1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes a-bar-out {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(1rem);
+    }
+  }
+  @keyframes a-rise-out {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+  @keyframes a-shimmer {
+    to {
+      background-position-x: -200%;
+    }
+  }
+  /* Directional route slides. Distance pairs a clear left/right read with a fade
+     so it stays in the app's calm motion register. */
+  @keyframes a-slide-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(2rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes a-slide-out-left {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-2rem);
+    }
+  }
+  @keyframes a-slide-in-left {
+    from {
+      opacity: 0;
+      transform: translateX(-2rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes a-slide-out-right {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(2rem);
+    }
+  }
+  @keyframes a-slide-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(2rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes a-slide-out-down {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(2rem);
+    }
+  }
+
+  .animate-fade-in {
+    animation: a-fade-in 0.2s var(--ease-out-quart) both;
+  }
+  .animate-rise {
+    animation: a-rise 0.32s var(--ease-out-quart) both;
+  }
+  .animate-rise-out {
+    animation: a-rise-out 0.28s var(--ease-out-quart) both;
+  }
+  .animate-pop {
+    animation: a-pop 0.2s var(--ease-out-quart) both;
+  }
+  .animate-fade-out {
+    animation: a-fade-out 0.2s var(--ease-out-quart) both;
+  }
+  .animate-pop-out {
+    animation: a-pop-out 0.2s var(--ease-out-quart) both;
+  }
+  .card-grid {
+    position: relative;
+    align-items: stretch;
+  }
+
+  .card-tile-collapse {
+    display: flex;
+    width: 100%;
+    min-height: 100%;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 13.5rem;
+  }
+
+  .card-tile-collapse[data-exiting="true"] {
+    pointer-events: none;
+    opacity: 0;
+    transform: scale(0.98) translateY(-4px);
+    transition:
+      opacity 0.22s var(--ease-out-quart),
+      transform 0.32s var(--ease-out-quart);
+  }
+  .animate-flip-in {
+    animation: a-flip-in 0.28s var(--ease-out-quart) both;
+  }
+  .animate-bar-in {
+    animation: a-bar-in 0.28s var(--ease-out-quart) both;
+  }
+  .animate-bar-out {
+    animation: a-bar-out 0.22s var(--ease-out-quart) both;
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      100deg,
+      var(--color-surface-sunken) 30%,
+      var(--color-border) 50%,
+      var(--color-surface-sunken) 70%
+    );
+    background-size: 200% 100%;
+    animation: a-shimmer 1.4s ease-in-out infinite;
+  }
+
+  .titlebar-drag {
+    -webkit-app-region: drag;
+  }
+  .titlebar-no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  /* Ruled notebook paper — horizontal lines with a lighter vertical grid. */
+  .notebook-bg {
+    --notebook-cell: 1.5rem;
+
+    background-color: var(--color-bg);
+    background-image:
+      linear-gradient(var(--armin-grid-h) 1px, transparent 1px),
+      linear-gradient(90deg, var(--armin-grid-v) 1px, transparent 1px);
+    background-size:
+      100% var(--notebook-cell),
+      var(--notebook-cell) 100%;
+  }
+
+  /* A full-bleed route (e.g. the prerequisite graph) opts out of the centered
+     page box and page scroll by rendering an element marked `data-fullbleed`.
+     Keying off the rendered content, rather than the router pathname, keeps the
+     layout in lockstep with <Outlet/>. */
+  .route-scroll:has([data-fullbleed]) {
+    overflow: hidden;
+  }
+  .route-pad:has([data-fullbleed]) {
+    height: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* View transitions between routes. The persistent `.route-view` wrapper gets
+     its own snapshot so only the page content animates; the header stays in the
+     default `root` group, which we hold still so the nav never flickers. */
+  .route-view {
+    view-transition-name: route-content;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+
+  /* Neutral fallback (first load, or moving within the same section). */
+  ::view-transition-old(route-content) {
+    animation: a-fade-out 0.2s var(--ease-out-quart) both;
+  }
+  ::view-transition-new(route-content) {
+    animation: a-rise 0.28s var(--ease-out-quart) both;
+  }
+
+  /* Forward (moving right through the app, e.g. Decks → Browse): the new page
+     enters from the right while the old page leaves to the left. */
+  html:active-view-transition-type(forward)::view-transition-old(route-content) {
+    animation: a-slide-out-left 0.28s var(--ease-out-quart) both;
+  }
+  html:active-view-transition-type(forward)::view-transition-new(route-content) {
+    animation: a-slide-in-right 0.28s var(--ease-out-quart) both;
+  }
+
+  /* Backward (moving left, e.g. Browse → Decks): the new page enters from the
+     left while the old page leaves to the right. */
+  html:active-view-transition-type(backward)::view-transition-old(route-content) {
+    animation: a-slide-out-right 0.28s var(--ease-out-quart) both;
+  }
+  html:active-view-transition-type(backward)::view-transition-new(route-content) {
+    animation: a-slide-in-left 0.28s var(--ease-out-quart) both;
+  }
+
+  /* Opening a deck: the deck page rises up from the bottom while the list it came
+     from fades away beneath it. */
+  html:active-view-transition-type(deck-enter)::view-transition-old(route-content) {
+    animation: a-fade-out 0.2s var(--ease-out-quart) both;
+  }
+  html:active-view-transition-type(deck-enter)::view-transition-new(route-content) {
+    animation: a-slide-in-up 0.32s var(--ease-out-quart) both;
+  }
+
+  /* Going back out of a deck: the deck page drops down off the bottom while the
+     list fades back in behind it. */
+  html:active-view-transition-type(deck-leave)::view-transition-old(route-content) {
+    animation: a-slide-out-down 0.28s var(--ease-out-quart) both;
+  }
+  html:active-view-transition-type(deck-leave)::view-transition-new(route-content) {
+    animation: a-fade-in 0.28s var(--ease-out-quart) both;
+  }
+
+  /* Themed scrollbars for inputs and other in-app scroll regions. */
+  .armin-scrollbar,
+  textarea {
+    --armin-scrollbar-gutter: var(--color-surface);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+
+  .armin-scrollbar-gutter-bg {
+    --armin-scrollbar-gutter: var(--color-bg);
+  }
+
+  .armin-scrollbar::-webkit-scrollbar,
+  textarea::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .armin-scrollbar::-webkit-scrollbar-track,
+  textarea::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .armin-scrollbar::-webkit-scrollbar-thumb,
+  textarea::-webkit-scrollbar-thumb {
+    background-color: var(--color-border-strong);
+    border: 2px solid var(--armin-scrollbar-gutter);
+  }
+
+  .armin-scrollbar::-webkit-scrollbar-thumb:hover,
+  textarea::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-ui-3);
+  }
+
+  .armin-scrollbar::-webkit-scrollbar-button,
+  textarea::-webkit-scrollbar-button {
+    display: none;
+    height: 0;
+    width: 0;
+  }
+
+  .armin-scrollbar::-webkit-scrollbar-corner,
+  textarea::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Tiptap markdown fields (card authoring)
+ * ------------------------------------------------------------------ */
+@layer components {
+  .markdown-editor {
+    overflow-y: hidden;
+  }
+
+  .markdown-editor[data-overflowing] {
+    overflow-y: auto;
+  }
+
+  .markdown-editor .tiptap {
+    min-height: 4.5rem;
+    overflow-wrap: anywhere;
+  }
+
+  .markdown-editor .tiptap p {
+    margin: 0;
+  }
+
+  .markdown-editor .tiptap p + p {
+    margin-top: 0.5rem;
+  }
+
+  .markdown-editor .tiptap strong {
+    font-weight: 600;
+  }
+
+  .markdown-editor .tiptap code {
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface-sunken);
+    padding: 0.1em 0.35em;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  .markdown-editor .tiptap img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0.5rem 0;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+  }
+
+  .markdown-editor .tiptap img.ProseMirror-selectednode {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+
+  .markdown-editor .tiptap p.is-editor-empty:first-child::before,
+  .markdown-editor .tiptap p.is-empty::before {
+    float: left;
+    height: 0;
+    pointer-events: none;
+    color: var(--color-muted);
+    content: attr(data-placeholder);
+  }
+
+  /* Read-only rendered Markdown (react-markdown, review cards). Typography
+   * (size, weight, leading) is inherited from the wrapper's utility classes. */
+  .markdown-content {
+    overflow-wrap: anywhere;
+  }
+
+  .markdown-content > :first-child {
+    margin-top: 0;
+  }
+
+  .markdown-content p {
+    margin: 0;
+  }
+
+  .markdown-content p + p,
+  .markdown-content ul,
+  .markdown-content ol,
+  .markdown-content blockquote {
+    margin-top: 0.5rem;
+  }
+
+  .markdown-content strong {
+    font-weight: 600;
+  }
+
+  .markdown-content em {
+    font-style: italic;
+  }
+
+  .markdown-content del {
+    text-decoration: line-through;
+  }
+
+  .markdown-content a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .markdown-content code {
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface-sunken);
+    padding: 0.1em 0.35em;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+
+  .markdown-content pre {
+    margin-top: 0.5rem;
+    overflow-x: auto;
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface-sunken);
+    padding: 0.75rem 0.9rem;
+    text-align: left;
+  }
+
+  .markdown-content pre code {
+    padding: 0;
+    background: none;
+  }
+
+  .markdown-content ul,
+  .markdown-content ol {
+    padding-left: 1.4em;
+    text-align: left;
+  }
+
+  .markdown-content ul {
+    list-style: disc;
+  }
+
+  .markdown-content ol {
+    list-style: decimal;
+  }
+
+  .markdown-content li + li {
+    margin-top: 0.25rem;
+  }
+
+  .markdown-content blockquote {
+    border-left: 2px solid var(--color-border-strong);
+    padding-left: 0.75rem;
+    color: var(--color-muted);
+    text-align: left;
+  }
+
+  .markdown-content table {
+    margin-top: 0.5rem;
+    border-collapse: collapse;
+    text-align: left;
+  }
+
+  .markdown-content th,
+  .markdown-content td {
+    border: 1px solid var(--color-border);
+    padding: 0.3em 0.6em;
+  }
+
+  .markdown-content img {
+    display: inline-block;
+    max-width: 100%;
+    height: auto;
+    margin: 0.5rem 0;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * React Flow — theme overrides (Flexoki)
+ * ------------------------------------------------------------------ */
+.react-flow__controls {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: none;
+}
+
+.react-flow__controls-button {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  fill: var(--color-muted);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--color-surface-sunken);
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--color-accent);
+  stroke-width: 2;
+}
+
+/*
+ * Card graph handles: one per side, centered on the border. Hidden until the
+ * card is hovered/selected or a connection is in progress, so the canvas stays
+ * calm but every side is reachable for drawing links in any direction.
+ */
+.react-flow__node .card-graph-handle {
+  width: 11px;
+  height: 11px;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-accent);
+  border: 2px solid var(--color-surface);
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.react-flow__node:hover .card-graph-handle,
+.react-flow__node.selected .card-graph-handle,
+.graph-connecting .react-flow__node .card-graph-handle {
+  opacity: 1;
+}
+
+.react-flow__node .card-graph-handle:hover {
+  background: var(--color-accent-deep);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .skeleton {
+    animation: none;
+    background: var(--color-surface-sunken);
+  }
+  /* The `*` rule above does not match view-transition pseudo-elements, so the
+     route transition needs its own opt-out for an instant swap. */
+  ::view-transition-old(route-content),
+  ::view-transition-new(route-content),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.001ms !important;
+  }
+}

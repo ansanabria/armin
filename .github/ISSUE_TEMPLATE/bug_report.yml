@@ -1,0 +1,55 @@
+name: Bug report
+description: Something in Armin isn't working as expected
+labels: ["needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please don't use this for security issues —
+        see [SECURITY.md](https://github.com/ansanabria/armin/blob/master/SECURITY.md)
+        for private reporting.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what actually happened?
+      placeholder: Steps to reproduce, expected vs. actual behavior.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Armin version
+      description: The release you downloaded, or the version shown in the app.
+      placeholder: e.g. v0.3.0-beta
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux (AppImage)
+        - Windows (installer)
+        - macOS (ZIP)
+        - Other / built from source
+    validations:
+      required: true
+  - type: dropdown
+    id: data-persisted
+    attributes:
+      label: If this involves your study data, did it persist across a restart?
+      options:
+        - Not applicable
+        - "Yes, data persisted"
+        - "No, data was lost or changed"
+        - Not sure
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste any relevant logs or attach screenshots.
+    validations:
+      required: false
