@@ -5,6 +5,9 @@ import { cn } from "@/lib/utils";
 /**
  * Empty state that teaches the interface rather than just saying "nothing
  * here." Dashed border keeps it visually distinct from a populated surface.
+ *
+ * Use `bare` when the empty state already sits inside its own card or window
+ * (e.g. the profile picker) so it doesn't render a nested card.
  */
 export function EmptyState({
   icon: Icon,
@@ -12,17 +15,22 @@ export function EmptyState({
   description,
   action,
   className,
+  bare = false,
 }: {
   icon: LucideIcon;
   title: string;
   description?: React.ReactNode;
   action?: React.ReactNode;
   className?: string;
+  bare?: boolean;
 }) {
   return (
     <div
       className={cn(
-        "flex flex-col items-center rounded-xl border border-dashed border-border-strong bg-bg-2 px-6 py-14 text-center",
+        "flex flex-col items-center px-6 text-center",
+        bare
+          ? "py-10"
+          : "rounded-xl border border-dashed border-border-strong bg-bg-2 py-14",
         className,
       )}
     >
