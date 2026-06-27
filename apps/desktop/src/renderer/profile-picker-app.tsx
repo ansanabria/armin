@@ -441,6 +441,7 @@ function PickerView({
           </div>
         ) : (
           <EmptyState
+            bare
             icon={UserRound}
             title="No profiles yet"
             description="Create a profile to keep decks and settings separate for each learner or context. You can also restore one from a backup."
