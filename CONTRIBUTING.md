@@ -43,9 +43,4 @@ conventions, domain language, and architectural decisions are documented in:
   [`docs/agents/triage-labels.md`](docs/agents/triage-labels.md) — how issues are
   tracked and triaged.
 
-## Code of conduct
-
-This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By
-participating, you agree to uphold it.
-
 [issues]: https://github.com/ansanabria/armin/issues
