@@ -9,9 +9,9 @@ import {
 const invoke = (command: IpcChannel, payload?: unknown) =>
   ipcRenderer.invoke(command.channel, payload);
 
-const c = ipcChannels;
+const channels = ipcChannels;
 
-function currentProfileId(): string | null {
+function currentProfileId() {
   const prefix = "--armin-profile-id=";
   const arg = process.argv.find((value) => value.startsWith(prefix));
   if (!arg) return null;
@@ -22,22 +22,24 @@ const profileId = currentProfileId();
 const mediaRefRe =
   /^armin-media:([a-f0-9]{64}\.(?:png|jpg|gif|webp|svg|bmp|avif))$/;
 
-function mediaUrl(ref: string): string {
+function mediaUrl(ref: string) {
   const match = ref.match(mediaRefRe);
   if (!match || !profileId) return ref;
   return `armin-media://${encodeURIComponent(profileId)}/${match[1]}`;
 }
 
-function mediaRefFromUrl(url: string): string | null {
+function mediaRefFromUrl(url: string) {
   if (!profileId) return null;
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "armin-media:") return null;
     if (decodeURIComponent(parsed.hostname) !== profileId) return null;
+
     const fileName = parsed.pathname.replace(/^\//, "");
     if (!/^[a-f0-9]{64}\.(?:png|jpg|gif|webp|svg|bmp|avif)$/.test(fileName)) {
       return null;
     }
+
     return `armin-media:${fileName}`;
   } catch {
     return null;
@@ -46,94 +48,97 @@ function mediaRefFromUrl(url: string): string | null {
 
 const api = {
   profiles: {
-    list: () => invoke(c.profiles.list),
-    create: (name: string) => invoke(c.profiles.create, { name }),
-    open: (id: string, name?: string) => invoke(c.profiles.open, { id, name }),
-    getDefault: () => invoke(c.profiles.getDefault),
-    setDefault: (id: string) => invoke(c.profiles.setDefault, { id }),
-    clearDefault: () => invoke(c.profiles.clearDefault),
-    delete: (id: string) => invoke(c.profiles.delete, { id }),
-    showPicker: () => invoke(c.profiles.showPicker),
+    list: () => invoke(channels.profiles.list),
+    create: (name: string) => invoke(channels.profiles.create, { name }),
+    open: (id: string, name?: string) =>
+      invoke(channels.profiles.open, { id, name }),
+    getDefault: () => invoke(channels.profiles.getDefault),
+    setDefault: (id: string) => invoke(channels.profiles.setDefault, { id }),
+    clearDefault: () => invoke(channels.profiles.clearDefault),
+    delete: (id: string) => invoke(channels.profiles.delete, { id }),
+    showPicker: () => invoke(channels.profiles.showPicker),
   },
   decks: {
-    list: () => invoke(c.decks.list),
-    get: (id: string) => invoke(c.decks.get, { id }),
-    create: (input: unknown) => invoke(c.decks.create, input),
-    update: (input: unknown) => invoke(c.decks.update, input),
-    delete: (id: string) => invoke(c.decks.delete, { id }),
+    list: () => invoke(channels.decks.list),
+    get: (id: string) => invoke(channels.decks.get, { id }),
+    create: (input: unknown) => invoke(channels.decks.create, input),
+    update: (input: unknown) => invoke(channels.decks.update, input),
+    delete: (id: string) => invoke(channels.decks.delete, { id }),
   },
   flashcards: {
-    list: (deckId: string) => invoke(c.flashcards.list, { deckId }),
-    listAll: () => invoke(c.flashcards.listAll),
-    browse: (input: unknown) => invoke(c.flashcards.browse, input),
-    listTags: () => invoke(c.flashcards.listTags),
+    list: (deckId: string) => invoke(channels.flashcards.list, { deckId }),
+    listAll: () => invoke(channels.flashcards.listAll),
+    browse: (input: unknown) => invoke(channels.flashcards.browse, input),
+    listTags: () => invoke(channels.flashcards.listTags),
     listDeckTags: (deckId: string) =>
-      invoke(c.flashcards.listDeckTags, { deckId }),
-    get: (id: string) => invoke(c.flashcards.get, { id }),
+      invoke(channels.flashcards.listDeckTags, { deckId }),
+    get: (id: string) => invoke(channels.flashcards.get, { id }),
     deleteConsequences: (id: string) =>
-      invoke(c.flashcards.deleteConsequences, { id }),
+      invoke(channels.flashcards.deleteConsequences, { id }),
     moveConsequences: (id: string) =>
-      invoke(c.flashcards.moveConsequences, { id }),
-    create: (input: unknown) => invoke(c.flashcards.create, input),
-    update: (input: unknown) => invoke(c.flashcards.update, input),
-    delete: (id: string) => invoke(c.flashcards.delete, { id }),
+      invoke(channels.flashcards.moveConsequences, { id }),
+    create: (input: unknown) => invoke(channels.flashcards.create, input),
+    update: (input: unknown) => invoke(channels.flashcards.update, input),
+    delete: (id: string) => invoke(channels.flashcards.delete, { id }),
     archive: (id: string, archived: boolean) =>
-      invoke(c.flashcards.archive, { id, archived }),
+      invoke(channels.flashcards.archive, { id, archived }),
     move: (id: string, targetDeckId: string) =>
-      invoke(c.flashcards.move, { id, targetDeckId }),
+      invoke(channels.flashcards.move, { id, targetDeckId }),
   },
   review: {
-    queue: (deckId: string) => invoke(c.review.queue, { deckId }),
-    queueAll: () => invoke(c.review.queueAll),
+    queue: (deckId: string) => invoke(channels.review.queue, { deckId }),
+    queueAll: () => invoke(channels.review.queueAll),
     preview: (reviewUnitId: string) =>
-      invoke(c.review.preview, { reviewUnitId }),
+      invoke(channels.review.preview, { reviewUnitId }),
     rate: (reviewUnitId: string, rating: number) =>
-      invoke(c.review.rate, { reviewUnitId, rating }),
-    undo: (reviewUnitId: string) => invoke(c.review.undo, { reviewUnitId }),
+      invoke(channels.review.rate, { reviewUnitId, rating }),
+    undo: (reviewUnitId: string) =>
+      invoke(channels.review.undo, { reviewUnitId }),
   },
   cram: {
-    pool: (input: unknown) => invoke(c.cram.pool, input),
+    pool: (input: unknown) => invoke(channels.cram.pool, input),
   },
   graph: {
-    getDeck: (deckId: string) => invoke(c.graph.getDeck, { deckId }),
+    getDeck: (deckId: string) => invoke(channels.graph.getDeck, { deckId }),
     addPrereq: (prereqId: string, dependentId: string) =>
-      invoke(c.graph.addPrereq, { prereqId, dependentId }),
+      invoke(channels.graph.addPrereq, { prereqId, dependentId }),
     removePrereq: (prereqId: string, dependentId: string) =>
-      invoke(c.graph.removePrereq, { prereqId, dependentId }),
+      invoke(channels.graph.removePrereq, { prereqId, dependentId }),
     saveLayout: (
       deckId: string,
       placements: { flashcardId: string; x: number; y: number }[],
-    ) => invoke(c.graph.saveLayout, { deckId, placements }),
+    ) => invoke(channels.graph.saveLayout, { deckId, placements }),
   },
   settings: {
-    get: () => invoke(c.settings.get),
-    update: (patch: unknown) => invoke(c.settings.update, patch),
-    getDeck: (deckId: string) => invoke(c.settings.getDeck, { deckId }),
+    get: () => invoke(channels.settings.get),
+    update: (patch: unknown) => invoke(channels.settings.update, patch),
+    getDeck: (deckId: string) => invoke(channels.settings.getDeck, { deckId }),
     updateDeck: (deckId: string, patch: unknown) =>
-      invoke(c.settings.updateDeck, { deckId, patch }),
+      invoke(channels.settings.updateDeck, { deckId, patch }),
   },
   mcp: {
-    getSetup: () => invoke(c.mcp.getSetup),
-    getEnabled: () => invoke(c.mcp.getEnabled),
-    setEnabled: (enabled: boolean) => invoke(c.mcp.setEnabled, { enabled }),
-    getStatus: () => invoke(c.mcp.getStatus),
-    getPort: () => invoke(c.mcp.getPort),
-    setPort: (port: number) => invoke(c.mcp.setPort, { port }),
-    retry: () => invoke(c.mcp.retry),
+    getSetup: () => invoke(channels.mcp.getSetup),
+    getEnabled: () => invoke(channels.mcp.getEnabled),
+    setEnabled: (enabled: boolean) =>
+      invoke(channels.mcp.setEnabled, { enabled }),
+    getStatus: () => invoke(channels.mcp.getStatus),
+    getPort: () => invoke(channels.mcp.getPort),
+    setPort: (port: number) => invoke(channels.mcp.setPort, { port }),
+    retry: () => invoke(channels.mcp.retry),
   },
   import: {
     analyzeAnki: (bytes: Uint8Array, fileName: string) =>
-      invoke(c.import.analyzeAnki, { bytes, fileName }),
-    commitAnki: (input: unknown) => invoke(c.import.commitAnki, input),
+      invoke(channels.import.analyzeAnki, { bytes, fileName }),
+    commitAnki: (input: unknown) => invoke(channels.import.commitAnki, input),
     createDeckWithFlashcards: (input: unknown) =>
-      invoke(c.import.createDeckWithFlashcards, input),
+      invoke(channels.import.createDeckWithFlashcards, input),
   },
   data: {
-    export: () => invoke(c.data.export),
-    restore: () => invoke(c.data.restore),
+    export: () => invoke(channels.data.export),
+    restore: () => invoke(channels.data.restore),
   },
   media: {
-    importImage: (input: unknown) => invoke(c.media.importImage, input),
+    importImage: (input: unknown) => invoke(channels.media.importImage, input),
     url: mediaUrl,
     refFromUrl: mediaRefFromUrl,
   },
@@ -152,10 +157,10 @@ contextBridge.exposeInMainWorld(
 
 const shell = {
   platform: process.platform,
-  minimize: () => invoke(c.shell.minimize),
-  maximize: () => invoke(c.shell.maximize),
-  close: () => invoke(c.shell.close),
-  isMaximized: () => invoke(c.shell.isMaximized),
+  minimize: () => invoke(channels.shell.minimize),
+  maximize: () => invoke(channels.shell.maximize),
+  close: () => invoke(channels.shell.close),
+  isMaximized: () => invoke(channels.shell.isMaximized),
   onMaximizedChange: (cb: (maximized: boolean) => void) => {
     const listener = (_event: unknown, maximized: boolean) => cb(maximized);
     ipcRenderer.on(ipcEvents.shellMaximized, listener);
