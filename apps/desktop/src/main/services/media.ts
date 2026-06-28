@@ -50,42 +50,35 @@ const EXT_BY_MIME: Record<string, ImageKind["ext"]> = {
   "image/avif": "avif",
 };
 
-export type StoredMedia = {
-  ref: string;
-  fileName: string;
-  mime: string;
-  bytes: number;
-};
-
-export function isMediaRef(value: string): boolean {
+export function isMediaRef(value: string) {
   return MEDIA_REF_RE.test(value);
 }
 
-export function mediaFileNameFromRef(ref: string): string {
+export function mediaFileNameFromRef(ref: string) {
   if (!isMediaRef(ref)) {
     throw new Error("Invalid Flashcard media reference.");
   }
   return ref.slice(MEDIA_REF_PREFIX.length);
 }
 
-export function mediaRefFromFileName(fileName: string): string {
+export function mediaRefFromFileName(fileName: string) {
   if (!isSafeMediaFileName(fileName)) {
     throw new Error("Invalid Flashcard media filename.");
   }
   return `${MEDIA_REF_PREFIX}${fileName}`;
 }
 
-export function isSafeMediaFileName(fileName: string): boolean {
+export function isSafeMediaFileName(fileName: string) {
   return MEDIA_FILE_RE.test(fileName);
 }
 
-export function mimeForMediaFile(fileName: string): string | undefined {
+export function mimeForMediaFile(fileName: string) {
   if (!isSafeMediaFileName(fileName)) return undefined;
-  const ext = path.extname(fileName).slice(1) as ImageKind["ext"];
-  return MIME_BY_EXT[ext];
+  const extension = path.extname(fileName).slice(1) as ImageKind["ext"];
+  return MIME_BY_EXT[extension];
 }
 
-export function mediaPath(profileId: string, fileName: string): string {
+export function mediaPath(profileId: string, fileName: string) {
   if (!isSafeMediaFileName(fileName)) {
     throw new Error("Invalid Flashcard media filename.");
   }
@@ -97,21 +90,24 @@ export function storeFlashcardMedia(input: {
   bytes: Uint8Array;
   fileName?: string;
   mime?: string;
-}): StoredMedia {
+}) {
   assertMediaSize(input.bytes);
-  const kind = detectImageKind(input.bytes, input.fileName, input.mime);
+
+  const imageKind = detectImageKind(input.bytes, input.fileName, input.mime);
   const hash = createHash("sha256").update(input.bytes).digest("hex");
-  const fileName = `${hash}.${kind.ext}`;
-  const dir = profileMediaDir(input.profileId);
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, fileName);
-  if (!fs.existsSync(file)) {
-    fs.writeFileSync(file, input.bytes);
+  const fileName = `${hash}.${imageKind.ext}`;
+  const mediaDir = profileMediaDir(input.profileId);
+  const targetPath = path.join(mediaDir, fileName);
+
+  fs.mkdirSync(mediaDir, { recursive: true });
+  if (!fs.existsSync(targetPath)) {
+    fs.writeFileSync(targetPath, input.bytes);
   }
+
   return {
     ref: mediaRefFromFileName(fileName),
     fileName,
-    mime: kind.mime,
+    mime: imageKind.mime,
     bytes: input.bytes.byteLength,
   };
 }
@@ -122,30 +118,30 @@ export function writeRestoredMediaFile(
   bytes: Uint8Array,
 ) {
   if (!isSafeMediaFileName(fileName)) return;
+
   assertMediaSize(bytes);
-  const detected = detectImageKind(bytes, fileName);
+
+  const detectedKind = detectImageKind(bytes, fileName);
   const expectedMime = mimeForMediaFile(fileName);
-  if (expectedMime !== detected.mime) {
+  if (expectedMime !== detectedKind.mime) {
     throw new Error(`Backup media file ${fileName} has the wrong image type.`);
   }
-  const dir = profileMediaDir(profileId);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, fileName), bytes);
+
+  const mediaDir = profileMediaDir(profileId);
+  fs.mkdirSync(mediaDir, { recursive: true });
+  fs.writeFileSync(path.join(mediaDir, fileName), bytes);
 }
 
-export function listProfileMediaFiles(profileId: string): string[] {
-  const dir = profileMediaDir(profileId);
-  if (!fs.existsSync(dir)) return [];
+export function listProfileMediaFiles(profileId: string) {
+  const mediaDir = profileMediaDir(profileId);
+  if (!fs.existsSync(mediaDir)) return [];
   return fs
-    .readdirSync(dir)
+    .readdirSync(mediaDir)
     .filter(isSafeMediaFileName)
     .sort((a, b) => a.localeCompare(b));
 }
 
-export function readProfileMediaFile(
-  profileId: string,
-  fileName: string,
-): Uint8Array {
+export function readProfileMediaFile(profileId: string, fileName: string) {
   return fs.readFileSync(mediaPath(profileId, fileName));
 }
 
@@ -153,17 +149,17 @@ export function assertContentUsesMediaRefs(
   type: FlashcardType,
   content: FlashcardContent,
 ) {
-  const markdownFields = markdownFieldsFor(type, content);
-  for (const field of markdownFields) {
-    assertMarkdownImageRefs(field);
+  for (const markdownField of markdownFieldsFor(type, content)) {
+    assertMarkdownImageRefs(markdownField);
   }
+
   if (type === "image_occlusion") {
-    const c = content as ImageOcclusionContent;
-    assertMediaRef(c.baseImage, "Image occlusion base image");
+    const imageOcclusionContent = content as ImageOcclusionContent;
+    assertMediaRef(imageOcclusionContent.baseImage, "Image occlusion base image");
   }
 }
 
-export function rewriteMarkdownMediaForExport(markdown: string): string {
+export function rewriteMarkdownMediaForExport(markdown: string) {
   return markdown.replace(
     new RegExp(
       `${MEDIA_REF_PREFIX}([a-f0-9]{64}\\.(?:png|jpg|gif|webp|svg|bmp|avif))`,
@@ -177,54 +173,70 @@ export function canonicalizeLegacyMediaInContent(
   profileId: string,
   type: FlashcardType,
   content: FlashcardContent,
-): { content: FlashcardContent; changed: boolean } {
+) {
   let changed = false;
-  const replace = (text: string) =>
-    text.replace(DATA_IMAGE_RE, (dataUrl, rawSubtype: string, base64: string) => {
+  const replaceDataImages = (text: string) =>
+    text.replace(DATA_IMAGE_RE, (_dataUrl, rawSubtype: string, base64: string) => {
       changed = true;
       const bytes = Buffer.from(base64, "base64");
-      const stored = storeFlashcardMedia({
+      const storedMedia = storeFlashcardMedia({
         profileId,
         bytes,
         mime: `image/${rawSubtype.toLowerCase()}`,
       });
-      return stored.ref;
+      return storedMedia.ref;
     });
 
   switch (type) {
     case "basic":
     case "basic_reversed": {
-      const c = content as { front: string; back: string };
-      const next = {
-        ...c,
-        front: replace(c.front),
-        back: replace(c.back),
+      const basicContent = content as { front: string; back: string };
+      return {
+        changed,
+        content: {
+          ...basicContent,
+          front: replaceDataImages(basicContent.front),
+          back: replaceDataImages(basicContent.back),
+        },
       };
-      return { changed, content: next };
     }
     case "cloze": {
-      const c = content as { text: string };
-      const next = { ...c, text: replace(c.text) };
-      return { changed, content: next };
+      const clozeContent = content as { text: string };
+      return {
+        changed,
+        content: {
+          ...clozeContent,
+          text: replaceDataImages(clozeContent.text),
+        },
+      };
     }
     case "type_answer": {
-      const c = content as {
+      const typeAnswerContent = content as {
         prompt: string;
         answer: string;
         acceptedAnswers: string[];
       };
-      const next = { ...c, prompt: replace(c.prompt) };
-      return { changed, content: next };
+      return {
+        changed,
+        content: {
+          ...typeAnswerContent,
+          prompt: replaceDataImages(typeAnswerContent.prompt),
+        },
+      };
     }
     case "image_occlusion": {
-      const c = content as ImageOcclusionContent;
-      const next: ImageOcclusionContent = {
-        ...c,
-        baseImage: replace(c.baseImage),
-        header: c.header ? replace(c.header) : c.header,
-        extra: c.extra ? replace(c.extra) : c.extra,
+      const imageOcclusionContent = content as ImageOcclusionContent;
+      const nextContent: ImageOcclusionContent = {
+        ...imageOcclusionContent,
+        baseImage: replaceDataImages(imageOcclusionContent.baseImage),
+        header: imageOcclusionContent.header
+          ? replaceDataImages(imageOcclusionContent.header)
+          : imageOcclusionContent.header,
+        extra: imageOcclusionContent.extra
+          ? replaceDataImages(imageOcclusionContent.extra)
+          : imageOcclusionContent.extra,
       };
-      return { changed, content: next };
+      return { changed, content: nextContent };
     }
   }
 }
@@ -233,32 +245,35 @@ export function canonicalizeLegacyMediaForWrite(
   profileId: string,
   type: FlashcardType,
   content: FlashcardContent,
-): FlashcardContent {
+) {
   const result = canonicalizeLegacyMediaInContent(profileId, type, content);
   return result.content;
 }
 
 export async function upgradeLegacyFlashcardMedia(ctx: ServiceContext) {
-  const rows = ctx.db.select().from(schema.flashcards).all();
-  const updates: { flashcard: Flashcard; content: FlashcardContent }[] = [];
-  for (const flashcard of rows) {
+  const flashcards = ctx.db.select().from(schema.flashcards).all();
+  const mediaUpdates: { flashcard: Flashcard; content: FlashcardContent }[] = [];
+
+  for (const flashcard of flashcards) {
     const parsed = parseStoredContent(flashcard.type, flashcard.content);
     const { content, changed } = canonicalizeLegacyMediaInContent(
       ctx.profileId,
       parsed.type,
       parsed.content,
     );
-    if (changed) updates.push({ flashcard, content });
+    if (changed) mediaUpdates.push({ flashcard, content });
   }
-  if (updates.length === 0) return;
+
+  if (mediaUpdates.length === 0) return;
+
   ctx.db.transaction((tx) => {
-    for (const update of updates) {
+    for (const mediaUpdate of mediaUpdates) {
       tx.update(schema.flashcards)
         .set({
-          content: serializeContent(update.content),
-          updatedAt: update.flashcard.updatedAt,
+          content: serializeContent(mediaUpdate.content),
+          updatedAt: mediaUpdate.flashcard.updatedAt,
         })
-        .where(eq(schema.flashcards.id, update.flashcard.id))
+        .where(eq(schema.flashcards.id, mediaUpdate.flashcard.id))
         .run();
     }
   });
@@ -273,26 +288,26 @@ function assertMediaSize(bytes: Uint8Array) {
   }
 }
 
-function detectImageKind(
-  bytes: Uint8Array,
-  fileName?: string,
-  mime?: string,
-): ImageKind {
-  const sniffed = sniffImageKind(bytes);
-  if (sniffed) return sniffed;
+function detectImageKind(bytes: Uint8Array, fileName?: string, mime?: string) {
+  const sniffedKind = sniffImageKind(bytes);
+  if (sniffedKind) return sniffedKind;
 
-  const mimeExt = mime ? EXT_BY_MIME[mime.toLowerCase()] : undefined;
-  if (mimeExt) return { ext: mimeExt, mime: MIME_BY_EXT[mimeExt] };
+  const extensionFromMime = mime ? EXT_BY_MIME[mime.toLowerCase()] : undefined;
+  if (extensionFromMime) {
+    return { ext: extensionFromMime, mime: MIME_BY_EXT[extensionFromMime] };
+  }
 
-  const ext = extensionFromFileName(fileName);
-  if (ext) return { ext, mime: MIME_BY_EXT[ext] };
+  const extensionFromName = extensionFromFileName(fileName);
+  if (extensionFromName) {
+    return { ext: extensionFromName, mime: MIME_BY_EXT[extensionFromName] };
+  }
 
   throw new Error(
     "Unsupported Flashcard media image type. Use PNG, JPG, GIF, WebP, SVG, BMP, or AVIF.",
   );
 }
 
-function sniffImageKind(bytes: Uint8Array): ImageKind | null {
+function sniffImageKind(bytes: Uint8Array) {
   if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47])) {
     return { ext: "png", mime: "image/png" };
   }
@@ -326,30 +341,29 @@ function ascii(bytes: Uint8Array, start: number, length: number) {
   return Buffer.from(bytes.slice(start, start + length)).toString("ascii");
 }
 
-function extensionFromFileName(fileName?: string): ImageKind["ext"] | undefined {
+function extensionFromFileName(fileName?: string) {
   const ext = fileName?.split(".").pop()?.toLowerCase();
   if (!ext) return undefined;
   if (ext === "jpeg") return "jpg";
   return (Object.keys(MIME_BY_EXT) as ImageKind["ext"][]).find((e) => e === ext);
 }
 
-function markdownFieldsFor(
-  type: FlashcardType,
-  content: FlashcardContent,
-): string[] {
+function markdownFieldsFor(type: FlashcardType, content: FlashcardContent) {
   switch (type) {
     case "basic":
     case "basic_reversed": {
-      const c = content as { front: string; back: string };
-      return [c.front, c.back];
+      const basicContent = content as { front: string; back: string };
+      return [basicContent.front, basicContent.back];
     }
     case "cloze":
       return [(content as { text: string }).text];
     case "type_answer":
       return [(content as { prompt: string }).prompt];
     case "image_occlusion": {
-      const c = content as ImageOcclusionContent;
-      return [c.header, c.extra].filter((v): v is string => Boolean(v));
+      const imageOcclusionContent = content as ImageOcclusionContent;
+      return [imageOcclusionContent.header, imageOcclusionContent.extra].filter(
+        (value): value is string => Boolean(value),
+      );
     }
   }
 }
