@@ -434,6 +434,16 @@
     animation: a-fade-in 0.28s var(--ease-out-quart) both;
   }
 
+  /* Opt-out (Settings → Appearance → Page transitions). The `*` reduced-motion
+     rule does not reach view-transition pseudo-elements, so collapse the route
+     transition to an instant swap directly, the same way reduced motion does. */
+  html[data-view-transitions="off"]::view-transition-old(route-content),
+  html[data-view-transitions="off"]::view-transition-new(route-content),
+  html[data-view-transitions="off"]::view-transition-old(root),
+  html[data-view-transitions="off"]::view-transition-new(root) {
+    animation-duration: 0.001ms !important;
+  }
+
   /* Themed scrollbars for inputs and other in-app scroll regions. */
   .armin-scrollbar,
   textarea {

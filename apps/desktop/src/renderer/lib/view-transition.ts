@@ -1,4 +1,5 @@
 import { flushSync } from "react-dom";
+import { readViewTransitionsEnabled } from "@/lib/view-transitions";
 
 type ViewTransitionDocument = Document & {
   startViewTransition?: (callback: () => void) => unknown;
@@ -11,15 +12,19 @@ type ViewTransitionDocument = Document & {
  * `defaultViewTransition` for swaps that change rendered content without
  * navigating (e.g. the cram menu giving way to a drill session).
  *
- * Falls back to a plain synchronous update when the browser lacks the API or
- * the user prefers reduced motion.
+ * Falls back to a plain synchronous update when the browser lacks the API, the
+ * user prefers reduced motion, or has turned off view transitions in settings.
  */
 export function withViewTransition(update: () => void): void {
   const doc = document as ViewTransitionDocument;
   const prefersReducedMotion = window.matchMedia(
     "(prefers-reduced-motion: reduce)",
   ).matches;
-  if (typeof doc.startViewTransition !== "function" || prefersReducedMotion) {
+  if (
+    typeof doc.startViewTransition !== "function" ||
+    prefersReducedMotion ||
+    !readViewTransitionsEnabled()
+  ) {
     update();
     return;
   }

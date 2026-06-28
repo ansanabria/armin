@@ -32,6 +32,7 @@ import {
 import { THEME_OPTIONS, type ThemePreference } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/theme/theme-provider";
+import { useViewTransitions } from "@/theme/view-transitions-provider";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Settings } from "@/types/window";
 
@@ -89,6 +90,8 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { preference: themePreference, setPreference: setThemePreference } =
     useTheme();
+  const { enabled: viewTransitionsEnabled, setEnabled: setViewTransitions } =
+    useViewTransitions();
   const [s, setS] = useState(initial);
   const currentRef = useRef(initial);
   const settingsLoadedRef = useRef(false);
@@ -412,7 +415,6 @@ export default function SettingsPage() {
           <Row
             label="Theme"
             hint="Flexoki light, Flexoki dark, or match your system setting."
-            last
           >
             <Select
               value={themePreference}
@@ -432,6 +434,16 @@ export default function SettingsPage() {
                 </SelectGroup>
               </SelectContent>
             </Select>
+          </Row>
+          <Row
+            label="Page transitions"
+            hint="Animate moving between pages. Turn off for instant, motion-free swaps."
+            last
+          >
+            <Switch
+              checked={viewTransitionsEnabled}
+              onCheckedChange={setViewTransitions}
+            />
           </Row>
         </Section>
       </div>
