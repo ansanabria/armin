@@ -15,7 +15,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { eq } from "drizzle-orm";
 import { Rating } from "ts-fsrs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { closeDb, getDb, initDb, schema } from "../main/db";
+import { closeDb, getDb, initDb, profileMediaDir, schema } from "../main/db";
 import { runMigrations } from "../main/db/migrate";
 import type { ServiceContext } from "../main/services/context";
 import * as review from "../main/services/review";
@@ -165,6 +165,7 @@ describe("MCP stdio server", () => {
       "get_flashcard",
       "get_graph",
       "import_flashcard_hierarchy",
+      "import_flashcard_media",
       "list_decks",
       "list_flashcards",
       "list_open_profiles",
@@ -183,6 +184,23 @@ describe("MCP stdio server", () => {
       await client!.callTool({ name: "list_decks", arguments: {} }),
     );
     expect(emptyDecks.decks).toEqual([]);
+
+    const importedMedia = parseToolText(
+      await client!.callTool({
+        name: "import_flashcard_media",
+        arguments: {
+          base64: Buffer.from(
+            new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00]),
+          ).toString("base64"),
+          fileName: "diagram.png",
+          mime: "image/png",
+        },
+      }),
+    );
+    expect((importedMedia.media as { ref: string }).ref).toMatch(
+      /^armin-media:[a-f0-9]{64}\.png$/,
+    );
+    expect(fs.readdirSync(profileMediaDir("mcp-smoke"))).toHaveLength(1);
 
     const createdDeck = parseToolText(
       await client!.callTool({

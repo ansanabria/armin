@@ -5,6 +5,7 @@ import * as decks from "./decks";
 import * as flashcards from "./flashcards";
 import * as graph from "./graph";
 import { exportProfileToMarkdownZip } from "./export";
+import { storeFlashcardMedia } from "./media";
 
 useTestDb();
 
@@ -55,7 +56,7 @@ describe("exportProfileToMarkdownZip", () => {
     const manifest = JSON.parse(files["manifest.json"]);
     expect(manifest).toMatchObject({
       format: "armin-backup",
-      formatVersion: 1,
+      formatVersion: 2,
       profileName: "My Profile",
       deckCount: 2,
       flashcardCount: 1,
@@ -117,5 +118,31 @@ describe("exportProfileToMarkdownZip", () => {
       "library/decks/my-deck-2.md",
       "library/decks/my-deck.md",
     ]);
+  });
+
+  it("includes Flashcard media and rewrites readable Markdown links", async () => {
+    const ctx = await makeContext("export-media");
+    const deck = await decks.createDeck(ctx, { name: "Biology" });
+    const media = storeFlashcardMedia({
+      profileId: ctx.profileId,
+      bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00]),
+      fileName: "cell.png",
+      mime: "image/png",
+    });
+    await flashcards.createFlashcard({
+      ctx,
+      deckId: deck.id,
+      type: "basic",
+      content: { front: `![cell](${media.ref})`, back: "Cell" },
+    });
+
+    const rawFiles = unzipSync(
+      (await exportProfileToMarkdownZip(ctx, "P", new Date())).bytes,
+    );
+    expect(rawFiles[`media/${media.fileName}`]).toBeDefined();
+
+    expect(strFromU8(rawFiles["library/decks/biology.md"])).toContain(
+      `![cell](../../media/${media.fileName})`,
+    );
   });
 });

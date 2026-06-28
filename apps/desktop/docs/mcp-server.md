@@ -13,6 +13,7 @@ Available tools:
 
 - `list_decks`
 - `create_deck`
+- `import_flashcard_media`
 - `create_flashcard`
 - `update_card`
 - `archive_card`

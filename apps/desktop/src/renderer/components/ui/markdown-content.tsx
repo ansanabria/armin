@@ -6,11 +6,12 @@ import ReactMarkdown, {
 } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
+import { mediaDisplayUrl } from "@/lib/media";
 
-/** Card images are stored as inline data URLs from the markdown editor. */
+/** Card images are stored as profile-relative Flashcard media references. */
 const cardUrlTransform: UrlTransform = (url, key) => {
-  if (key === "src" && /^data:image\//i.test(url)) {
-    return url;
+  if (key === "src" && /^armin-media:/i.test(url)) {
+    return mediaDisplayUrl(url);
   }
   return defaultUrlTransform(url);
 };

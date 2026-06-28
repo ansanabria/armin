@@ -36,6 +36,10 @@ import {
 } from "../flashcard-types";
 import type { ServiceContext } from "../context";
 import { newReviewUnitFields, type FsrsFields } from "../scheduler";
+import {
+  assertContentUsesMediaRefs,
+  canonicalizeLegacyMediaForWrite,
+} from "../media";
 import { ankiHtmlToMarkdown } from "./html";
 import { hasClozeMarkers, renderTemplate } from "./template";
 
@@ -1248,7 +1252,7 @@ export async function analyzeAnkiPackage(
       );
     if (imageCount > 0)
       warnings.push(
-        `${plural(imageCount, "image")} embedded directly into cards.`,
+        `${plural(imageCount, "image")} will be copied into this Profile's Flashcard media.`,
       );
     if (droppedAudio)
       warnings.push("Audio was skipped — Armin doesn't support sound yet.");
@@ -1407,11 +1411,17 @@ async function writeDeck(
 
     for (const parsedNote of parsedNotes) {
       const flashcardId = randomUUID();
+      const content = canonicalizeLegacyMediaForWrite(
+        ctx.profileId,
+        parsedNote.type,
+        parsedNote.content,
+      );
+      assertContentUsesMediaRefs(parsedNote.type, content);
       noteValues.push({
         id: flashcardId,
         deckId,
         type: parsedNote.type,
-        content: serializeContent(parsedNote.content),
+        content: serializeContent(content),
       });
       for (const tag of parsedNote.tags) {
         const tagId = tagIdByLower.get(tag.toLocaleLowerCase());
@@ -1419,7 +1429,7 @@ async function writeDeck(
       }
       for (const item of generateReviewUnits(
         parsedNote.type,
-        parsedNote.content,
+        content,
       )) {
         cardValues.push({
           id: randomUUID(),

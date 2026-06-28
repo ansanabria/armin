@@ -8,8 +8,9 @@
  * (mostly `<div>` line breaks, `<b>/<i>`, lists, links and `<img>`) into
  * Markdown, and strip everything else down to its text.
  *
- * Images are inlined as `data:` URLs — the same convention Armin's Markdown
- * editor uses — so imported cards stay self-contained and local-first.
+ * During package analysis, image filenames can resolve to temporary `data:`
+ * URLs. Commit converts those URLs into profile-owned Flashcard media before
+ * persisting flashcard content.
  */
 
 /** Named HTML entities that show up in real Anki decks. */

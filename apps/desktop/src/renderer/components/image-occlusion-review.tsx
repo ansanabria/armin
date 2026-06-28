@@ -1,4 +1,5 @@
 import type { ImageOcclusionContent } from "../../shared/flashcard-types";
+import { mediaDisplayUrl } from "@/lib/media";
 import { cn } from "@/lib/utils";
 
 export function isImageOcclusionMaskHidden({
@@ -36,7 +37,7 @@ export function ImageOcclusionReview({
       )}
       <div className="relative overflow-hidden rounded-md border border-border-strong">
         <img
-          src={content.baseImage}
+          src={mediaDisplayUrl(content.baseImage)}
           alt="Image occlusion"
           className="block max-h-[360px] w-full object-contain"
         />
