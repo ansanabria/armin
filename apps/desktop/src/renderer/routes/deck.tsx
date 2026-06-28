@@ -24,7 +24,10 @@ import { FlashcardTile } from "@/components/flashcard-tile";
 import { MoveFlashcardDialog } from "@/components/move-flashcard-dialog";
 import { SortControl } from "@/components/sort-control";
 import { SearchableMultiSelect } from "@/components/ui/combobox";
-import { FLASHCARD_SORT_OPTIONS, type FlashcardSortKey } from "@/lib/sort-flashcards";
+import {
+  FLASHCARD_SORT_OPTIONS,
+  type FlashcardSortKey,
+} from "@/lib/sort-flashcards";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -51,7 +54,7 @@ export default function DeckPage() {
   const [sort, setSort] = useState<FlashcardSortKey>("due-soon");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
 
-  const browseFilters = useMemo((): BrowseQueryFilters => {
+  const browseFilters = useMemo(() => {
     const filters: BrowseQueryFilters = { sort, deckId };
     if (tagFilter.length > 0) filters.tags = tagFilter;
     return filters;
@@ -189,7 +192,8 @@ export default function DeckPage() {
         title: archived ? "Flashcard archived" : "Flashcard unarchived",
       });
     },
-    onError: () => toast({ tone: "error", title: "Could not update flashcard" }),
+    onError: () =>
+      toast({ tone: "error", title: "Could not update flashcard" }),
   });
 
   const saveCard = async (values: CardFormValues) => {

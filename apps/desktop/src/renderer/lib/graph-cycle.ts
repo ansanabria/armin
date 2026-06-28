@@ -56,7 +56,3 @@ export function wouldCreateCycleIndexed(
   }
   return false;
 }
-
-export function isIsolatedNode(nodeId: string, edges: GraphEdge[]): boolean {
-  return !edges.some((e) => e.prereqId === nodeId || e.dependentId === nodeId);
-}

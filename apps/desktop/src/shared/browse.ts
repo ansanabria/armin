@@ -20,6 +20,3 @@ export const BROWSE_SORT_KEYS = [
 ] as const;
 
 export type BrowseSortKey = (typeof BROWSE_SORT_KEYS)[number];
-
-/** @deprecated All browse sorts are paginated in SQL; kept for compatibility. */
-export const COMPLEX_BROWSE_SORTS = new Set<BrowseSortKey>();

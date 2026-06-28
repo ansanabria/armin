@@ -75,9 +75,7 @@ export type ImageOcclusionGeometry = z.infer<
   typeof imageOcclusionGeometrySchema
 >;
 export type ImageOcclusionMask = z.infer<typeof imageOcclusionMaskSchema>;
-export type ImageOcclusionContent = z.infer<
-  typeof imageOcclusionContentSchema
->;
+export type ImageOcclusionContent = z.infer<typeof imageOcclusionContentSchema>;
 
 export type FlashcardContentByType = {
   basic: BasicContent;
@@ -88,25 +86,6 @@ export type FlashcardContentByType = {
 };
 
 export type FlashcardContent = FlashcardContentByType[FlashcardType];
-
-/** A `{ type, content }` pair, validated as a discriminated union. */
-export type TypedFlashcardContent = {
-  [K in FlashcardType]: { type: K; content: FlashcardContentByType[K] };
-}[FlashcardType];
-
-export const typedFlashcardContentSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("basic"), content: basicContentSchema }),
-  z.object({ type: z.literal("basic_reversed"), content: basicContentSchema }),
-  z.object({ type: z.literal("cloze"), content: clozeContentSchema }),
-  z.object({
-    type: z.literal("type_answer"),
-    content: typeAnswerContentSchema,
-  }),
-  z.object({
-    type: z.literal("image_occlusion"),
-    content: imageOcclusionContentSchema,
-  }),
-]);
 
 const contentSchemaByType = {
   basic: basicContentSchema,
@@ -233,24 +212,26 @@ export function parseClozes(text: string): ClozeDeletion[] {
   while ((match = re.exec(text)) !== null) {
     raws.push(parseClozeBody(match[1]));
   }
-  const maxExplicit = raws.reduce(
-    (max, r) =>
-      r.explicitCluster != null && r.explicitCluster > max
-        ? r.explicitCluster
-        : max,
+  const maxExplicitCluster = raws.reduce(
+    (maxCluster, rawCloze) =>
+      rawCloze.explicitCluster != null && rawCloze.explicitCluster > maxCluster
+        ? rawCloze.explicitCluster
+        : maxCluster,
     0,
   );
-  let nextAuto = maxExplicit + 1;
-  return raws.map((r) => ({
-    cluster: r.explicitCluster ?? nextAuto++,
-    answer: r.answer,
-    hint: r.hint,
+  let nextAutoCluster = maxExplicitCluster + 1;
+  return raws.map((rawCloze) => ({
+    cluster: rawCloze.explicitCluster ?? nextAutoCluster++,
+    answer: rawCloze.answer,
+    hint: rawCloze.hint,
   }));
 }
 
 /** Distinct cluster numbers present in the text, sorted ascending. */
 export function clozeClusters(text: string): number[] {
-  const clusters = new Set(parseClozes(text).map((d) => d.cluster));
+  const clusters = new Set(
+    parseClozes(text).map((deletion) => deletion.cluster),
+  );
   return [...clusters].sort((a, b) => a - b);
 }
 
@@ -264,9 +245,9 @@ function replaceClozes(
   fn: (deletion: ClozeDeletion) => string,
 ): string {
   const deletions = parseClozes(text);
-  let i = 0;
+  let deletionIndex = 0;
   return text.replace(new RegExp(CLOZE_RE.source, "g"), () =>
-    fn(deletions[i++]),
+    fn(deletions[deletionIndex++]),
   );
 }
 
@@ -305,35 +286,38 @@ export function generateReviewUnits(
 ): ReviewUnitSpec[] {
   switch (type) {
     case "basic": {
-      const c = content as BasicContent;
-      return [{ subKey: "", front: c.front, back: c.back }];
+      const basic = content as BasicContent;
+      return [{ subKey: "", front: basic.front, back: basic.back }];
     }
     case "basic_reversed": {
-      const c = content as BasicContent;
+      const basic = content as BasicContent;
       return [
-        { subKey: "", front: c.front, back: c.back },
-        { subKey: "rev", front: c.back, back: c.front },
+        { subKey: "", front: basic.front, back: basic.back },
+        { subKey: "rev", front: basic.back, back: basic.front },
       ];
     }
     case "cloze": {
-      const c = content as ClozeContent;
-      return clozeClusters(c.text).map((cluster) => ({
+      const cloze = content as ClozeContent;
+      return clozeClusters(cloze.text).map((cluster) => ({
         subKey: `c${cluster}`,
-        front: renderClozeText(c.text, cluster),
-        back: renderClozeText(c.text, null),
+        front: renderClozeText(cloze.text, cluster),
+        back: renderClozeText(cloze.text, null),
       }));
     }
     case "type_answer": {
-      const c = content as TypeAnswerContent;
-      return [{ subKey: "", front: c.prompt, back: c.answer }];
+      const typeAnswer = content as TypeAnswerContent;
+      return [
+        { subKey: "", front: typeAnswer.prompt, back: typeAnswer.answer },
+      ];
     }
     case "image_occlusion": {
-      const c = content as ImageOcclusionContent;
-      return c.masks.map((mask) => ({
+      const imageOcclusion = content as ImageOcclusionContent;
+      return imageOcclusion.masks.map((mask) => ({
         subKey: mask.id,
-        front: [c.header, mask.hint ? `Hint: ${mask.hint}` : null]
-          .filter(Boolean)
-          .join("\n\n") || "Recall the hidden area.",
+        front:
+          [imageOcclusion.header, mask.hint ? `Hint: ${mask.hint}` : null]
+            .filter(Boolean)
+            .join("\n\n") || "Recall the hidden area.",
         back: mask.label ?? "Hidden area",
       }));
     }
@@ -348,26 +332,29 @@ export function flashcardDisplay(
   switch (type) {
     case "basic":
     case "basic_reversed": {
-      const c = content as BasicContent;
-      return { front: c.front, back: c.back };
+      const basic = content as BasicContent;
+      return { front: basic.front, back: basic.back };
     }
     case "cloze": {
-      const c = content as ClozeContent;
+      const cloze = content as ClozeContent;
       return {
-        front: renderAllClozesBlanked(c.text),
-        back: renderClozeText(c.text, null),
+        front: renderAllClozesBlanked(cloze.text),
+        back: renderClozeText(cloze.text, null),
       };
     }
     case "type_answer": {
-      const c = content as TypeAnswerContent;
-      return { front: c.prompt, back: c.answer };
+      const typeAnswer = content as TypeAnswerContent;
+      return { front: typeAnswer.prompt, back: typeAnswer.answer };
     }
     case "image_occlusion": {
-      const c = content as ImageOcclusionContent;
-      const count = c.masks.length;
+      const imageOcclusion = content as ImageOcclusionContent;
+      const count = imageOcclusion.masks.length;
       return {
         front: `Image occlusion · ${count} mask${count === 1 ? "" : "s"}`,
-        back: c.masks.map((mask) => mask.label).filter(Boolean).join(" · "),
+        back: imageOcclusion.masks
+          .map((mask) => mask.label)
+          .filter(Boolean)
+          .join(" · "),
       };
     }
   }
@@ -387,10 +374,7 @@ export function matchesTypeAnswer(
   const normalized = normalizeAnswer(input);
   if (!normalized) return false;
   const candidates = [content.answer, ...content.acceptedAnswers];
-  return candidates.some((c) => normalizeAnswer(c) === normalized);
-}
-
-/** Convenience for the simple two-field create paths (Anki / Markdown import). */
-export function basicFlashcard(front: string, back: string): TypedFlashcardContent {
-  return { type: "basic", content: { front, back } };
+  return candidates.some(
+    (candidate) => normalizeAnswer(candidate) === normalized,
+  );
 }

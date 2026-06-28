@@ -1,7 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { net, protocol } from "electron";
-import { mediaPath } from "./services/media";
-import { mimeForMediaFile } from "./services/media";
+import { mediaPath, mimeForMediaFile } from "./services/media";
 
 export const MEDIA_PROTOCOL = "armin-media";
 
