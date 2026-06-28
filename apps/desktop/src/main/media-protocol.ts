@@ -1,7 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { net, protocol } from "electron";
-import { mediaPath } from "./services/media";
-import { mimeForMediaFile } from "./services/media";
+import { mediaPath, mimeForMediaFile } from "./services/media";
 
 export const MEDIA_PROTOCOL = "armin-media";
 
@@ -20,18 +19,22 @@ export function registerMediaProtocolScheme() {
 
 export function registerMediaProtocol() {
   protocol.handle(MEDIA_PROTOCOL, async (request) => {
-    const url = new URL(request.url);
-    const profileId = decodeURIComponent(url.hostname);
-    const fileName = url.pathname.replace(/^\//, "");
-    const mime = mimeForMediaFile(fileName);
+    const requestUrl = new URL(request.url);
+    const profileId = decodeURIComponent(requestUrl.hostname);
+    const mediaFileName = requestUrl.pathname.replace(/^\//, "");
+    const mime = mimeForMediaFile(mediaFileName);
+
     if (!profileId || !mime) {
       return new Response("Not found", { status: 404 });
     }
+
     try {
-      const fileUrl = pathToFileURL(mediaPath(profileId, fileName)).toString();
-      const response = await net.fetch(fileUrl);
-      return new Response(response.body, {
-        status: response.status,
+      const mediaFileUrl = pathToFileURL(
+        mediaPath(profileId, mediaFileName),
+      ).toString();
+      const mediaResponse = await net.fetch(mediaFileUrl);
+      return new Response(mediaResponse.body, {
+        status: mediaResponse.status,
         headers: { "content-type": mime },
       });
     } catch {
