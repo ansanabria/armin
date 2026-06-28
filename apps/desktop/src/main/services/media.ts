@@ -191,24 +191,20 @@ export function canonicalizeLegacyMediaInContent(
     case "basic":
     case "basic_reversed": {
       const basicContent = content as { front: string; back: string };
-      return {
-        changed,
-        content: {
-          ...basicContent,
-          front: replaceDataImages(basicContent.front),
-          back: replaceDataImages(basicContent.back),
-        },
+      const nextContent = {
+        ...basicContent,
+        front: replaceDataImages(basicContent.front),
+        back: replaceDataImages(basicContent.back),
       };
+      return { changed, content: nextContent };
     }
     case "cloze": {
       const clozeContent = content as { text: string };
-      return {
-        changed,
-        content: {
-          ...clozeContent,
-          text: replaceDataImages(clozeContent.text),
-        },
+      const nextContent = {
+        ...clozeContent,
+        text: replaceDataImages(clozeContent.text),
       };
+      return { changed, content: nextContent };
     }
     case "type_answer": {
       const typeAnswerContent = content as {
@@ -216,13 +212,11 @@ export function canonicalizeLegacyMediaInContent(
         answer: string;
         acceptedAnswers: string[];
       };
-      return {
-        changed,
-        content: {
-          ...typeAnswerContent,
-          prompt: replaceDataImages(typeAnswerContent.prompt),
-        },
+      const nextContent = {
+        ...typeAnswerContent,
+        prompt: replaceDataImages(typeAnswerContent.prompt),
       };
+      return { changed, content: nextContent };
     }
     case "image_occlusion": {
       const imageOcclusionContent = content as ImageOcclusionContent;
