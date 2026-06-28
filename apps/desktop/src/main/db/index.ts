@@ -15,7 +15,7 @@ type DbHandle = {
   db: BetterSQLite3Database<typeof schema>;
 };
 
-const handles = new Map<string, DbHandle>();
+const dbHandles = new Map<string, DbHandle>();
 let testDbRoot: string | null = null;
 
 function defaultDbRoot() {
@@ -41,32 +41,28 @@ export function profileMediaDir(profileId: string) {
   return path.join(profileDataDir(profileId), "media");
 }
 
-function profileDbDir(profileId: string) {
-  return profileDataDir(profileId);
-}
-
 export function setDbRootForTests(root: string | null) {
   testDbRoot = root;
 }
 
 /** Open a profile's SQLite database via better-sqlite3 (WAL + FK enforcement). */
 export async function initDb(profileId: string) {
-  const existing = handles.get(profileId);
+  const existing = dbHandles.get(profileId);
   if (existing) return existing.db;
 
-  const dir = profileDbDir(profileId);
-  fs.mkdirSync(dir, { recursive: true });
-  const client = openSqliteDatabase(path.join(dir, "armin.db"));
+  const profileDir = profileDataDir(profileId);
+  fs.mkdirSync(profileDir, { recursive: true });
+  const client = openSqliteDatabase(path.join(profileDir, "armin.db"));
   client.pragma("journal_mode = WAL");
   client.pragma("foreign_keys = ON");
 
   const db = drizzle(client, { schema });
-  handles.set(profileId, { client, db });
+  dbHandles.set(profileId, { client, db });
   return db;
 }
 
 export function getDb(profileId: string) {
-  const handle = handles.get(profileId);
+  const handle = dbHandles.get(profileId);
   if (!handle) {
     throw new Error(
       `Database for profile ${profileId} is not initialized — call initDb(profileId) first.`,
@@ -77,15 +73,15 @@ export function getDb(profileId: string) {
 
 export function closeDb(profileId?: string) {
   if (profileId) {
-    handles.get(profileId)?.client.close();
-    handles.delete(profileId);
+    dbHandles.get(profileId)?.client.close();
+    dbHandles.delete(profileId);
     return;
   }
 
-  for (const handle of handles.values()) {
+  for (const handle of dbHandles.values()) {
     handle.client.close();
   }
-  handles.clear();
+  dbHandles.clear();
 }
 
 /**
@@ -93,8 +89,8 @@ export function closeDb(profileId?: string) {
  * folds the WAL back into the main file first, so the serialized bytes include
  * every committed write without needing to close the database.
  */
-export function snapshotProfileDb(profileId: string): Uint8Array {
-  const handle = handles.get(profileId);
+export function snapshotProfileDb(profileId: string) {
+  const handle = dbHandles.get(profileId);
   if (!handle) {
     throw new Error(
       `Database for profile ${profileId} is not initialized — call initDb(profileId) first.`,
@@ -110,16 +106,16 @@ export function snapshotProfileDb(profileId: string): Uint8Array {
  * id first.
  */
 export function writeProfileDbFile(profileId: string, bytes: Uint8Array) {
-  const dir = profileDbDir(profileId);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "armin.db"), bytes);
+  const profileDir = profileDataDir(profileId);
+  fs.mkdirSync(profileDir, { recursive: true });
+  fs.writeFileSync(path.join(profileDir, "armin.db"), bytes);
 }
 
 export function deleteProfileData(profileId: string) {
   closeDb(profileId);
-  const dir = profileDbDir(profileId);
-  if (fs.existsSync(dir)) {
-    fs.rmSync(dir, { recursive: true, force: true });
+  const profileDir = profileDataDir(profileId);
+  if (fs.existsSync(profileDir)) {
+    fs.rmSync(profileDir, { recursive: true, force: true });
   }
 }
 
