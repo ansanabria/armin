@@ -24,6 +24,7 @@ System-wide decisions live in the root `docs/adr/`. See `docs/agents/domain.md`.
 - Migration workflow is described in @apps/desktop/docs/migrations.md . Read it before changing @apps/desktop/src/main/db/schema.ts or files under @apps/desktop/drizzle/ .
 - Migration names must be descriptive. Pass a snake_case `--name` to Drizzle instead of accepting generated fantasy names.
 - Shadcn uses Base UI instead of Radix UI. Use only Base UI, unless the user explictly asks to use the Radix UI API.
+- Dialog action buttons keep a static label. Show "running" with the `busy` prop on `Button`, never by swapping the label to a busy verb ("Deleting…"), which flashes during the dialog's close animation. See @apps/desktop/docs/adr/0016-dialog-action-labels-stay-static.md .
 
 ## TypeScript styling notes
 

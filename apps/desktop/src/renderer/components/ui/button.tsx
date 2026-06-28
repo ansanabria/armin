@@ -29,13 +29,24 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends
     React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {}
+    VariantProps<typeof buttonVariants> {
+  /**
+   * Marks the button as performing an async action: it becomes non-interactive
+   * and reports `aria-busy`, but its visible label stays unchanged. Use this for
+   * dialog actions instead of swapping the label to a busy verb ("Deleting…"),
+   * which flashes during the dialog's close animation. See
+   * docs/adr/0016-dialog-action-labels-stay-static.md.
+   */
+  busy?: boolean;
+}
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => (
+  ({ className, variant, size, busy, disabled, ...props }, ref) => (
     <button
       ref={ref}
       className={cn(buttonVariants({ variant, size, className }))}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
       {...props}
     />
   ),

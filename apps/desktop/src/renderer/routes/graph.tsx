@@ -348,7 +348,8 @@ export default function DeckGraphPage() {
           </Button>
           <Button
             variant="destructive"
-            disabled={graphEdits.deletePending || !deleteConsequences}
+            disabled={!deleteConsequences}
+            busy={graphEdits.deletePending}
             onClick={() => void confirmGraphDelete()}
           >
             Delete flashcard
