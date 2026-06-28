@@ -23,6 +23,11 @@ prerequisite edges, graph position, and lock state, and generates one or more
 review units. The unit that participates in the prerequisite graph.
 _Avoid_: Note, item, entry, fact
 
+**Flashcard media**:
+User-provided image files referenced by flashcard content. Flashcard media belongs
+to exactly one Profile and is part of that Profile's local study data.
+_Avoid_: Assets, uploads, attachments
+
 **Review unit**:
 A generated review item belonging to a flashcard. It carries the FSRS scheduling
 state and is the unit that appears in a review session. One flashcard can

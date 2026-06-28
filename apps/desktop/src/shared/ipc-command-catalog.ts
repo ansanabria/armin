@@ -170,6 +170,16 @@ export const ipcCommands = {
     export: command(ipcChannels.data.export.channel, optionalVoid),
     restore: command(ipcChannels.data.restore.channel, optionalVoid),
   },
+  media: {
+    importImage: command(
+      ipcChannels.media.importImage.channel,
+      z.object({
+        bytes: z.instanceof(Uint8Array),
+        fileName: z.string().optional(),
+        mime: z.string().optional(),
+      }),
+    ),
+  },
   review: {
     queue: command(
       ipcChannels.review.queue.channel,

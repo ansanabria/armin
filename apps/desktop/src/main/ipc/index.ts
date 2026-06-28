@@ -13,6 +13,10 @@ import * as cram from "../services/cram";
 import * as graph from "../services/graph";
 import * as settings from "../services/settings";
 import * as mcp from "../services/mcp";
+import {
+  storeFlashcardMedia,
+  upgradeLegacyFlashcardMedia,
+} from "../services/media";
 import { getAppSettings, setMcpEnabled, setMcpPort } from "../services/app-settings";
 import { startEmbeddedMcpServer, stopEmbeddedMcpServer } from "../mcp-http";
 import * as profiles from "../services/profiles";
@@ -67,6 +71,7 @@ async function ensureDbReady(profileId: string) {
   // actually run (e.g. 0015 dropping cross-deck prerequisite edges), so no
   // separate repair is needed here.
   await runMigrations(profileId);
+  await upgradeLegacyFlashcardMedia({ profileId, db: getDb(profileId) });
   dbReady.add(profileId);
 }
 
@@ -275,6 +280,16 @@ export function registerIpc() {
       flashcardCount,
     };
   });
+
+  // --- media ---
+  registerForProfile(c.media.importImage, (ctx, input) =>
+    storeFlashcardMedia({
+      profileId: ctx.profileId,
+      bytes: input.bytes,
+      fileName: input.fileName,
+      mime: input.mime,
+    }),
+  );
 
   // --- review ---
   registerForProfile(

@@ -188,6 +188,15 @@ export interface ArminApi {
         }
     >;
   };
+  media: {
+    importImage(input: {
+      bytes: Uint8Array;
+      fileName?: string;
+      mime?: string;
+    }): Promise<{ ref: string; fileName: string; mime: string; bytes: number }>;
+    url(ref: string): string;
+    refFromUrl(url: string): string | null;
+  };
   onDataChanged(cb: () => void): () => void;
 }
 

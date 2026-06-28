@@ -22,6 +22,7 @@ import {
   refreshAfterPrerequisiteStateChange,
   refreshDependentSubgraph,
 } from "./graph";
+import { assertContentUsesMediaRefs } from "./media";
 
 const { reviewUnits, reviewLogs, flashcards, flashcardPrereqs, flashcardTags, tags, decks } =
   schema;
@@ -325,6 +326,7 @@ export function createFlashcardRecord(
   },
 ): Flashcard {
   const content = validateContent(input.type, input.content);
+  assertContentUsesMediaRefs(input.type, content);
   const created = db
     .insert(flashcards)
     .values({
@@ -458,6 +460,7 @@ export async function updateFlashcard(
             parseStoredContent(current.type, current.content).content,
         )
       : parseStoredContent(current.type, current.content).content;
+    assertContentUsesMediaRefs(nextType, content);
 
     let updated = current;
     if (contentChanged) {

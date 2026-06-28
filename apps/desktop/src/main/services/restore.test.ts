@@ -25,7 +25,14 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { closeDb, getDb, initDb, schema, setDbRootForTests } from "../db";
+import {
+  closeDb,
+  getDb,
+  initDb,
+  profileMediaDir,
+  schema,
+  setDbRootForTests,
+} from "../db";
 import { runMigrations } from "../db/migrate";
 import { getLocalSchemaVersion } from "../db/schema-version";
 import type { ServiceContext } from "./context";
@@ -35,6 +42,7 @@ import * as graph from "./graph";
 import * as review from "./review";
 import { listProfiles } from "./profiles";
 import { exportProfileToMarkdownZip } from "./export";
+import { mediaFileNameFromRef, storeFlashcardMedia } from "./media";
 import { restoreProfileFromZip } from "./restore";
 
 let root: string;
@@ -73,11 +81,20 @@ describe("restoreProfileFromZip", () => {
   it("round-trips a profile losslessly into a new profile", async () => {
     const source = await makeCtx("restore-source");
     const deck = await decks.createDeck(source, { name: "Calculus" });
+    const media = storeFlashcardMedia({
+      profileId: source.profileId,
+      bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x00]),
+      fileName: "graph.png",
+      mime: "image/png",
+    });
     const limit = await flashcards.createFlashcard({
       ctx: source,
       deckId: deck.id,
       type: "basic",
-      content: { front: "What is a limit?", back: "..." },
+      content: {
+        front: `![graph](${media.ref})\n\nWhat is a limit?`,
+        back: "...",
+      },
       tags: ["math"],
     });
     const derivative = await flashcards.createFlashcard({
@@ -123,6 +140,14 @@ describe("restoreProfileFromZip", () => {
 
     const restoredDecks = restored.db.select().from(schema.decks).all();
     expect(restoredDecks[0].name).toBe("Calculus");
+    expect(
+      fs.existsSync(
+        path.join(
+          profileMediaDir(result.profile.id),
+          mediaFileNameFromRef(media.ref),
+        ),
+      ),
+    ).toBe(true);
   });
 
 

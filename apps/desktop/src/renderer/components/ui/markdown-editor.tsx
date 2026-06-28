@@ -6,6 +6,11 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { Image } from "@tiptap/extension-image";
 import { ImagePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  mediaDisplayUrl,
+  persistMediaRefsInMarkdown,
+  resolveMediaRefsInMarkdown,
+} from "@/lib/media";
 
 type MarkdownEditorProps = {
   value: string;
@@ -37,20 +42,21 @@ export function MarkdownEditor({
     }
   }, []);
 
-  // Read dropped/pasted/picked image files and insert them inline as data
-  // URLs. (UI preview: a real backend would upload and insert a stable URL.)
   const insertImageFiles = useCallback(
-    (editor: Editor | null, files: Iterable<File>) => {
+    async (editor: Editor | null, files: Iterable<File>) => {
       if (!editor) return;
       for (const file of files) {
         if (!file.type.startsWith("image/")) continue;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const src = reader.result;
-          if (typeof src !== "string") return;
-          editor.chain().focus().setImage({ src, alt: file.name }).run();
-        };
-        reader.readAsDataURL(file);
+        const stored = await window.armin.media.importImage({
+          bytes: new Uint8Array(await file.arrayBuffer()),
+          fileName: file.name,
+          mime: file.type,
+        });
+        editor
+          .chain()
+          .focus()
+          .setImage({ src: mediaDisplayUrl(stored.ref), alt: file.name })
+          .run();
       }
     },
     [],
@@ -65,13 +71,13 @@ export function MarkdownEditor({
         codeBlock: false,
       }),
       Markdown,
-      Image.configure({ allowBase64: true }),
+      Image.configure({ allowBase64: false }),
       Placeholder.configure({
         placeholder: placeholder ?? "",
         emptyEditorClass: "is-editor-empty",
       }),
     ],
-    content: value,
+    content: resolveMediaRefsInMarkdown(value),
     contentType: "markdown",
     editorProps: {
       attributes: {
@@ -96,7 +102,7 @@ export function MarkdownEditor({
           files?.length &&
           Array.from(files).some((f) => f.type.startsWith("image/"))
         ) {
-          insertImageFiles(editorRef.current, files);
+          void insertImageFiles(editorRef.current, files);
           return true;
         }
         return false;
@@ -108,14 +114,14 @@ export function MarkdownEditor({
           Array.from(files).some((f) => f.type.startsWith("image/"))
         ) {
           event.preventDefault();
-          insertImageFiles(editorRef.current, files);
+          void insertImageFiles(editorRef.current, files);
           return true;
         }
         return false;
       },
     },
     onUpdate: ({ editor: current }) => {
-      onChange(current.getMarkdown());
+      onChange(persistMediaRefsInMarkdown(current.getMarkdown()));
       requestAnimationFrame(syncScrollOverflow);
     },
     onCreate: ({ editor: current }) => {
@@ -135,9 +141,9 @@ export function MarkdownEditor({
 
   useEffect(() => {
     if (!editor) return;
-    const current = editor.getMarkdown();
+    const current = persistMediaRefsInMarkdown(editor.getMarkdown());
     if (value !== current) {
-      editor.commands.setContent(value, {
+      editor.commands.setContent(resolveMediaRefsInMarkdown(value), {
         contentType: "markdown",
         emitUpdate: false,
       });
@@ -158,7 +164,7 @@ export function MarkdownEditor({
 
   const handlePick = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files?.length) {
-      insertImageFiles(editor, event.target.files);
+      void insertImageFiles(editor, event.target.files);
     }
     // Reset so the same file can be picked again.
     event.target.value = "";

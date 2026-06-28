@@ -4,6 +4,10 @@ import { closeDb } from "./db";
 import { loadDevToolsExtensions } from "./devtools";
 import { applyLinuxDesktopEntry } from "./icon";
 import { registerIpc, openProfile } from "./ipc";
+import {
+  registerMediaProtocol,
+  registerMediaProtocolScheme,
+} from "./media-protocol";
 import { startEmbeddedMcpServer, stopEmbeddedMcpServer } from "./mcp-http";
 import { applyContentSecurityPolicy } from "./security";
 import { getAppSettings } from "./services/app-settings";
@@ -12,6 +16,7 @@ import { configureUserDataPath } from "./user-data";
 import { openProfilePicker } from "./windows";
 
 configureUserDataPath(app);
+registerMediaProtocolScheme();
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -35,6 +40,7 @@ async function openStartupProfile() {
 // Some APIs can only be used after this event occurs.
 app.on("ready", async () => {
   applyLinuxDesktopEntry();
+  registerMediaProtocol();
   applyContentSecurityPolicy();
   session.defaultSession.setSpellCheckerEnabled(false);
   registerIpc();
