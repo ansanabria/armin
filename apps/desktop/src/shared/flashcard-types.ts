@@ -59,10 +59,6 @@ export type FlashcardContentByType = {
 
 export type FlashcardContent = FlashcardContentByType[FlashcardType];
 
-export type TypedFlashcardContent = {
-  [K in FlashcardType]: { type: K; content: FlashcardContentByType[K] };
-}[FlashcardType];
-
 /** Matches any `{{...}}` wrapper; the body is parsed separately. */
 const CLOZE_RE = /\{\{([\s\S]+?)\}\}/g;
 
@@ -107,23 +103,25 @@ export function parseClozes(text: string): ClozeDeletion[] {
   while ((match = re.exec(text)) !== null) {
     raws.push(parseClozeBody(match[1]));
   }
-  const maxExplicit = raws.reduce(
-    (max, r) =>
-      r.explicitCluster != null && r.explicitCluster > max
-        ? r.explicitCluster
-        : max,
+  const maxExplicitCluster = raws.reduce(
+    (maxCluster, rawCloze) =>
+      rawCloze.explicitCluster != null && rawCloze.explicitCluster > maxCluster
+        ? rawCloze.explicitCluster
+        : maxCluster,
     0,
   );
-  let nextAuto = maxExplicit + 1;
-  return raws.map((r) => ({
-    cluster: r.explicitCluster ?? nextAuto++,
-    answer: r.answer,
-    hint: r.hint,
+  let nextAutoCluster = maxExplicitCluster + 1;
+  return raws.map((rawCloze) => ({
+    cluster: rawCloze.explicitCluster ?? nextAutoCluster++,
+    answer: rawCloze.answer,
+    hint: rawCloze.hint,
   }));
 }
 
 export function clozeClusters(text: string): number[] {
-  const clusters = new Set(parseClozes(text).map((d) => d.cluster));
+  const clusters = new Set(
+    parseClozes(text).map((deletion) => deletion.cluster),
+  );
   return [...clusters].sort((a, b) => a - b);
 }
 
@@ -138,5 +136,7 @@ export function matchesTypeAnswer(
   const normalized = normalizeAnswer(input);
   if (!normalized) return false;
   const candidates = [content.answer, ...content.acceptedAnswers];
-  return candidates.some((c) => normalizeAnswer(c) === normalized);
+  return candidates.some(
+    (candidate) => normalizeAnswer(candidate) === normalized,
+  );
 }

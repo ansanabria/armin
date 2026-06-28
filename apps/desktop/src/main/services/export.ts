@@ -9,8 +9,16 @@ import {
   BACKUP_FORMAT,
   BACKUP_FORMAT_VERSION,
   BACKUP_MANIFEST_ENTRY,
+  BACKUP_MEDIA_PREFIX,
   type BackupManifest,
 } from "./backup-format";
+import {
+  isMediaRef,
+  listProfileMediaFiles,
+  mediaFileNameFromRef,
+  readProfileMediaFile,
+  rewriteMarkdownMediaForExport,
+} from "./media";
 import {
   parseStoredContent,
   type BasicContent,
@@ -53,7 +61,7 @@ export type ProfileExport = {
  * Build a single backup archive for a profile. The zip is both human-readable
  * and a true backup:
  *   - `library/` — one Markdown file per deck plus a README index (readable)
- *   - `armin.db` — a lossless SQLite snapshot (restorable)
+ *   - `armin.db` + `media/` — lossless Profile data (restorable)
  *   - `manifest.json` — format + version metadata used by restore
  *   - `README.md` — a short note describing the archive
  */
@@ -160,6 +168,12 @@ export async function exportProfileToMarkdownZip(
   };
   files[BACKUP_MANIFEST_ENTRY] = strToU8(JSON.stringify(manifest, null, 2));
   files[BACKUP_DB_ENTRY] = snapshotProfileDb(ctx.profileId);
+  for (const fileName of listProfileMediaFiles(ctx.profileId)) {
+    files[`${BACKUP_MEDIA_PREFIX}${fileName}`] = readProfileMediaFile(
+      ctx.profileId,
+      fileName,
+    );
+  }
   files["README.md"] = strToU8(renderArchiveReadme(profileName, now));
 
   const bytes = zipSync(files, { level: 9 });
@@ -183,6 +197,7 @@ function renderArchiveReadme(profileName: string, now: Date): string {
     "",
     "- `library/` — your decks and flashcards as Markdown, readable anywhere.",
     "- `armin.db` — a complete SQLite snapshot of this profile.",
+    "- `media/` — image files referenced by your flashcards.",
     "- `manifest.json` — metadata Armin uses to restore this archive.",
     "",
     "To restore, open Armin's profile picker and choose **Restore from backup**,",
@@ -306,13 +321,21 @@ function renderContent(
     case "basic_reversed": {
       const c = content as BasicContent;
       return [
-        "**Front**", "", c.front, "",
-        "**Back**", "", c.back,
+        "**Front**", "", rewriteMarkdownMediaForExport(c.front), "",
+        "**Back**", "", rewriteMarkdownMediaForExport(c.back),
       ];
     }
     case "type_answer": {
       const c = content as TypeAnswerContent;
-      const lines = ["**Prompt**", "", c.prompt, "", "**Answer**", "", c.answer];
+      const lines = [
+        "**Prompt**",
+        "",
+        rewriteMarkdownMediaForExport(c.prompt),
+        "",
+        "**Answer**",
+        "",
+        c.answer,
+      ];
       if (c.acceptedAnswers.length > 0) {
         lines.push("", `**Accepted answers:** ${c.acceptedAnswers.join(", ")}`);
       }
@@ -320,12 +343,25 @@ function renderContent(
     }
     case "cloze": {
       const c = content as ClozeContent;
-      return ["**Cloze**", "", c.text];
+      return ["**Cloze**", "", rewriteMarkdownMediaForExport(c.text)];
     }
     case "image_occlusion": {
       const c = content as ImageOcclusionContent;
       const lines: string[] = [];
-      if (c.header) lines.push("**Header**", "", c.header, "");
+      if (c.header) {
+        lines.push(
+          "**Header**",
+          "",
+          rewriteMarkdownMediaForExport(c.header),
+          "",
+        );
+      }
+      if (isMediaRef(c.baseImage)) {
+        lines.push(
+          `![Image occlusion](../../media/${mediaFileNameFromRef(c.baseImage)})`,
+          "",
+        );
+      }
       lines.push(`**Image occlusion** — ${c.masks.length} mask(s)`);
       const labelled = c.masks
         .map((m) => m.label)
@@ -333,7 +369,9 @@ function renderContent(
       if (labelled.length > 0) {
         lines.push("", ...labelled.map((l) => `- ${l}`));
       }
-      if (c.extra) lines.push("", "**Extra**", "", c.extra);
+      if (c.extra) {
+        lines.push("", "**Extra**", "", rewriteMarkdownMediaForExport(c.extra));
+      }
       return lines;
     }
   }

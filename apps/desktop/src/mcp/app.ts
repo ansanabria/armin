@@ -7,6 +7,10 @@ import {
   isFlashcardType,
   type FlashcardType,
 } from "../main/services/flashcard-types";
+import {
+  storeFlashcardMedia,
+  upgradeLegacyFlashcardMedia,
+} from "../main/services/media";
 import { createDeck, listDecks } from "../main/services/decks";
 import { addPrereq, removePrereq } from "../main/services/graph";
 import {
@@ -49,7 +53,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
     },
     {
       instructions:
-        "Use Armin to create study flashcards and prerequisite hierarchies. If multiple Armin profiles are open, call list_open_profiles, ask the user which profile to use, then call select_profile before creating or reading flashcards. Prefer import_flashcard_hierarchy when creating multiple related flashcards: assign stable clientId values, set prerequisites to those clientIds, and submit the whole hierarchy in one call. Flashcards should be atomic, accurate, and ordered from foundations to dependents.",
+        "Use Armin to create study flashcards and prerequisite hierarchies. If multiple Armin profiles are open, call list_open_profiles, ask the user which profile to use, then call select_profile before creating or reading flashcards. Import images with import_flashcard_media first, then use the returned armin-media:<sha256>.<ext> refs in flashcard content. Prefer import_flashcard_hierarchy when creating multiple related flashcards: assign stable clientId values, set prerequisites to those clientIds, and submit the whole hierarchy in one call. Flashcards should be atomic, accurate, and ordered from foundations to dependents.",
     },
   );
 
@@ -111,6 +115,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
   async function ensureProfileReady(profileId: string) {
     await initDb(profileId);
     await runMigrations(profileId);
+    await upgradeLegacyFlashcardMedia({ profileId, db: getDb(profileId) });
   }
 
   async function withSelectedProfile<T>(handler: () => Promise<T>) {
@@ -190,6 +195,39 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
   );
 
   server.registerTool(
+    "import_flashcard_media",
+    {
+      title: "Import Flashcard Media",
+      description:
+        "Import one image into the selected Profile's Flashcard media. Use the returned armin-media:<sha256>.<ext> ref in Markdown image syntax or image_occlusion.baseImage.",
+      inputSchema: z.object({
+        base64: z
+          .string()
+          .min(1)
+          .describe("Base64-encoded image bytes, without a data URL prefix."),
+        fileName: z
+          .string()
+          .optional()
+          .describe("Optional original filename, used only to help identify type."),
+        mime: z
+          .string()
+          .optional()
+          .describe("Optional image MIME type, e.g. image/png."),
+      }),
+    },
+    async (input) =>
+      withSelectedProfile(async () => {
+        const media = storeFlashcardMedia({
+          profileId: ctx().profileId,
+          bytes: Buffer.from(input.base64, "base64"),
+          fileName: input.fileName,
+          mime: input.mime,
+        });
+        return jsonResult({ media });
+      }),
+  );
+
+  server.registerTool(
     "create_flashcard",
     {
       title: "Create Flashcard",
@@ -219,7 +257,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
           .record(z.string(), z.any())
           .optional()
           .describe(
-            'Type-specific content object. Defaults to { front, back } for basic. Cloze uses { text } with numbered deletions written {{N::answer}}. Image occlusion uses { baseImage, masks: [{ id, geometry: { x, y, w, h }, label?, hint? }], header?, extra?, revealMode? }.',
+            'Type-specific content object. Defaults to { front, back } for basic. Markdown images and image occlusion baseImage must use armin-media:<sha256>.<ext> refs returned by import_flashcard_media. Cloze uses { text } with numbered deletions written {{N::answer}}. Image occlusion uses { baseImage, masks: [{ id, geometry: { x, y, w, h }, label?, hint? }], header?, extra?, revealMode? }.',
           ),
       }),
     },
@@ -295,7 +333,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
           .record(z.string(), z.any())
           .optional()
           .describe(
-            'Type-specific content object. Defaults to { front, back } when either shorthand field is provided. Cloze uses { text } with numbered deletions written {{N::answer}}. Image occlusion uses { baseImage, masks: [{ id, geometry: { x, y, w, h }, label?, hint? }], header?, extra?, revealMode? }.',
+            'Type-specific content object. Defaults to { front, back } when either shorthand field is provided. Markdown images and image occlusion baseImage must use armin-media:<sha256>.<ext> refs returned by import_flashcard_media. Cloze uses { text } with numbered deletions written {{N::answer}}. Image occlusion uses { baseImage, masks: [{ id, geometry: { x, y, w, h }, label?, hint? }], header?, extra?, revealMode? }.',
           ),
         tags: z.array(z.string()).optional().describe("Replacement tag names."),
       }),
@@ -428,7 +466,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
                   .record(z.string(), z.any())
                   .optional()
                   .describe(
-                    'Type-specific content object. Defaults to { front, back } for basic. Cloze uses { text } with numbered deletions written {{N::answer}}. Image occlusion uses { baseImage, masks: [{ id, geometry: { x, y, w, h }, label?, hint? }], header?, extra?, revealMode? }.',
+                    'Type-specific content object. Defaults to { front, back } for basic. Markdown images and image occlusion baseImage must use armin-media:<sha256>.<ext> refs returned by import_flashcard_media. Cloze uses { text } with numbered deletions written {{N::answer}}. Image occlusion uses { baseImage, masks: [{ id, geometry: { x, y, w, h }, label?, hint? }], header?, extra?, revealMode? }.',
                   ),
                 prerequisites: z
                   .array(idSchema)

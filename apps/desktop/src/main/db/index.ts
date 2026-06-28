@@ -28,10 +28,21 @@ function defaultDbRoot() {
   return app.getPath("userData");
 }
 
-function profileDbDir(profileId: string) {
-  const safeProfileId = profileId.replace(/[^a-zA-Z0-9_-]/g, "_");
+function safeProfileId(profileId: string) {
+  return profileId.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+export function profileDataDir(profileId: string) {
   const root = testDbRoot ?? defaultDbRoot();
-  return path.join(root, "profiles", safeProfileId);
+  return path.join(root, "profiles", safeProfileId(profileId));
+}
+
+export function profileMediaDir(profileId: string) {
+  return path.join(profileDataDir(profileId), "media");
+}
+
+function profileDbDir(profileId: string) {
+  return profileDataDir(profileId);
 }
 
 export function setDbRootForTests(root: string | null) {

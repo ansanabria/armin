@@ -86,45 +86,8 @@ function clozeAnswer(body: string): string {
   return sep === -1 ? body : body.slice(0, sep);
 }
 
-function clozeHint(body: string): string | null {
-  const sep = body.indexOf("::");
-  return sep === -1 ? null : body.slice(sep + 2);
-}
-
 /** True if a field contains cloze markers, i.e. belongs to a cloze note. */
 export function hasClozeMarkers(text: string): boolean {
   CLOZE_RE.lastIndex = 0;
   return /\{\{c\d+::/.test(text);
-}
-
-/** The distinct cloze numbers present in a field, in ascending order. */
-export function clozeNumbers(text: string): number[] {
-  const found = new Set<number>();
-  let m: RegExpExecArray | null;
-  CLOZE_RE.lastIndex = 0;
-  while ((m = CLOZE_RE.exec(text))) found.add(Number(m[1]));
-  return [...found].sort((a, b) => a - b);
-}
-
-/**
- * Render one cloze card (1-based `clozeNumber`): the matching deletions are
- * blanked on the front and revealed (bold) on the back; other clozes show
- * their answer on both sides.
- */
-export function renderCloze(
-  text: string,
-  clozeNumber: number,
-): { front: string; back: string } {
-  const front = text.replace(CLOZE_RE, (_w, n: string, body: string) => {
-    if (Number(n) === clozeNumber) {
-      const hint = clozeHint(body);
-      return `[${hint ?? "..."}]`;
-    }
-    return clozeAnswer(body);
-  });
-  const back = text.replace(CLOZE_RE, (_w, n: string, body: string) => {
-    const answer = clozeAnswer(body);
-    return Number(n) === clozeNumber ? `<b>${answer}</b>` : answer;
-  });
-  return { front, back };
 }

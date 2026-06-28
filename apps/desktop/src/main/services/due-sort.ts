@@ -1,9 +1,4 @@
-import { sql, type SQL } from "drizzle-orm";
-import { schema } from "../db";
-
-const { reviewUnits } = schema;
-
-/** Mirrors renderer `dueLabelPriority` using raw scheduling fields. */
+/** Lower values sort closer to the front of a due-soon queue. */
 export function dueSortPriority(
   row: { locked: boolean; state: number; due: Date },
   now: Date,
@@ -23,22 +18,4 @@ export function dueSortPriority(
   if (months < 12) return 50 + months;
 
   return 80;
-}
-
-/** SQL expression matching `dueSortPriority` for paginated ORDER BY. */
-export function sqlDueSortPriority(nowMs: number): SQL {
-  const dueMs = sql`cast(${reviewUnits.due} as integer)`;
-  const delta = sql`${dueMs} - ${nowMs}`;
-  const mins = sql`((${delta}) + 59999) / 60000`;
-  const days = sql`((${delta}) + 86399999) / 86400000`;
-
-  return sql`case
-    when ${reviewUnits.locked} then 95
-    when ${reviewUnits.state} = 0 then 90
-    when ${dueMs} <= ${nowMs} then 0
-    when ${mins} < 60 then 1.0 + (${mins} * 1.0) / 1000.0
-    when ${days} < 30 then 10.0 + (${days} * 1.0)
-    when ((${days} + 29) / 30) < 12 then 50.0 + ((${days} + 29) / 30) * 1.0
-    else 80
-  end`;
 }

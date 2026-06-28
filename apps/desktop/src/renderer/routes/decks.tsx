@@ -306,14 +306,11 @@ export default function DecksPage() {
               Cancel
             </Button>
             <Button
-              disabled={
-                !name.trim() || createDeck.isPending || closingAfterCreate
-              }
+              disabled={!name.trim()}
+              busy={createDeck.isPending || closingAfterCreate}
               onClick={create}
             >
-              {createDeck.isPending || closingAfterCreate
-                ? "Creating…"
-                : "Create deck"}
+              Create deck
             </Button>
           </div>
         </div>
@@ -348,10 +345,9 @@ export default function DecksPage() {
             <Button
               disabled={
                 !renameName.trim() ||
-                updateDeck.isPending ||
-                closingAfterRename ||
                 renameName.trim() === renamingDeck?.name
               }
+              busy={updateDeck.isPending || closingAfterRename}
               onClick={() => {
                 if (!renamingDeck || !renameName.trim()) return;
                 updateDeck.mutate({
@@ -360,7 +356,7 @@ export default function DecksPage() {
                 });
               }}
             >
-              {updateDeck.isPending || closingAfterRename ? "Saving…" : "Save"}
+              Save
             </Button>
           </div>
         </div>
@@ -383,15 +379,13 @@ export default function DecksPage() {
           </Button>
           <Button
             variant="destructive"
-            disabled={deleteDeck.isPending || closingAfterDelete}
+            busy={deleteDeck.isPending || closingAfterDelete}
             onClick={() => {
               if (!deletingDeck) return;
               deleteDeck.mutate(deletingDeck.id);
             }}
           >
-            {deleteDeck.isPending || closingAfterDelete
-              ? "Deleting…"
-              : "Delete deck"}
+            Delete deck
           </Button>
         </div>
       </Dialog>

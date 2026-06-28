@@ -2,17 +2,8 @@ import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu
 
 import { cn } from "@/lib/utils";
 import {
-  DropdownMenuCheckboxItem,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 
 const ContextMenu = ContextMenuPrimitive.Root;
@@ -45,14 +36,5 @@ export {
   ContextMenuContent,
   ContextMenuPortal,
   DropdownMenuItem as ContextMenuItem,
-  DropdownMenuCheckboxItem as ContextMenuCheckboxItem,
-  DropdownMenuRadioGroup as ContextMenuRadioGroup,
-  DropdownMenuRadioItem as ContextMenuRadioItem,
   DropdownMenuSeparator as ContextMenuSeparator,
-  DropdownMenuShortcut as ContextMenuShortcut,
-  DropdownMenuSub as ContextMenuSub,
-  DropdownMenuSubTrigger as ContextMenuSubTrigger,
-  DropdownMenuSubContent as ContextMenuSubContent,
-  DropdownMenuGroup as ContextMenuGroup,
-  DropdownMenuLabel as ContextMenuLabel,
 };

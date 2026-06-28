@@ -35,7 +35,10 @@ import {
   invalidateCoreData,
   type BrowseQueryFilters,
 } from "@/lib/armin-query";
-import { toUiBrowseFlashcard, type UiBrowseFlashcard } from "@/types/view-models";
+import {
+  toUiBrowseFlashcard,
+  type UiBrowseFlashcard,
+} from "@/types/view-models";
 import { BROWSE_SORT_OPTIONS, type BrowseSortKey } from "@/lib/browse";
 import { STATE_OPTIONS } from "@/lib/flashcard-filters";
 import { BROWSE_PAGE_SIZE } from "../../shared/browse";
@@ -56,7 +59,7 @@ export default function BrowsePage() {
   const [editing, setEditing] = useState<UiBrowseFlashcard | null>(null);
   const [moveTarget, setMoveTarget] = useState<UiBrowseFlashcard | null>(null);
 
-  const browseFilters = useMemo((): BrowseQueryFilters => {
+  const browseFilters = useMemo(() => {
     const filters: BrowseQueryFilters = { sort };
     if (stateFilter !== ALL_STATES) {
       const state = Number(stateFilter);
@@ -190,7 +193,8 @@ export default function BrowsePage() {
         title: archived ? "Flashcard archived" : "Flashcard unarchived",
       });
     },
-    onError: () => toast({ tone: "error", title: "Could not update flashcard" }),
+    onError: () =>
+      toast({ tone: "error", title: "Could not update flashcard" }),
   });
 
   const saveCard = (values: CardFormValues) => {

@@ -109,10 +109,6 @@ export function isValidStepDuration(step: StepDuration): boolean {
   );
 }
 
-export function isValidSteps(steps: StepDuration[]): boolean {
-  return steps.length > 0 && steps.every(isValidStepDuration);
-}
-
 function formatStepToken(step: StepDuration): string | null {
   if (!isValidStepDuration(step)) return null;
 

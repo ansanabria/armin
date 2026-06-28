@@ -1,4 +1,4 @@
-import { useMemo, useRef, type MutableRefObject } from "react";
+import { useMemo, useRef, useState, type MutableRefObject } from "react";
 import ReactMarkdown, {
   defaultUrlTransform,
   type Components,
@@ -6,11 +6,14 @@ import ReactMarkdown, {
 } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
+import { mediaDisplayUrl } from "@/lib/media";
+import { parseImageWidth, stripImageWidth } from "@/lib/image-size";
+import { ImageZoomDialog } from "@/components/ui/image-zoom-dialog";
 
-/** Card images are stored as inline data URLs from the markdown editor. */
+/** Card images are stored as profile-relative Flashcard media references. */
 const cardUrlTransform: UrlTransform = (url, key) => {
-  if (key === "src" && /^data:image\//i.test(url)) {
-    return url;
+  if (key === "src" && /^armin-media:/i.test(url)) {
+    return mediaDisplayUrl(url);
   }
   return defaultUrlTransform(url);
 };
@@ -26,6 +29,7 @@ type MarkdownContentProps = {
 function createComponents(
   images: MarkdownContentProps["images"],
   imageIndexRef: MutableRefObject<number>,
+  onPreview: (src: string) => void,
 ): Components {
   const components: Components = {
     a({ children, href, ...props }) {
@@ -42,6 +46,30 @@ function createComponents(
       imageIndexRef.current += 1;
       return <span>[Image {imageIndexRef.current}]</span>;
     };
+  } else {
+    // Apply the stored display width (encoded in the title) and let clicking the
+    // image open the centered zoom preview.
+    components.img = ({ src, alt, title }) => {
+      const rawTitle = typeof title === "string" ? title : null;
+      const width = parseImageWidth(rawTitle);
+      const caption = stripImageWidth(rawTitle);
+      const source = typeof src === "string" ? src : "";
+      return (
+        <button
+          type="button"
+          className="md-image-zoom"
+          aria-label="Preview image"
+          onClick={() => source && onPreview(source)}
+        >
+          <img
+            src={source}
+            alt={alt ?? ""}
+            title={caption}
+            style={width ? { width, maxWidth: "100%" } : undefined}
+          />
+        </button>
+      );
+    };
   }
 
   return components;
@@ -57,8 +85,9 @@ export function MarkdownContent({
   images = "show",
 }: MarkdownContentProps) {
   const imageIndexRef = useRef(0);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const components = useMemo(
-    () => createComponents(images, imageIndexRef),
+    () => createComponents(images, imageIndexRef, setPreviewSrc),
     [images],
   );
 
@@ -73,6 +102,13 @@ export function MarkdownContent({
       >
         {content}
       </ReactMarkdown>
+      {images === "show" && (
+        <ImageZoomDialog
+          src={previewSrc}
+          open={previewSrc !== null}
+          onClose={() => setPreviewSrc(null)}
+        />
+      )}
     </div>
   );
 }

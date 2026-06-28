@@ -1,5 +1,5 @@
 import { strFromU8, unzipSync } from "fflate";
-import { deleteProfileData, initDb, writeProfileDbFile } from "../db";
+import { deleteProfileData, getDb, initDb, writeProfileDbFile } from "../db";
 import { runMigrations } from "../db/migrate";
 import { getLocalSchemaVersion } from "../db/schema-version";
 import { createProfile, deleteProfile, type Profile } from "./profiles";
@@ -7,8 +7,10 @@ import {
   BACKUP_DB_ENTRY,
   BACKUP_FORMAT,
   BACKUP_MANIFEST_ENTRY,
+  BACKUP_MEDIA_PREFIX,
   type BackupManifest,
 } from "./backup-format";
+import { upgradeLegacyFlashcardMedia, writeRestoredMediaFile } from "./media";
 
 /**
  * Restore a profile from a backup archive produced by the export service. This
@@ -53,8 +55,18 @@ export async function restoreProfileFromZip(
   const profile = createProfile(name);
   try {
     writeProfileDbFile(profile.id, dbBytes);
+    for (const [entry, fileBytes] of Object.entries(files)) {
+      if (!entry.startsWith(BACKUP_MEDIA_PREFIX)) continue;
+      const fileName = entry.slice(BACKUP_MEDIA_PREFIX.length);
+      if (!fileName || fileName.includes("/")) continue;
+      writeRestoredMediaFile(profile.id, fileName, fileBytes);
+    }
     await initDb(profile.id);
     await runMigrations(profile.id);
+    await upgradeLegacyFlashcardMedia({
+      profileId: profile.id,
+      db: getDb(profile.id),
+    });
   } catch (error) {
     // Roll back the half-created profile so a failed restore leaves no trace.
     try {

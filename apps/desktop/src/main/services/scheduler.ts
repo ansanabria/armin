@@ -14,9 +14,6 @@ import type { ServiceContext } from "./context";
 /** Review units awaiting prerequisite unlock use a far-future due date. */
 export const PENDING_DUE = new Date("2099-01-01T00:00:00.000Z");
 
-export const DEFAULT_PREREQ_STABILITY_FLOOR = 2;
-export const DEFAULT_NEW_REVIEW_UNITS_PER_DAY = 10;
-
 /** The subset of review-unit columns that hold FSRS scheduling state. */
 export type FsrsFields = Pick<
   DbReviewUnit,

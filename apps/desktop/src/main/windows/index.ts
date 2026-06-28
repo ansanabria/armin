@@ -93,10 +93,15 @@ function shellOptions() {
   return { isMac, isLinux };
 }
 
-function rendererWebPreferences() {
+function rendererWebPreferences(profileId?: string) {
   const additionalArguments: string[] = [];
   if (process.env.ARMIN_E2E === "1") {
     additionalArguments.push("--armin-e2e");
+  }
+  if (profileId) {
+    additionalArguments.push(
+      `--armin-profile-id=${encodeURIComponent(profileId)}`,
+    );
   }
 
   return {
@@ -213,7 +218,7 @@ export async function openMainWindow(profileId: string, profileName?: string) {
           frame: false,
           ...(isLinux && { hasShadow: false }),
         }),
-    webPreferences: rendererWebPreferences(),
+    webPreferences: rendererWebPreferences(profileId),
   });
   attachWindowIcon(win);
 

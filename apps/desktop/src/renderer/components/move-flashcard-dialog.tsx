@@ -161,11 +161,8 @@ export function MoveFlashcardDialog({
         </Button>
         {!noTargets && (
           <Button
-            disabled={
-              !targetDeckId ||
-              move.isPending ||
-              consequencesQuery.isLoading
-            }
+            disabled={!targetDeckId || consequencesQuery.isLoading}
+            busy={move.isPending}
             onClick={() => move.mutate()}
           >
             {hasLinks ? "Move and remove links" : "Move flashcard"}

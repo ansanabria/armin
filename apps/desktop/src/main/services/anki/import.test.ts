@@ -5,7 +5,14 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import Database from "better-sqlite3";
 import { zipSync } from "fflate";
-import { closeDb, getDb, initDb, schema, setDbRootForTests } from "../../db";
+import {
+  closeDb,
+  getDb,
+  initDb,
+  profileMediaDir,
+  schema,
+  setDbRootForTests,
+} from "../../db";
 import { runMigrations } from "../../db/migrate";
 import type { ServiceContext } from "../context";
 import { analyzeAnkiPackage, commitAnkiImport } from "./import";
@@ -260,10 +267,11 @@ describe("Anki package import", () => {
     expect(rows.some((c) => c.subKey === "c1" && c.front.includes("[…]"))).toBe(
       true,
     );
-    // The image was inlined as a data URL.
-    expect(rows.some((c) => c.back.includes("data:image/png;base64"))).toBe(
+    // The imported image was stored as Flashcard media before persistence.
+    expect(rows.some((c) => c.back.includes("armin-media:"))).toBe(
       true,
     );
+    expect(fs.readdirSync(profileMediaDir(ctx.profileId))).toHaveLength(1);
 
     const tags = ctx.db.select().from(schema.tags).all();
     expect(tags.map((t) => t.name).sort()).toEqual(["capital", "europe"]);
@@ -388,7 +396,8 @@ describe("Anki package import", () => {
       extra: string;
       revealMode: string;
     };
-    expect(content.baseImage).toContain("data:image/png;base64");
+    expect(content.baseImage).toMatch(/^armin-media:[a-f0-9]{64}\.png$/);
+    expect(fs.readdirSync(profileMediaDir(ctx.profileId))).toHaveLength(1);
     expect(content.revealMode).toBe("hide_one");
     expect(content.header).toBe("Anatomy");
     expect(content.extra).toBe("Back notes\n\nComment notes");

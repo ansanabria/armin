@@ -16,6 +16,9 @@ import { State } from "./scheduler";
 
 useTestDb();
 
+const MEDIA_A = `armin-media:${"a".repeat(64)}.png`;
+const MEDIA_B = `armin-media:${"b".repeat(64)}.png`;
+
 function reviewUnitsForFlashcard(
   ctx: Awaited<ReturnType<typeof makeContext>>,
   flashcardId: string,
@@ -121,7 +124,7 @@ describe("updateFlashcard reconciliation", () => {
       deckId: deck.id,
       type: "image_occlusion",
       content: {
-        baseImage: "data:image/png;base64,AAAA",
+        baseImage: MEDIA_A,
         revealMode: "hide_one",
         masks: [
           { id: "m1", geometry: { x: 0, y: 0, w: 0.4, h: 0.4 }, label: "One" },
@@ -141,7 +144,7 @@ describe("updateFlashcard reconciliation", () => {
 
     await flashcards.updateFlashcard(ctx, note.id, {
       content: {
-        baseImage: "data:image/png;base64,BBBB",
+        baseImage: MEDIA_B,
         revealMode: "hide_all",
         masks: [
           {

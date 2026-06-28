@@ -48,6 +48,9 @@ export const ipcChannels = {
     export: channel("data:export"),
     restore: channel("data:restore"),
   },
+  media: {
+    importImage: channel("media:importImage"),
+  },
   review: {
     queue: channel("review:queue"),
     queueAll: channel("review:queueAll"),

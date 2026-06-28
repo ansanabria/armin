@@ -11,6 +11,39 @@ const invoke = (command: IpcChannel, payload?: unknown) =>
 
 const c = ipcChannels;
 
+function currentProfileId(): string | null {
+  const prefix = "--armin-profile-id=";
+  const arg = process.argv.find((value) => value.startsWith(prefix));
+  if (!arg) return null;
+  return decodeURIComponent(arg.slice(prefix.length));
+}
+
+const profileId = currentProfileId();
+const mediaRefRe =
+  /^armin-media:([a-f0-9]{64}\.(?:png|jpg|gif|webp|svg|bmp|avif))$/;
+
+function mediaUrl(ref: string): string {
+  const match = ref.match(mediaRefRe);
+  if (!match || !profileId) return ref;
+  return `armin-media://${encodeURIComponent(profileId)}/${match[1]}`;
+}
+
+function mediaRefFromUrl(url: string): string | null {
+  if (!profileId) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "armin-media:") return null;
+    if (decodeURIComponent(parsed.hostname) !== profileId) return null;
+    const fileName = parsed.pathname.replace(/^\//, "");
+    if (!/^[a-f0-9]{64}\.(?:png|jpg|gif|webp|svg|bmp|avif)$/.test(fileName)) {
+      return null;
+    }
+    return `armin-media:${fileName}`;
+  } catch {
+    return null;
+  }
+}
+
 const api = {
   profiles: {
     list: () => invoke(c.profiles.list),
@@ -98,6 +131,11 @@ const api = {
   data: {
     export: () => invoke(c.data.export),
     restore: () => invoke(c.data.restore),
+  },
+  media: {
+    importImage: (input: unknown) => invoke(c.media.importImage, input),
+    url: mediaUrl,
+    refFromUrl: mediaRefFromUrl,
   },
   onDataChanged: (cb: () => void) => {
     const listener = () => cb();
