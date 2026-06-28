@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { Markdown } from "@tiptap/markdown";
 import { Placeholder } from "@tiptap/extension-placeholder";
-import { Image } from "@tiptap/extension-image";
 import { ImagePlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -11,6 +10,8 @@ import {
   persistMediaRefsInMarkdown,
   resolveMediaRefsInMarkdown,
 } from "@/lib/media";
+import { ImageZoomDialog } from "@/components/ui/image-zoom-dialog";
+import { ResizableImage } from "@/components/ui/markdown-image";
 
 type MarkdownEditorProps = {
   value: string;
@@ -31,6 +32,10 @@ export function MarkdownEditor({
 }: MarkdownEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+  // The editor is created once, so reach the latest preview handler via a ref.
+  const onPreviewRef = useRef<((src: string) => void) | null>(null);
+  onPreviewRef.current = setPreviewSrc;
 
   const syncScrollOverflow = useCallback(() => {
     const el = containerRef.current;
@@ -71,7 +76,10 @@ export function MarkdownEditor({
         codeBlock: false,
       }),
       Markdown,
-      Image.configure({ allowBase64: false }),
+      ResizableImage.configure({
+        allowBase64: false,
+        onPreview: (src) => onPreviewRef.current?.(src),
+      }),
       Placeholder.configure({
         placeholder: placeholder ?? "",
         emptyEditorClass: "is-editor-empty",
@@ -202,6 +210,11 @@ export function MarkdownEditor({
           Add image
         </button>
       </div>
+      <ImageZoomDialog
+        src={previewSrc}
+        open={previewSrc !== null}
+        onClose={() => setPreviewSrc(null)}
+      />
     </div>
   );
 }
