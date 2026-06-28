@@ -42,7 +42,7 @@ import {
 import {
   EDGE_MARKER_END,
   EDGE_STROKE,
-  graphToFlowElements,
+  buildGraphFlowElementsAsync,
   graphNodePreview,
   incidentNodeIdsOf,
   makeFlowEdge,
@@ -81,6 +81,13 @@ const defaultEdgeOptions = {
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
+
+// First-open framing when there's no saved viewport. We deliberately do NOT
+// fit the whole graph on open: fitting a large Deck brings every node on-screen,
+// which (with virtualization) would force all of them to render at once. Landing
+// at a normal zoom keeps the first paint to a screenful of cards; the Fit-view
+// control frames the whole graph on demand.
+const DEFAULT_VIEWPORT: Viewport = { x: 48, y: 48, zoom: 1 };
 
 type NodePlacement = { flashcardId: string; x: number; y: number };
 
@@ -293,11 +300,11 @@ function PrerequisiteGraphCanvas({
   onReady,
 }: PrerequisiteGraphProps) {
   const { screenToFlowPosition, fitView } = useReactFlow();
-  const knownNodeIds = useRef(new Set(graph.nodes.map((n) => n.id)));
+  const knownNodeIds = useRef(new Set<string>());
   const connectFrom = useRef<string | null>(null);
-  const didSyncNodes = useRef(false);
-  const didSyncEdges = useRef(false);
-  const didSyncNodeData = useRef(false);
+  // Set once the async builder commits the first real graph; the incremental
+  // sync effects below stay dormant until then so they don't fight the build.
+  const initialFlowLoaded = useRef(false);
   const backgroundLaidOutIds = useRef(new Set<string>());
   const layoutWorker = useRef<Worker | null>(null);
   const layoutRequestId = useRef(0);
@@ -306,44 +313,31 @@ function PrerequisiteGraphCanvas({
   const [connectMenu, setConnectMenu] = useState<ConnectMenuState>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [interactive, setInteractive] = useState(false);
+  // Two-part readiness gate: `flowReady` once the async build commits nodes and
+  // edges, `reactFlowReady` once ReactFlow's `onInit` fires. Marking the graph
+  // interactive needs both, so we never signal ready on the empty init.
+  const [flowReady, setFlowReady] = useState(false);
+  const [reactFlowReady, setReactFlowReady] = useState(false);
 
   // Selection + search lens. The selected card lights up itself, its edges, and
   // its direct neighbors; search dims everything outside its scope.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  // Build the initial canvas once, synchronously, from the graph the parent
-  // hands us (it gates mount until the deck has loaded). Computing this at mount
-  // — rather than populating an empty canvas in an effect — lets ReactFlow frame
-  // the graph on its first paint, avoiding an empty/unframed flicker.
-  const initialElements = useRef<{
-    nodes: CardFlowNode[];
-    edges: Edge[];
-  } | null>(null);
-  if (!initialElements.current) {
-    markGraphPerf("graphToFlowElements:start");
-    initialElements.current = graphToFlowElements(
-      graph,
-      savedPositionsOf(graph),
-    );
-    markGraphPerf("graphToFlowElements:end");
-    measureGraphPerf(
-      "graphToFlowElements",
-      "graphToFlowElements:start",
-      "graphToFlowElements:end",
-    );
-  }
-
-  const [nodes, setNodes, onNodesChange] = useNodesState<CardFlowNode>(
-    initialElements.current.nodes,
-  );
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
-    initialElements.current.edges,
-  );
+  // Start ReactFlow empty: the initial conversion happens off the render path in
+  // an abortable, chunked effect (see below) so a large Deck graph can't freeze
+  // the renderer while it mounts.
+  const [nodes, setNodes, onNodesChange] = useNodesState<CardFlowNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   // Always-fresh snapshot of node positions for layout persistence.
   const nodesRef = useRef(nodes);
   nodesRef.current = nodes;
+
+  // Keep `onReady` in a ref so the readiness effect doesn't re-run (and cancel a
+  // pending ready signal) when the parent passes a fresh callback identity.
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
 
   useEffect(
     () => () => {
@@ -353,6 +347,57 @@ function PrerequisiteGraphCanvas({
     },
     [],
   );
+
+  // Convert the persisted graph into ReactFlow elements off the render path, in
+  // an abortable chunked task. Runs once for the initial graph; afterwards the
+  // incremental sync effects own updates. If the route unmounts (or the graph is
+  // replaced) before the build finishes, the controller aborts and the stale
+  // result is dropped instead of being committed into an unmounted canvas.
+  useEffect(() => {
+    if (initialFlowLoaded.current) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    setFlowReady(false);
+    setInteractive(false);
+    markGraphPerf("buildFlowElements:start");
+    void buildGraphFlowElementsAsync(graph, savedPositionsOf(graph), {
+      signal,
+    }).then((result) => {
+      if (!result || signal.aborted) return;
+      markGraphPerf("buildFlowElements:end");
+      measureGraphPerf(
+        "buildFlowElements",
+        "buildFlowElements:start",
+        "buildFlowElements:end",
+      );
+      setNodes(result.nodes);
+      setEdges(result.edges);
+      knownNodeIds.current = new Set(graph.nodes.map((n) => n.id));
+      initialFlowLoaded.current = true;
+      setFlowReady(true);
+    });
+    return () => controller.abort();
+  }, [graph, setNodes, setEdges]);
+
+  // Signal ready only after both the async build has committed real nodes/edges
+  // and ReactFlow has initialized, then reveal the canvas on the next paint. We
+  // don't fit-to-all here: framing is handled by `defaultViewport` so the first
+  // paint stays cheap (see DEFAULT_VIEWPORT).
+  useEffect(() => {
+    if (!flowReady || !reactFlowReady || interactive) return;
+    cancelReadySignal.current?.();
+    cancelReadySignal.current = afterCanvasPaint(() => {
+      cancelReadySignal.current = null;
+      markGraphPerf("interactive:end");
+      measureGraphPerf("interactive", "routeRender:start", "interactive:end");
+      setInteractive(true);
+      onReadyRef.current?.();
+    });
+    return () => {
+      cancelReadySignal.current?.();
+      cancelReadySignal.current = null;
+    };
+  }, [flowReady, reactFlowReady, interactive]);
 
   const nodeById = useMemo(
     () => new Map(graph.nodes.map((n) => [n.id, n])),
@@ -366,10 +411,7 @@ function PrerequisiteGraphCanvas({
   // Incrementally add/remove nodes as the underlying deck changes, preserving
   // the positions of cards that are already on the canvas.
   useEffect(() => {
-    if (!didSyncNodes.current) {
-      didSyncNodes.current = true;
-      return;
-    }
+    if (!initialFlowLoaded.current) return;
     const currentIds = new Set(graph.nodes.map((n) => n.id));
     const added = graph.nodes.filter((n) => !knownNodeIds.current.has(n.id));
     const removed = [...knownNodeIds.current].filter(
@@ -426,10 +468,7 @@ function PrerequisiteGraphCanvas({
   // Keep the rendered edges in sync with the persisted prerequisite edges so
   // arrows survive a reload of the graph.
   useEffect(() => {
-    if (!didSyncEdges.current) {
-      didSyncEdges.current = true;
-      return;
-    }
+    if (!initialFlowLoaded.current) return;
     setEdges((current) => {
       const desiredIds = new Set(
         graph.edges.map((e) => `${e.prereqId}-${e.dependentId}`),
@@ -447,10 +486,7 @@ function PrerequisiteGraphCanvas({
   }, [graph.edges, setEdges]);
 
   useEffect(() => {
-    if (!didSyncNodeData.current) {
-      didSyncNodeData.current = true;
-      return;
-    }
+    if (!initialFlowLoaded.current) return;
     setNodes((current) => {
       let changed = false;
       const updated = current.map((node) => {
@@ -869,7 +905,12 @@ function PrerequisiteGraphCanvas({
   return (
     <>
       <ReactFlow
-        className={cn(isConnecting && "graph-connecting")}
+        className={cn(
+          isConnecting && "graph-connecting",
+          // Keep the still-loading canvas from capturing pointer events so the
+          // surrounding app stays clickable while the graph builds.
+          !interactive && "pointer-events-none",
+        )}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -888,25 +929,14 @@ function PrerequisiteGraphCanvas({
         onMoveEnd={(_, viewport) => onViewportChange?.(viewport)}
         onInit={() => {
           markGraphPerf("reactFlow:onInit");
-          // The initial frame (fitView/defaultViewport) is applied during init;
-          // wait for it to paint before signalling ready, so the canvas is only
-          // revealed once it's framed — never in an intermediate unframed state.
-          cancelReadySignal.current?.();
-          cancelReadySignal.current = afterCanvasPaint(() => {
-            cancelReadySignal.current = null;
-            markGraphPerf("interactive:end");
-            measureGraphPerf(
-              "interactive",
-              "routeRender:start",
-              "interactive:end",
-            );
-            setInteractive(true);
-            onReady?.();
-          });
+          // ReactFlow may init before the async build commits real nodes; the
+          // readiness effect waits for both before signalling ready, so we never
+          // mark interactive on the empty init.
+          setReactFlowReady(true);
         }}
-        defaultViewport={initialViewport}
-        fitView={!initialViewport}
+        defaultViewport={initialViewport ?? DEFAULT_VIEWPORT}
         fitViewOptions={fitViewOptions}
+        onlyRenderVisibleElements
         connectionMode={ConnectionMode.Loose}
         connectionRadius={36}
         minZoom={MIN_ZOOM}

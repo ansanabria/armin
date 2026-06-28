@@ -141,3 +141,41 @@ test("deck graph opens interactively for a 471-card profile", async () => {
     await closeArmin(session);
   }
 });
+
+test("navigation works while a large graph is still loading", async () => {
+  const cardCount = Number.parseInt(process.env.CARD_COUNT ?? "471", 10);
+  const edgeCount = Number.parseInt(process.env.EDGE_COUNT ?? "190", 10);
+  const contentRepeat = Number.parseInt(process.env.CONTENT_REPEAT ?? "20", 10);
+  const errors: string[] = [];
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "armin-e2e-graph-nav-"));
+  const session = await launchArmin(dataDir);
+
+  try {
+    const picker = await firstWindow(session.app);
+    const page = await createProfile(session.app, picker, "Graph Nav");
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push(message.text());
+    });
+    page.on("pageerror", (error) => errors.push(error.message));
+
+    const deckId = await seedGraph(page, cardCount, edgeCount, contentRepeat);
+
+    await clearGraphPerfEntries(page);
+    await page.evaluate((id) => {
+      window.location.hash = `#/deck/${id}/graph`;
+    }, deckId);
+
+    // Immediately leave the route, without waiting for the graph to finish
+    // preparing. Graph work must not monopolize the renderer thread, so the
+    // surrounding navigation has to stay clickable instead of frozen — whether
+    // the build is still running or has already completed.
+    await page.getByRole("link", { name: "Decks" }).dispatchEvent("click");
+
+    await expect(
+      page.getByRole("heading", { name: "Decks", exact: true }),
+    ).toBeVisible();
+    expect(errors).toEqual([]);
+  } finally {
+    await closeArmin(session);
+  }
+});
