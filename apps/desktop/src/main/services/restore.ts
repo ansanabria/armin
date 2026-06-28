@@ -2,7 +2,7 @@ import { strFromU8, unzipSync } from "fflate";
 import { deleteProfileData, getDb, initDb, writeProfileDbFile } from "../db";
 import { runMigrations } from "../db/migrate";
 import { getLocalSchemaVersion } from "../db/schema-version";
-import { createProfile, deleteProfile, type Profile } from "./profiles";
+import { createProfile, deleteProfile } from "./profiles";
 import {
   BACKUP_DB_ENTRY,
   BACKUP_FORMAT,
@@ -21,22 +21,25 @@ import { upgradeLegacyFlashcardMedia, writeRestoredMediaFile } from "./media";
 export async function restoreProfileFromZip(
   bytes: Uint8Array,
   opts: { name?: string } = {},
-): Promise<{ profile: Profile; deckCount: number; flashcardCount: number }> {
+) {
   const files = unzipSync(bytes);
 
   const manifestEntry = files[BACKUP_MANIFEST_ENTRY];
   if (!manifestEntry) {
     throw new Error("This file isn't an Armin backup (missing manifest.json).");
   }
+
   let manifest: BackupManifest;
   try {
     manifest = JSON.parse(strFromU8(manifestEntry)) as BackupManifest;
   } catch {
     throw new Error("This backup's manifest is corrupted.");
   }
+
   if (manifest.format !== BACKUP_FORMAT) {
     throw new Error("This file isn't an Armin backup.");
   }
+
   if (
     typeof manifest.schemaVersion === "number" &&
     manifest.schemaVersion > getLocalSchemaVersion()
@@ -51,16 +54,21 @@ export async function restoreProfileFromZip(
     throw new Error("This backup is missing its database (armin.db).");
   }
 
-  const name = opts.name?.trim() || restoredName(manifest.profileName);
-  const profile = createProfile(name);
+  const profileName = opts.name?.trim() || restoredName(manifest.profileName);
+  const profile = createProfile(profileName);
+
   try {
     writeProfileDbFile(profile.id, dbBytes);
-    for (const [entry, fileBytes] of Object.entries(files)) {
-      if (!entry.startsWith(BACKUP_MEDIA_PREFIX)) continue;
-      const fileName = entry.slice(BACKUP_MEDIA_PREFIX.length);
+
+    for (const [entryPath, fileBytes] of Object.entries(files)) {
+      if (!entryPath.startsWith(BACKUP_MEDIA_PREFIX)) continue;
+
+      const fileName = entryPath.slice(BACKUP_MEDIA_PREFIX.length);
       if (!fileName || fileName.includes("/")) continue;
+
       writeRestoredMediaFile(profile.id, fileName, fileBytes);
     }
+
     await initDb(profile.id);
     await runMigrations(profile.id);
     await upgradeLegacyFlashcardMedia({
@@ -91,7 +99,7 @@ export async function restoreProfileFromZip(
   };
 }
 
-function restoredName(profileName: string | undefined): string {
+function restoredName(profileName: string | undefined) {
   const trimmed = profileName?.trim();
   return trimmed ? `Restored: ${trimmed}` : "Restored profile";
 }
