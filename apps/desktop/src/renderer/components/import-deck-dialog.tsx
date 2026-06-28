@@ -350,10 +350,9 @@ function AnkiImport({
 
       <Footer
         onCancel={onBack}
-        disabled={
-          !analysis || analyzing || importing || (needsName && !name.trim())
-        }
-        label={importing ? "Importing…" : "Import deck"}
+        disabled={!analysis || analyzing || (needsName && !name.trim())}
+        busy={importing}
+        label="Import deck"
         onConfirm={() => void handleImport()}
       />
     </div>
@@ -503,8 +502,9 @@ function MarkdownImport({
 
       <Footer
         onCancel={onBack}
-        disabled={!text.trim() || !name.trim() || importing}
-        label={importing ? "Importing…" : "Import deck"}
+        disabled={!text.trim() || !name.trim()}
+        busy={importing}
+        label="Import deck"
         onConfirm={() => void handleImport()}
       />
     </div>
@@ -653,11 +653,13 @@ function Footer({
   onCancel,
   onConfirm,
   disabled,
+  busy,
   label,
 }: {
   onCancel: () => void;
   onConfirm: () => void;
   disabled: boolean;
+  busy?: boolean;
   label: string;
 }) {
   return (
@@ -665,7 +667,7 @@ function Footer({
       <Button variant="ghost" onClick={onCancel}>
         Cancel
       </Button>
-      <Button disabled={disabled} onClick={onConfirm}>
+      <Button disabled={disabled} busy={busy} onClick={onConfirm}>
         {label}
       </Button>
     </div>

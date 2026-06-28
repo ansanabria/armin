@@ -256,10 +256,10 @@ export function ProfilePickerApp() {
           </Button>
           <Button
             variant="destructive"
-            disabled={deleting}
+            busy={deleting}
             onClick={() => void confirmDelete()}
           >
-            {deleting ? "Deleting…" : "Delete profile"}
+            Delete profile
           </Button>
         </div>
       </Dialog>
@@ -557,9 +557,10 @@ function CreateView({
         <Button
           type="submit"
           className="w-full"
-          disabled={!canCreate || creating}
+          disabled={!canCreate}
+          busy={creating}
         >
-          {creating ? "Creating…" : "Create profile"}
+          Create profile
         </Button>
         <Button
           type="button"

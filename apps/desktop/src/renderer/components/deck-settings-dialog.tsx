@@ -263,7 +263,7 @@ export function DeckSettingsDialog({
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button onClick={save} disabled={!ready || mutation.isPending}>
+            <Button onClick={save} disabled={!ready} busy={mutation.isPending}>
               Save
             </Button>
           </div>
