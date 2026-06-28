@@ -1,13 +1,16 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - master
   pull_request:
     branches:
       - master
   workflow_call:
+
+# Cancel superseded runs on the same branch/PR. A new push cancels the
+# in-progress run for the same ref so only the latest commit is verified.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
