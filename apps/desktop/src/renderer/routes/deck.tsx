@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -98,6 +105,15 @@ export default function DeckPage() {
         .map(toUiFlashcard),
     [cardsQuery.data],
   );
+
+  // Rendering a page of flashcard tiles is the heavy part of opening a deck —
+  // each tile mounts two Base UI menu trees, so 30 of them block the main
+  // thread for a few hundred ms while the (sub-20ms) data is long since loaded.
+  // Deferring the rendered list keeps the route's first paint cheap: the
+  // skeleton shows instantly and the tiles stream in through a non-blocking
+  // concurrent render instead of freezing the navigation.
+  const deferredDisplayed = useDeferredValue(displayed);
+  const cardsRendering = deferredDisplayed !== displayed;
 
   const filteredTotal = cardsQuery.data?.pages[0]?.filteredTotal ?? 0;
   const hasMore = cardsQuery.hasNextPage ?? false;
@@ -205,6 +221,11 @@ export default function DeckPage() {
   const dueCount = deck?.due ?? 0;
   const deckLoading = deckQuery.isLoading;
   const cardsLoading = cardsQuery.isLoading;
+  // Skeleton covers both the fetch and the deferred tile render that follows it,
+  // but only when nothing is on screen yet. Once tiles are rendered, a later
+  // data change re-renders them concurrently without flashing back to skeleton.
+  const showCardsSkeleton =
+    (cardsLoading || cardsRendering) && deferredDisplayed.length === 0;
   const isError = deckQuery.isError || cardsQuery.isError;
 
   if (deckLoading) {
@@ -381,17 +402,17 @@ export default function DeckPage() {
             </div>
           </div>
 
-          {cardsLoading && <CardsSkeleton />}
+          {showCardsSkeleton && <CardsSkeleton />}
 
-          {!cardsLoading && filteredTotal > 0 && (
+          {!showCardsSkeleton && filteredTotal > 0 && (
             <>
               <p className="mb-3 text-xs text-muted">
                 {hasMore
-                  ? `Showing ${displayed.length} of ${filteredTotal} flashcards`
+                  ? `Showing ${deferredDisplayed.length} of ${filteredTotal} flashcards`
                   : `${filteredTotal} flashcards`}
               </p>
               <ul className="card-grid grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {displayed.map((card) => (
+                {deferredDisplayed.map((card) => (
                   <FlashcardTile
                     key={card.id}
                     card={card}
@@ -428,7 +449,7 @@ export default function DeckPage() {
             </>
           )}
 
-          {!cardsLoading && filteredTotal === 0 && (
+          {!showCardsSkeleton && filteredTotal === 0 && (
             <p className="border border-border bg-bg-2 px-6 py-10 text-center text-sm text-muted">
               No flashcards match the selected tags.
             </p>
