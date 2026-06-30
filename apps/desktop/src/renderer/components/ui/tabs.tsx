@@ -6,7 +6,7 @@ function Tabs({ className, ...props }: TabsPrimitive.Root.Props) {
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
-      className={cn("flex flex-col gap-6", className)}
+      className={cn("flex flex-col gap-12", className)}
       {...props}
     />
   );
@@ -16,10 +16,7 @@ function TabsList({ className, children, ...props }: TabsPrimitive.List.Props) {
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
-      className={cn(
-        "relative flex items-center gap-1 border-b border-border",
-        className,
-      )}
+      className={cn("relative flex items-center gap-1", className)}
       {...props}
     >
       {children}
