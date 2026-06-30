@@ -1,8 +1,6 @@
 import {
   useDeferredValue,
-  useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -27,8 +25,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { FlashcardFormDialog } from "@/components/flashcard-form-dialog";
 import { DeckSettingsDialog } from "@/components/deck-settings-dialog";
-import { FlashcardTile } from "@/components/flashcard-tile";
+import {
+  FlashcardDeleteDialog,
+  FlashcardTile,
+  type FlashcardDeleteRequest,
+} from "@/components/flashcard-tile";
 import { MoveFlashcardDialog } from "@/components/move-flashcard-dialog";
+import { VirtualFlashcardGrid } from "@/components/virtual-flashcard-grid";
 import { SortControl } from "@/components/sort-control";
 import { SearchableMultiSelect } from "@/components/ui/combobox";
 import {
@@ -42,12 +45,17 @@ import { useToast } from "@/components/ui/toast";
 import {
   flashcardKeys,
   deckKeys,
-  invalidateCoreData,
+  invalidateDeckScopedData,
   type BrowseQueryFilters,
 } from "@/lib/armin-query";
-import { toUiFlashcard, type UiFlashcard } from "@/types/view-models";
+import {
+  getCachedDeckDetail,
+  getCachedDeckDetailUpdatedAt,
+} from "@/lib/deck-detail-cache";
+import { toUiFlashcard, type UiDeck, type UiFlashcard } from "@/types/view-models";
 import type { CardFormValues } from "@/components/flashcard-form-dialog";
 import { BROWSE_PAGE_SIZE } from "../../shared/browse";
+import type { FlashcardDeleteConsequences } from "@/types/window";
 
 export default function DeckPage() {
   const { deckId } = useParams({ from: "/deck/$deckId" });
@@ -58,6 +66,11 @@ export default function DeckPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editing, setEditing] = useState<UiFlashcard | null>(null);
   const [moveTarget, setMoveTarget] = useState<UiFlashcard | null>(null);
+  const [deleteRequest, setDeleteRequest] =
+    useState<FlashcardDeleteRequest | null>(null);
+  const [deleteConsequences, setDeleteConsequences] =
+    useState<FlashcardDeleteConsequences | null>(null);
+  const [deleteConsequencesError, setDeleteConsequencesError] = useState(false);
   const [sort, setSort] = useState<FlashcardSortKey>("due-soon");
   const [tagFilter, setTagFilter] = useState<string[]>([]);
 
@@ -70,6 +83,9 @@ export default function DeckPage() {
   const deckQuery = useQuery({
     queryKey: deckKeys.detail(deckId),
     queryFn: () => window.armin.decks.get(deckId),
+    initialData: () => getCachedDeckDetail(queryClient, deckId),
+    initialDataUpdatedAt: () =>
+      getCachedDeckDetailUpdatedAt(queryClient, deckId),
   });
 
   const tagsQuery = useQuery({
@@ -117,35 +133,6 @@ export default function DeckPage() {
 
   const filteredTotal = cardsQuery.data?.pages[0]?.filteredTotal ?? 0;
   const hasMore = cardsQuery.hasNextPage ?? false;
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const sentinel = loadMoreRef.current;
-    if (!sentinel || !hasMore || cardsQuery.isFetchingNextPage) return;
-
-    const root = sentinel.closest(".route-scroll");
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (
-          entries[0]?.isIntersecting &&
-          cardsQuery.hasNextPage &&
-          !cardsQuery.isFetchingNextPage
-        ) {
-          void cardsQuery.fetchNextPage();
-        }
-      },
-      { root, rootMargin: "240px" },
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [
-    hasMore,
-    cardsQuery.hasNextPage,
-    cardsQuery.isFetchingNextPage,
-    cardsQuery.fetchNextPage,
-    browseFilters,
-  ]);
 
   const deckTags = tagsQuery.data ?? [];
   const tagOptions = useMemo(
@@ -168,11 +155,29 @@ export default function DeckPage() {
     setEditing(null);
   };
 
+  const requestDelete = (request: FlashcardDeleteRequest) => {
+    setDeleteRequest(request);
+    setDeleteConsequences(null);
+    setDeleteConsequencesError(false);
+    if (request.loadDeleteConsequences) {
+      void request
+        .loadDeleteConsequences(request.card.id)
+        .then((summary) => setDeleteConsequences(summary))
+        .catch(() => setDeleteConsequencesError(true));
+    }
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteRequest(null);
+    setDeleteConsequences(null);
+    setDeleteConsequencesError(false);
+  };
+
   const createCard = useMutation({
     mutationFn: (values: CardFormValues) =>
       window.armin.flashcards.create({ deckId, ...values }),
     onSuccess: () => {
-      invalidateCoreData(queryClient, deckId);
+      invalidateDeckScopedData(queryClient, deckId);
       toast({ tone: "success", title: "Flashcard added" });
     },
     onError: () => toast({ tone: "error", title: "Couldn’t add flashcard" }),
@@ -182,7 +187,7 @@ export default function DeckPage() {
     mutationFn: (values: CardFormValues & { id: string }) =>
       window.armin.flashcards.update(values),
     onSuccess: () => {
-      invalidateCoreData(queryClient, deckId);
+      invalidateDeckScopedData(queryClient, deckId);
       toast({ tone: "success", title: "Flashcard updated" });
       closeDialog();
     },
@@ -192,7 +197,7 @@ export default function DeckPage() {
   const deleteCard = useMutation({
     mutationFn: (id: string) => window.armin.flashcards.delete(id),
     onSuccess: () => {
-      invalidateCoreData(queryClient, deckId);
+      invalidateDeckScopedData(queryClient, deckId);
       toast({ tone: "error", title: "Flashcard deleted" });
     },
     onError: () => toast({ tone: "error", title: "Couldn’t delete flashcard" }),
@@ -202,7 +207,7 @@ export default function DeckPage() {
     mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
       window.armin.flashcards.archive(id, archived),
     onSuccess: (_note, { archived }) => {
-      invalidateCoreData(queryClient, deckId);
+      invalidateDeckScopedData(queryClient, deckId);
       toast({
         tone: "success",
         title: archived ? "Flashcard archived" : "Flashcard unarchived",
@@ -219,7 +224,6 @@ export default function DeckPage() {
 
   const deck = deckQuery.data;
   const dueCount = deck?.due ?? 0;
-  const deckLoading = deckQuery.isLoading;
   const cardsLoading = cardsQuery.isLoading;
   // Skeleton covers both the fetch and the deferred tile render that follows it,
   // but only when nothing is on screen yet. Once tiles are rendered, a later
@@ -227,18 +231,6 @@ export default function DeckPage() {
   const showCardsSkeleton =
     (cardsLoading || cardsRendering) && deferredDisplayed.length === 0;
   const isError = deckQuery.isError || cardsQuery.isError;
-
-  if (deckLoading) {
-    return (
-      <div>
-        <BackLink />
-        <div className="mt-6">
-          <Skeleton className="mb-6 h-16 w-full max-w-md" />
-          <CardsSkeleton />
-        </div>
-      </div>
-    );
-  }
 
   if (isError) {
     return (
@@ -272,7 +264,7 @@ export default function DeckPage() {
     );
   }
 
-  if (!deck) {
+  if (deckQuery.isSuccess && !deck) {
     return (
       <div>
         <BackLink />
@@ -295,54 +287,20 @@ export default function DeckPage() {
     <div>
       <BackLink />
 
-      <header className="mb-6 mt-4 flex flex-wrap items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-[1.75rem] font-semibold tracking-tight text-balance">
-            {deck.name}
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            {deck.total} flashcards
-            <span className="text-border-strong"> · </span>
-            {deck.learned} learned
-            {dueCount > 0 && (
-              <>
-                <span className="text-border-strong"> · </span>
-                <span className="font-medium text-accent">
-                  {dueCount} due now
-                </span>
-              </>
-            )}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link to="/deck/$deckId/graph" params={{ deckId: deck.id }}>
-            <Button variant="outline">
-              <Share2 className="h-4 w-4" /> Graph
-            </Button>
-          </Link>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Deck settings"
-            title="Deck settings"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-          {dueCount > 0 && (
-            <Link to="/deck/$deckId/review" params={{ deckId: deck.id }}>
-              <Button>
-                <Play className="h-4 w-4" /> Review
-              </Button>
-            </Link>
-          )}
-          <Button onClick={openNew}>
-            <Plus className="h-4 w-4" /> Add card
-          </Button>
-        </div>
-      </header>
+      {deck ? (
+        <DeckHeader
+          deck={deck}
+          dueCount={dueCount}
+          onSettings={() => setSettingsOpen(true)}
+          onAddCard={openNew}
+        />
+      ) : (
+        <DeckHeaderSkeleton />
+      )}
 
-      {deck.total === 0 && !cardsLoading && (
+      {!deck && <CardsSkeleton />}
+
+      {deck?.total === 0 && !cardsLoading && (
         <EmptyState
           icon={Layers}
           title="No flashcards in this deck"
@@ -355,7 +313,7 @@ export default function DeckPage() {
         />
       )}
 
-      {deck.total > 0 && (
+      {deck && deck.total > 0 && (
         <>
           <div className="mb-5 border border-border bg-bg-2 px-4 py-3">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -411,8 +369,12 @@ export default function DeckPage() {
                   ? `Showing ${deferredDisplayed.length} of ${filteredTotal} flashcards`
                   : `${filteredTotal} flashcards`}
               </p>
-              <ul className="card-grid grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {deferredDisplayed.map((card) => (
+              <VirtualFlashcardGrid
+                cards={deferredDisplayed}
+                hasMore={hasMore}
+                isFetchingNextPage={cardsQuery.isFetchingNextPage}
+                fetchNextPage={() => void cardsQuery.fetchNextPage()}
+                renderCard={(card) => (
                   <FlashcardTile
                     key={card.id}
                     card={card}
@@ -427,25 +389,13 @@ export default function DeckPage() {
                     loadDeleteConsequences={(id) =>
                       window.armin.flashcards.deleteConsequences(id)
                     }
+                    onDeleteRequest={requestDelete}
                     onDelete={async () => {
                       await deleteCard.mutateAsync(card.id);
                     }}
                   />
-                ))}
-              </ul>
-              {hasMore || cardsQuery.isFetchingNextPage ? (
-                <div
-                  ref={loadMoreRef}
-                  className="mt-4 flex justify-center py-2"
-                  aria-hidden
-                >
-                  {cardsQuery.isFetchingNextPage ? (
-                    <Skeleton className="h-4 w-28" />
-                  ) : (
-                    <div className="h-px w-full" />
-                  )}
-                </div>
-              ) : null}
+                )}
+              />
             </>
           )}
 
@@ -468,18 +418,111 @@ export default function DeckPage() {
         initialTags={editing?.tags ?? []}
         onSubmit={saveCard}
       />
-      <DeckSettingsDialog
-        deckId={deck.id}
-        deckName={deck.name}
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
+      {deck && (
+        <DeckSettingsDialog
+          deckId={deck.id}
+          deckName={deck.name}
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       <MoveFlashcardDialog
         flashcard={moveTarget}
         open={Boolean(moveTarget)}
         onClose={() => setMoveTarget(null)}
       />
+      <FlashcardDeleteDialog
+        request={deleteRequest}
+        consequences={deleteConsequences}
+        consequencesError={deleteConsequencesError}
+        onClose={closeDeleteDialog}
+        onArchiveInstead={() => {
+          const request = deleteRequest;
+          closeDeleteDialog();
+          void request?.archiveInstead();
+        }}
+        onConfirm={() => {
+          const request = deleteRequest;
+          closeDeleteDialog();
+          request?.confirmDelete();
+        }}
+      />
     </div>
+  );
+}
+
+function DeckHeader({
+  deck,
+  dueCount,
+  onSettings,
+  onAddCard,
+}: {
+  deck: UiDeck;
+  dueCount: number;
+  onSettings: () => void;
+  onAddCard: () => void;
+}) {
+  return (
+    <header className="mb-6 mt-4 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h1 className="text-[1.75rem] font-semibold tracking-tight text-balance">
+          {deck.name}
+        </h1>
+        <p className="mt-1 text-sm text-muted">
+          {deck.total} flashcards
+          <span className="text-border-strong"> · </span>
+          {deck.learned} learned
+          {dueCount > 0 && (
+            <>
+              <span className="text-border-strong"> · </span>
+              <span className="font-medium text-accent">{dueCount} due now</span>
+            </>
+          )}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Link to="/deck/$deckId/graph" params={{ deckId: deck.id }}>
+          <Button variant="outline">
+            <Share2 className="h-4 w-4" /> Graph
+          </Button>
+        </Link>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Deck settings"
+          title="Deck settings"
+          onClick={onSettings}
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
+        {dueCount > 0 && (
+          <Link to="/deck/$deckId/review" params={{ deckId: deck.id }}>
+            <Button>
+              <Play className="h-4 w-4" /> Review
+            </Button>
+          </Link>
+        )}
+        <Button onClick={onAddCard}>
+          <Plus className="h-4 w-4" /> Add card
+        </Button>
+      </div>
+    </header>
+  );
+}
+
+function DeckHeaderSkeleton() {
+  return (
+    <header className="mb-6 mt-4 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0 flex-1">
+        <Skeleton className="h-9 w-full max-w-xs" />
+        <Skeleton className="mt-2 h-4 w-48" />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Skeleton className="h-9 w-20" />
+        <Skeleton className="h-9 w-9" />
+        <Skeleton className="h-9 w-24" />
+      </div>
+    </header>
   );
 }
 
