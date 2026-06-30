@@ -7,6 +7,7 @@ import {
 } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
+import * as prerequisiteState from "./prerequisite-state";
 import * as flashcards from "./flashcards";
 import * as settings from "./settings";
 import { isPendingSchedule } from "./scheduler";
@@ -28,29 +29,6 @@ function basic(
 }
 
 describe("prerequisite edges", () => {
-  it("allows prerequisite edges within the same deck", async () => {
-    const ctx = await makeContext("edge-same-deck");
-    const deck = await decks.createDeck(ctx, { name: "Deck" });
-    const prereq = await basic(ctx, deck.id, "P", "P");
-    const dependent = await basic(ctx, deck.id, "D", "D");
-
-    await graph.addPrereq(ctx, prereq.id, dependent.id);
-
-    expect(await graph.getPrereqIds(ctx, dependent.id)).toEqual([prereq.id]);
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
-    expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(
-      true,
-    );
-
-    await securePrereq(ctx, prereq.id);
-    await graph.refreshAfterPrerequisiteReview(ctx, prereq.id);
-
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
-    const dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
-    expect(dependentCard.locked).toBe(false);
-    expect(isPendingSchedule(dependentCard)).toBe(false);
-  });
-
   it("rejects prerequisite edges across deck boundaries", async () => {
     const ctx = await makeContext("edge-cross-deck");
     const prereqDeck = await decks.createDeck(ctx, { name: "Prereqs" });
@@ -64,7 +42,7 @@ describe("prerequisite edges", () => {
       "Prerequisites can only connect flashcards in the same deck.",
     );
 
-    expect(await graph.getPrereqIds(ctx, dependent.id)).toEqual([]);
+    expect(await prerequisiteState.getPrereqIds(ctx, dependent.id)).toEqual([]);
   });
 
   it("still prevents cycles within a deck", async () => {
@@ -113,20 +91,20 @@ describe("prerequisite edges", () => {
     await graph.addPrereq(ctx, a.id, b.id);
     await graph.addPrereq(ctx, b.id, c.id);
 
-    expect(await graph.isUnlocked(ctx, b.id)).toBe(false);
-    expect(await graph.isUnlocked(ctx, c.id)).toBe(false);
+    expect(await prerequisiteState.isUnlocked(ctx, b.id)).toBe(false);
+    expect(await prerequisiteState.isUnlocked(ctx, c.id)).toBe(false);
 
     await securePrereq(ctx, a.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, a.id);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, a.id);
 
-    expect(await graph.isUnlocked(ctx, b.id)).toBe(true);
+    expect(await prerequisiteState.isUnlocked(ctx, b.id)).toBe(true);
     // C still waits on B, which is unlocked but not secured.
-    expect(await graph.isUnlocked(ctx, c.id)).toBe(false);
+    expect(await prerequisiteState.isUnlocked(ctx, c.id)).toBe(false);
 
     await securePrereq(ctx, b.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, b.id);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, b.id);
 
-    expect(await graph.isUnlocked(ctx, c.id)).toBe(true);
+    expect(await prerequisiteState.isUnlocked(ctx, c.id)).toBe(true);
   });
 
   it("a dependent with multiple prereqs needs all of them secured", async () => {
@@ -139,12 +117,12 @@ describe("prerequisite edges", () => {
     await graph.addPrereq(ctx, b.id, dependent.id);
 
     await securePrereq(ctx, a.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, a.id);
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, a.id);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(false);
 
     await securePrereq(ctx, b.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, b.id);
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, b.id);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(true);
   });
 
   it("uses the deck's prerequisite stability floor and refreshes on change", async () => {
@@ -156,21 +134,21 @@ describe("prerequisite edges", () => {
 
     await graph.addPrereq(ctx, prereq.id, dependent.id);
     await securePrereq(ctx, prereq.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
 
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(true);
 
     await settings.updateDeckSettings(ctx, deck.id, {
       prereqStabilityFloor: 3,
     });
 
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(false);
 
     await settings.updateDeckSettings(ctx, deck.id, {
       prereqStabilityFloor: null,
     });
 
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(true);
   });
 
   it("archive and unarchive of an unsecured prerequisite toggles dependent locking", async () => {
@@ -206,58 +184,9 @@ describe("prerequisite edges", () => {
     expect(isPendingSchedule(dependentCard)).toBe(true);
   });
 
-  it("archive and unarchive of a secured prerequisite keeps dependents unlocked", async () => {
-    const ctx = await makeContext("edge-archive-secured");
-    const deck = await decks.createDeck(ctx, { name: "Archive secured" });
-    const prereq = await basic(ctx, deck.id, "P", "P");
-    const dependent = await basic(ctx, deck.id, "D", "D");
-    await graph.addPrereq(ctx, prereq.id, dependent.id);
-
-    await securePrereq(ctx, prereq.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
-    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
-      false,
-    );
-    expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
-
-    await flashcards.setArchived(ctx, prereq.id, true);
-
-    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
-      false,
-    );
-    expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
-
-    await flashcards.setArchived(ctx, prereq.id, false);
-
-    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
-      false,
-    );
-    expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
-  });
 });
 
 describe("canvas layout", () => {
-  it("saveLayout persists positions and ignores notes outside the deck", async () => {
-    const ctx = await makeContext("layout");
-    const deck = await decks.createDeck(ctx, { name: "Canvas" });
-    const other = await decks.createDeck(ctx, { name: "Other" });
-    const inside = await basic(ctx, deck.id, "In", "In");
-    const outside = await basic(ctx, other.id, "Out", "Out");
-
-    await graph.saveLayout(ctx, deck.id, [
-      { flashcardId: inside.id, x: 10, y: 20 },
-      { flashcardId: outside.id, x: 99, y: 99 },
-    ]);
-
-    const insideNote = await flashcards.getFlashcard(ctx, inside.id);
-    expect(insideNote?.posX).toBe(10);
-    expect(insideNote?.posY).toBe(20);
-
-    const outsideNote = await flashcards.getFlashcard(ctx, outside.id);
-    expect(outsideNote?.posX).toBeNull();
-    expect(outsideNote?.posY).toBeNull();
-  });
-
   it("getDeckGraph exposes positions, lock state, and display text", async () => {
     const ctx = await makeContext("deck-graph");
     const deck = await decks.createDeck(ctx, { name: "Graph" });

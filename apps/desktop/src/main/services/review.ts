@@ -8,7 +8,7 @@ import {
   type FlashcardType,
 } from "./flashcard-types";
 import type { ServiceContext } from "./context";
-import { refreshAfterPrerequisiteReview } from "./graph";
+import { refreshAfterPrerequisiteReview } from "./prerequisite-state";
 import {
   buildScheduler,
   fromFsrsCard,

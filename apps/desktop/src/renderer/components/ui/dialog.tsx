@@ -2,6 +2,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useModalIsolation } from "@/keybindings/keybindings-provider";
 
 const EXIT_MS = 200;
 
@@ -35,6 +36,11 @@ export function Dialog({
   const [closing, setClosing] = React.useState(false);
   const snapshotRef = React.useRef({ title, description, children });
   const exiting = closing || (present && !open);
+
+  // While a dialog is mounted, isolate app-level keybindings beneath it so a
+  // stray chord or rating key can't fire behind the modal. The dialog's own
+  // Escape/Tab handlers (below) are intrinsic and unaffected.
+  useModalIsolation(present);
 
   if (open && !exiting) {
     snapshotRef.current = { title, description, children };

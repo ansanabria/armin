@@ -46,6 +46,31 @@ export const mcpKeys = {
   enabled: ["mcp", "enabled"] as const,
 };
 
+function browseQueryIncludesDeck(queryKey: readonly unknown[], deckId: string) {
+  if (queryKey[0] !== "flashcards" || queryKey[1] !== "browse") return false;
+  const filters = queryKey[2] as BrowseQueryFilters | undefined;
+  return !filters?.deckId || filters.deckId === deckId;
+}
+
+export function invalidateDeckScopedData(
+  queryClient: QueryClient,
+  deckId: string,
+) {
+  void queryClient.invalidateQueries({ queryKey: deckKeys.all });
+  void queryClient.invalidateQueries({ queryKey: deckKeys.detail(deckId) });
+  void queryClient.invalidateQueries({ queryKey: flashcardKeys.deck(deckId) });
+  void queryClient.invalidateQueries({
+    queryKey: flashcardKeys.deckTags(deckId),
+  });
+  void queryClient.invalidateQueries({ queryKey: flashcardKeys.tags });
+  void queryClient.invalidateQueries({ queryKey: reviewKeys.all });
+  void queryClient.invalidateQueries({ queryKey: reviewKeys.deck(deckId) });
+  void queryClient.invalidateQueries({ queryKey: graphKeys.deck(deckId) });
+  void queryClient.invalidateQueries({
+    predicate: (query) => browseQueryIncludesDeck(query.queryKey, deckId),
+  });
+}
+
 export function invalidateCoreData(queryClient: QueryClient, deckId?: string) {
   void queryClient.invalidateQueries({ queryKey: deckKeys.all });
   void queryClient.invalidateQueries({ queryKey: flashcardKeys.all });

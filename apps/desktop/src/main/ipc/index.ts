@@ -1,9 +1,19 @@
 import { readFile, writeFile } from "node:fs/promises";
-import { BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from "electron";
+import {
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  type IpcMainInvokeEvent,
+  type OpenDialogOptions,
+  type SaveDialogOptions,
+} from "electron";
 import type { z } from "zod";
-import { getDb, initDb, deleteProfileData } from "../db";
-import { runMigrations } from "../db/migrate";
+import { deleteProfileData } from "../db";
 import { setActiveProfileId } from "../profiles/active";
+import {
+  ensureProfileReady,
+  forgetProfileRuntime,
+} from "../profiles/runtime";
 import type { ServiceContext } from "../services/context";
 import * as decks from "../services/decks";
 import * as flashcards from "../services/flashcards";
@@ -13,10 +23,7 @@ import * as cram from "../services/cram";
 import * as graph from "../services/graph";
 import * as settings from "../services/settings";
 import * as mcp from "../services/mcp";
-import {
-  storeFlashcardMedia,
-  upgradeLegacyFlashcardMedia,
-} from "../services/media";
+import { storeFlashcardMedia } from "../services/media";
 import { getAppSettings, setMcpEnabled, setMcpPort } from "../services/app-settings";
 import { startEmbeddedMcpServer, stopEmbeddedMcpServer } from "../mcp-http";
 import * as profiles from "../services/profiles";
@@ -62,19 +69,6 @@ function registerForProfile<T extends z.ZodType>(
   });
 }
 
-const dbReady = new Set<string>();
-
-async function ensureDbReady(profileId: string) {
-  if (dbReady.has(profileId)) return;
-  await initDb(profileId);
-  // runMigrations recomputes denormalized lock/scheduling state when migrations
-  // actually run (e.g. 0015 dropping cross-deck prerequisite edges), so no
-  // separate repair is needed here.
-  await runMigrations(profileId);
-  await upgradeLegacyFlashcardMedia({ profileId, db: getDb(profileId) });
-  dbReady.add(profileId);
-}
-
 async function serviceContextForEvent(
   event: IpcMainInvokeEvent,
 ): Promise<ServiceContext> {
@@ -82,16 +76,35 @@ async function serviceContextForEvent(
   if (!profileId) {
     throw new Error("No active profile is associated with this window.");
   }
-  await ensureDbReady(profileId);
-  return { profileId, db: getDb(profileId) };
+  return ensureProfileReady(profileId);
 }
 
 export async function openProfile(id: string, name?: string) {
   setActiveProfileId(id);
-  await ensureDbReady(id);
+  await ensureProfileReady(id);
   const profileName = name ?? profiles.getProfile(id)?.name;
   await openMainWindow(id, profileName);
   return { ok: true as const };
+}
+
+async function showSaveDialog(
+  event: IpcMainInvokeEvent,
+  options: SaveDialogOptions,
+) {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return win
+    ? dialog.showSaveDialog(win, options)
+    : dialog.showSaveDialog(options);
+}
+
+async function showOpenDialog(
+  event: IpcMainInvokeEvent,
+  options: OpenDialogOptions,
+) {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return win
+    ? dialog.showOpenDialog(win, options)
+    : dialog.showOpenDialog(options);
 }
 
 export function registerIpc() {
@@ -122,7 +135,7 @@ export function registerIpc() {
     }
     deleteProfileData(id);
     profiles.deleteProfile(id);
-    dbReady.delete(id);
+    forgetProfileRuntime(id);
     return { ok: true as const };
   });
   register(c.profiles.showPicker, () => {
@@ -230,15 +243,12 @@ export function registerIpc() {
     const { fileName, bytes, deckCount, flashcardCount } =
       await exportProfileToMarkdownZip(ctx, profileName);
 
-    const win = BrowserWindow.fromWebContents(event.sender);
     const options = {
       title: "Export & back up library",
       defaultPath: fileName,
       filters: [{ name: "Zip archive", extensions: ["zip"] }],
     };
-    const result = win
-      ? await dialog.showSaveDialog(win, options)
-      : await dialog.showSaveDialog(options);
+    const result = await showSaveDialog(event, options);
     if (result.canceled || !result.filePath) {
       return { canceled: true as const };
     }
@@ -256,15 +266,12 @@ export function registerIpc() {
   // it creates a brand-new profile from the chosen backup archive.
   ipcMain.handle(c.data.restore.channel, async (event, payload) => {
     c.data.restore.schema.parse(payload);
-    const win = BrowserWindow.fromWebContents(event.sender);
     const options = {
       title: "Restore from backup",
       properties: ["openFile" as const],
       filters: [{ name: "Armin backup", extensions: ["zip"] }],
     };
-    const picked = win
-      ? await dialog.showOpenDialog(win, options)
-      : await dialog.showOpenDialog(options);
+    const picked = await showOpenDialog(event, options);
     if (picked.canceled || picked.filePaths.length === 0) {
       return { canceled: true as const };
     }
@@ -400,7 +407,6 @@ export function registerIpc() {
 
   // --- shell (custom title bar controls) ---
   register(c.shell.minimize, () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const win = BrowserWindow.getFocusedWindow();
     win?.minimize();
   });

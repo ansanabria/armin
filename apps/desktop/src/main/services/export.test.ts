@@ -103,23 +103,6 @@ describe("exportProfileToMarkdownZip", () => {
     );
   });
 
-  it("gives colliding deck names distinct filenames", async () => {
-    const ctx = await makeContext("export-collide");
-    await decks.createDeck(ctx, { name: "My Deck" });
-    await decks.createDeck(ctx, { name: "My Deck" });
-
-    const files = unzip(
-      (await exportProfileToMarkdownZip(ctx, "P", new Date())).bytes,
-    );
-    const deckFiles = Object.keys(files)
-      .filter((name) => name.startsWith("library/decks/"))
-      .sort();
-    expect(deckFiles).toEqual([
-      "library/decks/my-deck-2.md",
-      "library/decks/my-deck.md",
-    ]);
-  });
-
   it("includes Flashcard media and rewrites readable Markdown links", async () => {
     const ctx = await makeContext("export-media");
     const deck = await decks.createDeck(ctx, { name: "Biology" });

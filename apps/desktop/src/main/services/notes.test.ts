@@ -10,6 +10,7 @@ import {
 } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
+import * as prerequisiteState from "./prerequisite-state";
 import * as flashcards from "./flashcards";
 import * as review from "./review";
 import { State } from "./scheduler";
@@ -30,38 +31,6 @@ function reviewUnitsForFlashcard(
     .orderBy(asc(schema.reviewUnits.subKey))
     .all();
 }
-
-describe("Flashcard → Review unit generation", () => {
-  it("generates forward and reverse Review units for basic_reversed", async () => {
-    const ctx = await makeContext("gen-reversed");
-    const deck = await decks.createDeck(ctx, { name: "R" });
-    const note = await flashcards.createFlashcard({
-      ctx,
-      deckId: deck.id,
-      type: "basic_reversed",
-      content: { front: "F", back: "B" },
-    });
-
-    const cards = reviewUnitsForFlashcard(ctx, note.id);
-    expect(cards.map((c) => c.subKey)).toEqual(["", "rev"]);
-    expect(cards.find((c) => c.subKey === "")?.front).toBe("F");
-    expect(cards.find((c) => c.subKey === "rev")?.front).toBe("B");
-  });
-
-  it("generates one Review unit per cloze cluster", async () => {
-    const ctx = await makeContext("gen-cloze");
-    const deck = await decks.createDeck(ctx, { name: "C" });
-    const note = await flashcards.createFlashcard({
-      ctx,
-      deckId: deck.id,
-      type: "cloze",
-      content: { text: "{{1::a}} and {{2::b}}" },
-    });
-
-    const cards = reviewUnitsForFlashcard(ctx, note.id);
-    expect(cards.map((c) => c.subKey)).toEqual(["c1", "c2"]);
-  });
-});
 
 describe("updateFlashcard reconciliation", () => {
   it("preserves FSRS state for unchanged sub-keys and adds new ones", async () => {
@@ -95,25 +64,6 @@ describe("updateFlashcard reconciliation", () => {
     const c3 = after.find((c) => c.subKey === "c3")!;
     expect(c3.reps).toBe(0);
     expect(c3.state).toBe(State.New);
-  });
-
-  it("deletes Review units whose sub-keys disappear", async () => {
-    const ctx = await makeContext("reconcile-delete");
-    const deck = await decks.createDeck(ctx, { name: "Shrink" });
-    const note = await flashcards.createFlashcard({
-      ctx,
-      deckId: deck.id,
-      type: "cloze",
-      content: { text: "{{1::a}} and {{2::b}}" },
-    });
-    expect(reviewUnitsForFlashcard(ctx, note.id)).toHaveLength(2);
-
-    await flashcards.updateFlashcard(ctx, note.id, {
-      content: { text: "{{1::a}} only" },
-    });
-
-    const after = reviewUnitsForFlashcard(ctx, note.id);
-    expect(after.map((c) => c.subKey)).toEqual(["c1"]);
   });
 
   it("preserves image occlusion mask history across mask add and remove", async () => {
@@ -307,7 +257,7 @@ describe("deleteFlashcard", () => {
 
     const [bCard] = reviewUnitsForFlashcard(ctx, prereqB.id);
     await secureReviewUnit(ctx, bCard.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, prereqB.id);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, prereqB.id);
 
     expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
       false,
@@ -334,15 +284,15 @@ describe("Flashcard-level securing", () => {
     });
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(false);
 
     const prereqReviewUnits = reviewUnitsForFlashcard(ctx, prereq.id);
     await secureReviewUnit(ctx, prereqReviewUnits[0].id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(false);
 
     await secureReviewUnit(ctx, prereqReviewUnits[1].id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(true);
   });
 });

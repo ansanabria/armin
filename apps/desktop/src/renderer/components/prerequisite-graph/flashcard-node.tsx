@@ -1,4 +1,4 @@
-import { memo, useEffect } from "react";
+import { memo, useEffect, useRef } from "react";
 import {
   Handle,
   Position,
@@ -50,8 +50,16 @@ function CardNodeComponent({ data, selected }: NodeProps<CardFlowNode>) {
   const nodeId = useNodeId();
   const updateNodeInternals = useUpdateNodeInternals();
 
-  // Re-measure handle bounds when text (and therefore height) changes.
+  // Re-measure handle bounds when text (and therefore height) changes — but skip
+  // the initial mount: ReactFlow already measures nodes on mount, and forcing a
+  // re-measure for every node at once turns a large graph's first paint into a
+  // layout-thrash storm.
+  const measuredOnce = useRef(false);
   useEffect(() => {
+    if (!measuredOnce.current) {
+      measuredOnce.current = true;
+      return;
+    }
     if (nodeId) updateNodeInternals(nodeId);
   }, [nodeId, data.front, data.back, updateNodeInternals]);
 

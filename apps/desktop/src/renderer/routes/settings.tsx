@@ -17,7 +17,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@/components/ui/tabs";
 import { McpSettings } from "@/components/mcp-settings";
+import { KeybindingSettings } from "@/components/keybinding-settings";
 import { useToast } from "@/components/ui/toast";
 import { settingsKeys } from "@/lib/armin-query";
 import {
@@ -223,7 +225,16 @@ export default function SettingsPage() {
         </div>
       )}
 
-      <div className="space-y-10">
+      <Tabs defaultValue="scheduling">
+        <TabsList>
+          <TabsTab value="scheduling">Scheduling</TabsTab>
+          <TabsTab value="keyboard">Keyboard</TabsTab>
+          <TabsTab value="ai">AI</TabsTab>
+          <TabsTab value="data">Data</TabsTab>
+          <TabsTab value="appearance">Appearance</TabsTab>
+        </TabsList>
+
+        <TabsPanel value="scheduling" className="space-y-10">
         <Section
           title="Scheduling profile"
           description="Pick a profile for a tuned set of spaced-repetition settings, or use Custom and fill it from a preset."
@@ -388,23 +399,36 @@ export default function SettingsPage() {
             </Button>
           </div>
         )}
+        </TabsPanel>
 
-        <SettingsSeparator />
+        <TabsPanel value="keyboard" className="space-y-10">
+        <Section
+          title="Keyboard shortcuts"
+          description="Rebind app-wide shortcuts for navigation, review, and cram. Only the ones you change are saved per profile."
+        >
+          <KeybindingSettings />
+        </Section>
+        </TabsPanel>
 
+        <TabsPanel value="ai" className="space-y-10">
         <Section
           title="AI flashcard creation"
           description="Connect a coding agent to Armin's local MCP server so it can generate flashcards."
         >
           <McpSettings />
         </Section>
+        </TabsPanel>
 
+        <TabsPanel value="data" className="space-y-10">
         <Section
           title="Export & backup"
           description="Take your data out of the app."
         >
           <ExportRow />
         </Section>
+        </TabsPanel>
 
+        <TabsPanel value="appearance" className="space-y-10">
         <Section
           title="Appearance"
           description="How Armin looks on your machine."
@@ -434,7 +458,8 @@ export default function SettingsPage() {
             </Select>
           </Row>
         </Section>
-      </div>
+        </TabsPanel>
+      </Tabs>
     </div>
   );
 }
@@ -478,15 +503,6 @@ function ExportRow() {
         {exportData.isPending ? "Exporting…" : "Export"}
       </Button>
     </div>
-  );
-}
-
-function SettingsSeparator() {
-  return (
-    <hr
-      className="border-0 border-t-2 border-border-strong"
-      aria-hidden="true"
-    />
   );
 }
 

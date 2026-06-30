@@ -9,7 +9,11 @@ import {
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Tag, Layers, AlertTriangle, Library, CircleDot } from "lucide-react";
 import { FlashcardFormDialog } from "@/components/flashcard-form-dialog";
-import { FlashcardTile } from "@/components/flashcard-tile";
+import {
+  FlashcardDeleteDialog,
+  FlashcardTile,
+  type FlashcardDeleteRequest,
+} from "@/components/flashcard-tile";
 import { MoveFlashcardDialog } from "@/components/move-flashcard-dialog";
 import { SortControl } from "@/components/sort-control";
 import {
@@ -43,6 +47,7 @@ import { BROWSE_SORT_OPTIONS, type BrowseSortKey } from "@/lib/browse";
 import { STATE_OPTIONS } from "@/lib/flashcard-filters";
 import { BROWSE_PAGE_SIZE } from "../../shared/browse";
 import { cn } from "@/lib/utils";
+import type { FlashcardDeleteConsequences } from "@/types/window";
 
 const ALL_STATES = "all";
 
@@ -58,6 +63,11 @@ export default function BrowsePage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<UiBrowseFlashcard | null>(null);
   const [moveTarget, setMoveTarget] = useState<UiBrowseFlashcard | null>(null);
+  const [deleteRequest, setDeleteRequest] =
+    useState<FlashcardDeleteRequest | null>(null);
+  const [deleteConsequences, setDeleteConsequences] =
+    useState<FlashcardDeleteConsequences | null>(null);
+  const [deleteConsequencesError, setDeleteConsequencesError] = useState(false);
 
   const browseFilters = useMemo(() => {
     const filters: BrowseQueryFilters = { sort };
@@ -153,6 +163,24 @@ export default function BrowsePage() {
 
   const handleDialogExitComplete = () => {
     setEditing(null);
+  };
+
+  const requestDelete = (request: FlashcardDeleteRequest) => {
+    setDeleteRequest(request);
+    setDeleteConsequences(null);
+    setDeleteConsequencesError(false);
+    if (request.loadDeleteConsequences) {
+      void request
+        .loadDeleteConsequences(request.card.id)
+        .then((summary) => setDeleteConsequences(summary))
+        .catch(() => setDeleteConsequencesError(true));
+    }
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteRequest(null);
+    setDeleteConsequences(null);
+    setDeleteConsequencesError(false);
   };
 
   const updateCard = useMutation({
@@ -416,6 +444,7 @@ export default function BrowsePage() {
                     loadDeleteConsequences={(id) =>
                       window.armin.flashcards.deleteConsequences(id)
                     }
+                    onDeleteRequest={requestDelete}
                     onDelete={async () => {
                       await deleteCard.mutateAsync(card);
                     }}
@@ -459,6 +488,22 @@ export default function BrowsePage() {
         flashcard={moveTarget}
         open={Boolean(moveTarget)}
         onClose={() => setMoveTarget(null)}
+      />
+      <FlashcardDeleteDialog
+        request={deleteRequest}
+        consequences={deleteConsequences}
+        consequencesError={deleteConsequencesError}
+        onClose={closeDeleteDialog}
+        onArchiveInstead={() => {
+          const request = deleteRequest;
+          closeDeleteDialog();
+          void request?.archiveInstead();
+        }}
+        onConfirm={() => {
+          const request = deleteRequest;
+          closeDeleteDialog();
+          request?.confirmDelete();
+        }}
       />
     </div>
   );

@@ -9,7 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/mcp/server.smoke.test.ts"],
+    include: ["src/mcp/**/*.test.ts"],
     testTimeout: 60_000,
   },
 });

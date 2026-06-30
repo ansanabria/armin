@@ -29,6 +29,7 @@ import {
   type ImageOcclusionContent,
   type TypeAnswerContent,
 } from "../../shared/flashcard-types";
+import { useScope } from "@/keybindings/keybindings-provider";
 import { cn } from "@/lib/utils";
 
 export type { CramMode, CramFlashcardGroup };
@@ -140,36 +141,40 @@ export function CramSession({
     [index],
   );
 
+  const cramActive = !isLoading && !isError && Boolean(card);
+
+  // Space reveals, then doubles as "mark correct" once flipped (the natural
+  // space-to-continue rhythm); 1/2 mark incorrect/correct. Bare-key-in-input
+  // suppression and modal isolation are handled by the dispatcher.
+  useScope(
+    "cram",
+    {
+      "cram.flip": () => {
+        if (!flipped) reveal();
+        else answer(true);
+      },
+      "cram.miss": () => {
+        if (flipped) answer(false);
+      },
+      "cram.got": () => {
+        if (flipped) answer(true);
+      },
+    },
+    { enabled: cramActive },
+  );
+
+  // Enter stays an intrinsic convention: reveal, then accept as correct.
   useEffect(() => {
-    if (isLoading || isError || !card) return;
+    if (!cramActive) return;
     const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const inField =
-        target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
-      if (!flipped) {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          reveal();
-        } else if (e.key === " " && !inField) {
-          e.preventDefault();
-          reveal();
-        }
-        return;
-      }
-      if (e.key === "1" && !inField) {
-        e.preventDefault();
-        answer(false);
-      } else if (
-        (e.key === "2" || e.key === " " || e.key === "Enter") &&
-        !inField
-      ) {
-        e.preventDefault();
-        answer(true);
-      }
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if (!flipped) reveal();
+      else answer(true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isLoading, isError, card, flipped, answer]);
+  }, [cramActive, flipped, answer]);
 
   return (
     <div className="mx-auto max-w-2xl">

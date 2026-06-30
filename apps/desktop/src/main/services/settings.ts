@@ -3,7 +3,10 @@ import { PRESET_VALUES } from "../../shared/scheduling-presets";
 import { schema } from "../db";
 import type { DeckSettings, Settings } from "../db/schema";
 import type { ServiceContext } from "./context";
-import { refreshAllLockedStates, refreshLockedForDeck } from "./graph";
+import {
+  refreshAllLockedStates,
+  refreshLockedForDeck,
+} from "./prerequisite-state";
 
 export type SchedulingSettings = Pick<
   Settings,
@@ -58,7 +61,7 @@ export async function getSettings(ctx: ServiceContext): Promise<Settings> {
 }
 
 export type SettingsUpdate = Partial<SchedulingSettings> &
-  Partial<Pick<Settings, "schedulingPreset">>;
+  Partial<Pick<Settings, "schedulingPreset" | "keybindings">>;
 
 type DeckSettingOverrideKey = Exclude<
   keyof SchedulingSettings,

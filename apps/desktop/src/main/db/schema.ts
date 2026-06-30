@@ -208,6 +208,13 @@ export const settings = sqliteTable("settings", {
     .default(true),
   /** Selected scheduling preset: balanced | aggressive | relaxed | custom. */
   schedulingPreset: text("scheduling_preset").notNull().default("balanced"),
+  /**
+   * Per-profile keybinding overrides as a JSON object mapping Command id to its
+   * binding string; null = no overrides (use factory defaults). Only the
+   * Commands the user changed are stored. See
+   * docs/adr/0019-keybindings-stored-as-per-profile-overrides-on-factory-defaults.md.
+   */
+  keybindings: text("keybindings"),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .default(sql`(unixepoch() * 1000)`),

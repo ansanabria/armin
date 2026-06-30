@@ -1,7 +1,14 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import {
+  Link,
+  Outlet,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { Dumbbell, Layers, Library, Settings } from "lucide-react";
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
+import { useScope } from "@/keybindings/keybindings-provider";
+import { KeyboardOverlays } from "@/components/keyboard-overlays";
 import { ProfileSwitcher } from "@/components/profile-switcher";
 import { ReviewNavLink } from "@/components/review-nav-link";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -37,9 +44,36 @@ export default function RootLayout() {
     return active ? navLinkActive : navLink;
   };
 
+  const navigate = useNavigate();
+
   const activateNav = (path: string) => {
     flushSync(() => setOptimisticPathname(path));
   };
+
+  // App-level navigation Commands (the `g` chord family). These live in the
+  // always-mounted root so they're available on every screen.
+  useScope("global", {
+    "nav.decks": () => {
+      activateNav("/");
+      void navigate({ to: "/" });
+    },
+    "nav.browse": () => {
+      activateNav("/browse");
+      void navigate({ to: "/browse" });
+    },
+    "nav.cram": () => {
+      activateNav("/cram");
+      void navigate({ to: "/cram" });
+    },
+    "nav.review": () => {
+      activateNav("/review");
+      void navigate({ to: "/review" });
+    },
+    "nav.settings": () => {
+      activateNav("/settings");
+      void navigate({ to: "/settings" });
+    },
+  });
 
   const activateNavFromKeyboard = (
     event: KeyboardEvent<HTMLAnchorElement>,
@@ -119,14 +153,14 @@ export default function RootLayout() {
       </header>
       <main className="route-view flex min-h-0 w-full flex-1 flex-col overflow-hidden">
         {/* Layout (centered vs. full-bleed) follows the rendered page via the
-            `route-pad`/`route-scroll` `:has([data-fullbleed])` rules, so it
-            stays in sync with <Outlet/> during view transitions. */}
+            `route-pad`/`route-scroll` `:has([data-fullbleed])` rules. */}
         <div className="route-scroll armin-scrollbar armin-scrollbar-gutter-bg notebook-bg min-h-0 flex-1 overflow-y-auto">
           <div className="route-pad mx-auto w-full max-w-5xl px-6 py-8">
             <Outlet />
           </div>
         </div>
       </main>
+      <KeyboardOverlays />
     </div>
   );
 }

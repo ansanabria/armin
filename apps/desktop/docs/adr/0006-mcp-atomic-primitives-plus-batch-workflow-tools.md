@@ -18,8 +18,3 @@ avoids.
 Constraint: coarse tools must be thin transactional orchestrations over the same
 service primitives (see ADR 0005), never a parallel implementation. "Does a lot"
 must mean "batches the primitives," not "a second code path."
-
-Status: today's tool surface is create-and-read only; the mutating primitives
-(`update_flashcard`, `archive_flashcard`, `delete_flashcard`,
-`remove_prerequisite`, attach-to-existing on `add_prerequisite`) are the parity
-gap this decision commits to closing.

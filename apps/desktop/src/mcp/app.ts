@@ -1,16 +1,15 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
-import { getDb, initDb } from "../main/db";
-import { runMigrations } from "../main/db/migrate";
+import {
+  ensureProfileReady,
+  profileContext,
+} from "../main/profiles/runtime";
 import type { ServiceContext } from "../main/services/context";
 import {
   isFlashcardType,
   type FlashcardType,
 } from "../main/services/flashcard-types";
-import {
-  storeFlashcardMedia,
-  upgradeLegacyFlashcardMedia,
-} from "../main/services/media";
+import { storeFlashcardMedia } from "../main/services/media";
 import { createDeck, listDecks } from "../main/services/decks";
 import { addPrereq, removePrereq } from "../main/services/graph";
 import {
@@ -109,13 +108,7 @@ export function createArminMcpServer(getState: ArminMcpStateProvider) {
 
   function ctx(): ServiceContext {
     const profileId = requireSelectedProfile();
-    return { profileId, db: getDb(profileId) };
-  }
-
-  async function ensureProfileReady(profileId: string) {
-    await initDb(profileId);
-    await runMigrations(profileId);
-    await upgradeLegacyFlashcardMedia({ profileId, db: getDb(profileId) });
+    return profileContext(profileId);
   }
 
   async function withSelectedProfile<T>(handler: () => Promise<T>) {

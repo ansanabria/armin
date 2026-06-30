@@ -15,8 +15,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { eq } from "drizzle-orm";
 import { Rating } from "ts-fsrs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { closeDb, getDb, initDb, profileMediaDir, schema } from "../main/db";
-import { runMigrations } from "../main/db/migrate";
+import { closeDb, profileMediaDir, schema } from "../main/db";
+import { ensureProfileReady, resetProfileRuntime } from "../main/profiles/runtime";
 import type { ServiceContext } from "../main/services/context";
 import * as review from "../main/services/review";
 import { createArminMcpServer } from "./app";
@@ -84,9 +84,7 @@ async function writeWebResponse(res: ServerResponse, response: Response) {
 }
 
 async function testServiceContext(): Promise<ServiceContext> {
-  await initDb("mcp-smoke");
-  await runMigrations("mcp-smoke");
-  return { profileId: "mcp-smoke", db: getDb("mcp-smoke") };
+  return ensureProfileReady("mcp-smoke");
 }
 
 async function reviewUnitsFor(flashcardId: string) {
@@ -143,6 +141,7 @@ afterEach(async () => {
   );
   httpTransports = [];
   closeDb();
+  resetProfileRuntime();
   fs.rmSync(dataDir, { recursive: true, force: true });
   if (previousArminDataDir === undefined) {
     delete process.env.ARMIN_DATA_DIR;

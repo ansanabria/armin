@@ -38,9 +38,7 @@ Open Armin and select the profile you want the agent to write to. Armin starts
 the MCP server automatically when the app opens (if MCP is enabled in Settings).
 
 The server binds to the port set in Settings (default `47321`), trying nearby
-fallback ports if that one is in use. The exact URL is shown in the in-app MCP
-settings panel — copy agent configs from there rather than assuming a fixed
-port.
+fallback ports if that one is in use.
 
 Example URL (default when port 47321 is free):
 
@@ -99,9 +97,6 @@ The simplest setup for each supported coding agent is:
 - Claude Code: run `claude mcp add`.
 - Codex: run `codex mcp add`.
 - OpenCode: add `mcp.armin` to `opencode.json` or `opencode.jsonc`.
-
-Before using any agent, open Armin and select the profile the agent should write
-to.
 
 ## Cursor
 

@@ -1,4 +1,4 @@
-import { MarkerType, type Edge } from "@xyflow/react";
+import { MarkerType, type Edge, type XYPosition } from "@xyflow/react";
 import type { UiDeckGraph } from "@/types/view-models";
 import { CARD_NODE_HEIGHT, CARD_NODE_WIDTH } from "@/lib/graph-layout";
 import type { CardFlowNode } from "@/components/prerequisite-graph/flashcard-node";
@@ -137,6 +137,78 @@ export function graphToFlowElements(
     ),
   );
   const edges = graph.edges.map((e) => makeFlowEdge(e.prereqId, e.dependentId));
+  return { nodes, edges };
+}
+
+/**
+ * Yield the renderer thread between chunks so Electron/browser input and
+ * navigation can run during a large initial graph build. Prefers
+ * `requestIdleCallback` (with a timeout so it still fires under constant
+ * activity) and falls back to a macrotask when it isn't available.
+ */
+function yieldToScheduler(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      window.requestIdleCallback(() => resolve(), { timeout: 50 });
+      return;
+    }
+    setTimeout(resolve, 0);
+  });
+}
+
+type BuildGraphFlowElementsOptions = {
+  signal: AbortSignal;
+  chunkSize?: number;
+};
+
+/**
+ * Abortable, chunked version of {@link graphToFlowElements}. Builds flow nodes
+ * and edges in bounded batches, yielding between batches so a large Deck graph
+ * doesn't monopolize the renderer thread. Resolves `null` if the signal aborts
+ * before the build finishes, so a cancelled load never commits into an
+ * unmounted canvas.
+ */
+export async function buildGraphFlowElementsAsync(
+  graph: UiDeckGraph,
+  savedPositions: Map<string, XYPosition>,
+  options: BuildGraphFlowElementsOptions,
+): Promise<{ nodes: CardFlowNode[]; edges: Edge[] } | null> {
+  // Building flow objects is cheap; the canvas is virtualized so it only mounts
+  // the on-screen nodes. The chunk boundary exists only to release the thread on
+  // pathologically large graphs — keep it high enough that realistic decks build
+  // in a single pass with no yield latency.
+  const { signal, chunkSize = 1000 } = options;
+  if (signal.aborted) return null;
+
+  const incidentNodeIds = incidentNodeIdsOf(graph.edges);
+
+  const nodes: CardFlowNode[] = [];
+  for (let index = 0; index < graph.nodes.length; index++) {
+    const node = graph.nodes[index];
+    nodes.push(
+      toFlowNode(
+        node,
+        incidentNodeIds,
+        savedPositions.get(node.id) ?? fallbackPositionFor(index),
+      ),
+    );
+    if ((index + 1) % chunkSize === 0) {
+      await yieldToScheduler();
+      if (signal.aborted) return null;
+    }
+  }
+
+  const edges: Edge[] = [];
+  for (let index = 0; index < graph.edges.length; index++) {
+    const edge = graph.edges[index];
+    edges.push(makeFlowEdge(edge.prereqId, edge.dependentId));
+    if ((index + 1) % chunkSize === 0) {
+      await yieldToScheduler();
+      if (signal.aborted) return null;
+    }
+  }
+
+  if (signal.aborted) return null;
   return { nodes, edges };
 }
 

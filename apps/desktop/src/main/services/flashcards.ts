@@ -13,6 +13,7 @@ import {
 import {
   newReviewUnitFields,
   pendingReviewUnitFields,
+  type FsrsFields,
   State,
 } from "./scheduler";
 import type { ServiceContext } from "./context";
@@ -21,7 +22,7 @@ import {
   getPrereqIds,
   refreshAfterPrerequisiteStateChange,
   refreshDependentSubgraph,
-} from "./graph";
+} from "./prerequisite-state";
 import { assertContentUsesMediaRefs } from "./media";
 
 const { reviewUnits, reviewLogs, flashcards, flashcardPrereqs, flashcardTags, tags, decks } =
@@ -246,6 +247,7 @@ type ReconcileDb = Pick<
 >;
 
 type CreateFlashcardDb = ReconcileDb;
+type ReviewUnitSchedules = Map<string, FsrsFields>;
 
 /**
  * Bring a flashcard's generated review units in sync with its content: keep the
@@ -257,6 +259,7 @@ function reconcileReviewUnits(
   flashcard: Pick<Flashcard, "id" | "deckId" | "locked" | "archived">,
   type: FlashcardType,
   content: FlashcardContent,
+  schedules?: ReviewUnitSchedules,
 ): void {
   const specs = generateReviewUnits(type, content);
   const existing = db
@@ -298,6 +301,9 @@ function reconcileReviewUnits(
         .where(eq(reviewUnits.id, found.id))
         .run();
     } else {
+      const schedule =
+        schedules?.get(spec.subKey) ??
+        (flashcard.locked ? pendingReviewUnitFields() : newReviewUnitFields(now));
       db.insert(reviewUnits)
         .values({
           flashcardId: flashcard.id,
@@ -307,9 +313,7 @@ function reconcileReviewUnits(
           back: spec.back,
           locked: flashcard.locked,
           archived: flashcard.archived,
-          ...(flashcard.locked
-            ? pendingReviewUnitFields()
-            : newReviewUnitFields(now)),
+          ...schedule,
         })
         .run();
     }
@@ -323,6 +327,7 @@ export function createFlashcardRecord(
     type: FlashcardType;
     content: unknown;
     tags?: string[];
+    reviewUnitSchedules?: ReviewUnitSchedules;
   },
 ): Flashcard {
   const content = validateContent(input.type, input.content);
@@ -338,7 +343,7 @@ export function createFlashcardRecord(
     .returning()
     .get();
 
-  reconcileReviewUnits(db, created!, input.type, content);
+  reconcileReviewUnits(db, created!, input.type, content, input.reviewUnitSchedules);
   replaceFlashcardTags(db, created!.id, input.tags ?? []);
   return created!;
 }
@@ -494,8 +499,8 @@ export async function deleteFlashcard(
   // Collect dependents before the delete cascades the prereq edges away.
   const dependentIds = await getDependentIds(ctx, id);
 
-  // review_units.flashcard_id has no DB-level FK on migrated databases, so
-  // remove the generated review units explicitly (review_logs cascade off them).
+  // Delete review units explicitly so dependent lock refresh observes a fully
+  // cleaned card even when SQLite foreign-key enforcement is disabled.
   ctx.db.transaction((tx) => {
     tx.delete(reviewUnits).where(eq(reviewUnits.flashcardId, id)).run();
     tx.delete(flashcards).where(eq(flashcards.id, id)).run();

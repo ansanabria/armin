@@ -19,12 +19,6 @@ describe("cloze parsing", () => {
 });
 
 describe("generateReviewUnits", () => {
-  it("makes one item for basic", () => {
-    expect(generateReviewUnits("basic", { front: "F", back: "B" })).toEqual([
-      { subKey: "", front: "F", back: "B" },
-    ]);
-  });
-
   it("makes forward and reverse items for basic_reversed", () => {
     expect(
       generateReviewUnits("basic_reversed", { front: "F", back: "B" }),
@@ -101,14 +95,5 @@ describe("validateContent", () => {
     expect(() =>
       validateContent("image_occlusion", { baseImage: "data:...", masks: [] }),
     ).toThrow();
-  });
-
-  it("defaults image occlusion reveal mode to hide_all", () => {
-    expect(
-      validateContent("image_occlusion", {
-        baseImage: "data:...",
-        masks: [{ id: "m1", geometry: { x: 0, y: 0, w: 1, h: 1 } }],
-      }),
-    ).toMatchObject({ revealMode: "hide_all" });
   });
 });

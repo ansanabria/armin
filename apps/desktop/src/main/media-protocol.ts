@@ -1,8 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { net, protocol } from "electron";
 import { mediaPath, mimeForMediaFile } from "./services/media";
-
-export const MEDIA_PROTOCOL = "armin-media";
+import { MEDIA_PROTOCOL, isSafeMediaFileName } from "../shared/media-ref";
 
 export function registerMediaProtocolScheme() {
   protocol.registerSchemesAsPrivileged([
@@ -22,6 +21,9 @@ export function registerMediaProtocol() {
     const url = new URL(request.url);
     const profileId = decodeURIComponent(url.hostname);
     const fileName = url.pathname.replace(/^\//, "");
+    if (!isSafeMediaFileName(fileName)) {
+      return new Response("Not found", { status: 404 });
+    }
     const mime = mimeForMediaFile(fileName);
     if (!profileId || !mime) {
       return new Response("Not found", { status: 404 });

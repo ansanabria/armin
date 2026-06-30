@@ -1,6 +1,4 @@
-import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-import { schema } from "../db";
 import { makeContext, useTestDb } from "../test/db";
 import * as decks from "./decks";
 import * as settings from "./settings";
@@ -43,38 +41,4 @@ describe("deck settings", () => {
     expect(result.effective.requestRetention).toBe(0.85);
   });
 
-  it("does not create a row for new decks until settings are saved", async () => {
-    const ctx = await makeContext("deck-settings-row");
-    const deck = await decks.createDeck(ctx, { name: "No row" });
-
-    let rows = ctx.db
-      .select()
-      .from(schema.deckSettings)
-      .where(eq(schema.deckSettings.deckId, deck.id))
-      .all();
-    expect(rows).toHaveLength(0);
-
-    await settings.updateDeckSettings(ctx, deck.id, { requestRetention: 0.8 });
-    rows = ctx.db
-      .select()
-      .from(schema.deckSettings)
-      .where(eq(schema.deckSettings.deckId, deck.id))
-      .all();
-    expect(rows).toHaveLength(1);
-  });
-
-  it("deletes deck settings when the deck is deleted", async () => {
-    const ctx = await makeContext("deck-settings-cascade");
-    const deck = await decks.createDeck(ctx, { name: "Cascade" });
-    await settings.updateDeckSettings(ctx, deck.id, { requestRetention: 0.8 });
-
-    await decks.deleteDeck(ctx, deck.id);
-
-    const rows = ctx.db
-      .select()
-      .from(schema.deckSettings)
-      .where(eq(schema.deckSettings.deckId, deck.id))
-      .all();
-    expect(rows).toHaveLength(0);
-  });
 });

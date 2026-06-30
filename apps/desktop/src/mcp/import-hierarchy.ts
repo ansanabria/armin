@@ -6,7 +6,8 @@ import {
   type FlashcardType,
 } from "../main/services/flashcard-types";
 import { getDeck } from "../main/services/decks";
-import { getDeckGraph, refreshLockedForDeck } from "../main/services/graph";
+import { getDeckGraph } from "../main/services/graph";
+import { refreshLockedForDeck } from "../main/services/prerequisite-state";
 import type { ServiceContext } from "../main/services/context";
 import { createFlashcardRecord } from "../main/services/flashcards";
 

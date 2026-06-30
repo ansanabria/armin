@@ -221,69 +221,6 @@
       background-position-x: -200%;
     }
   }
-  /* Directional route slides. Distance pairs a clear left/right read with a fade
-     so it stays in the app's calm motion register. */
-  @keyframes a-slide-in-right {
-    from {
-      opacity: 0;
-      transform: translateX(2rem);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-  @keyframes a-slide-out-left {
-    from {
-      opacity: 1;
-      transform: translateX(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateX(-2rem);
-    }
-  }
-  @keyframes a-slide-in-left {
-    from {
-      opacity: 0;
-      transform: translateX(-2rem);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-  @keyframes a-slide-out-right {
-    from {
-      opacity: 1;
-      transform: translateX(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateX(2rem);
-    }
-  }
-  @keyframes a-slide-in-up {
-    from {
-      opacity: 0;
-      transform: translateY(2rem);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-  @keyframes a-slide-out-down {
-    from {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateY(2rem);
-    }
-  }
-
   .animate-fade-in {
     animation: a-fade-in 0.2s var(--ease-out-quart) both;
   }
@@ -376,62 +313,6 @@
     max-width: none;
     margin: 0;
     padding: 0;
-  }
-
-  /* View transitions between routes. The persistent `.route-view` wrapper gets
-     its own snapshot so only the page content animates; the header stays in the
-     default `root` group, which we hold still so the nav never flickers. */
-  .route-view {
-    view-transition-name: route-content;
-  }
-
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation: none;
-  }
-
-  /* Neutral fallback (first load, or moving within the same section). */
-  ::view-transition-old(route-content) {
-    animation: a-fade-out 0.2s var(--ease-out-quart) both;
-  }
-  ::view-transition-new(route-content) {
-    animation: a-rise 0.28s var(--ease-out-quart) both;
-  }
-
-  /* Forward (moving right through the app, e.g. Decks → Browse): the new page
-     enters from the right while the old page leaves to the left. */
-  html:active-view-transition-type(forward)::view-transition-old(route-content) {
-    animation: a-slide-out-left 0.28s var(--ease-out-quart) both;
-  }
-  html:active-view-transition-type(forward)::view-transition-new(route-content) {
-    animation: a-slide-in-right 0.28s var(--ease-out-quart) both;
-  }
-
-  /* Backward (moving left, e.g. Browse → Decks): the new page enters from the
-     left while the old page leaves to the right. */
-  html:active-view-transition-type(backward)::view-transition-old(route-content) {
-    animation: a-slide-out-right 0.28s var(--ease-out-quart) both;
-  }
-  html:active-view-transition-type(backward)::view-transition-new(route-content) {
-    animation: a-slide-in-left 0.28s var(--ease-out-quart) both;
-  }
-
-  /* Opening a deck: the deck page rises up from the bottom while the list it came
-     from fades away beneath it. */
-  html:active-view-transition-type(deck-enter)::view-transition-old(route-content) {
-    animation: a-fade-out 0.2s var(--ease-out-quart) both;
-  }
-  html:active-view-transition-type(deck-enter)::view-transition-new(route-content) {
-    animation: a-slide-in-up 0.32s var(--ease-out-quart) both;
-  }
-
-  /* Going back out of a deck: the deck page drops down off the bottom while the
-     list fades back in behind it. */
-  html:active-view-transition-type(deck-leave)::view-transition-old(route-content) {
-    animation: a-slide-out-down 0.28s var(--ease-out-quart) both;
-  }
-  html:active-view-transition-type(deck-leave)::view-transition-new(route-content) {
-    animation: a-fade-in 0.28s var(--ease-out-quart) both;
   }
 
   /* Themed scrollbars for inputs and other in-app scroll regions. */
@@ -815,13 +696,5 @@
   .skeleton {
     animation: none;
     background: var(--color-surface-sunken);
-  }
-  /* The `*` rule above does not match view-transition pseudo-elements, so the
-     route transition needs its own opt-out for an instant swap. */
-  ::view-transition-old(route-content),
-  ::view-transition-new(route-content),
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation-duration: 0.001ms !important;
   }
 }

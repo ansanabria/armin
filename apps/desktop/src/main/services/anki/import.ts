@@ -27,7 +27,6 @@ import { openSqliteDatabase } from "../../db/better-sqlite";
 import { schema } from "../../db";
 import {
   generateReviewUnits,
-  serializeContent,
   type FlashcardContent,
   type FlashcardType,
   type ImageOcclusionContent,
@@ -35,11 +34,9 @@ import {
   type ImageOcclusionMask,
 } from "../flashcard-types";
 import type { ServiceContext } from "../context";
-import { newReviewUnitFields, type FsrsFields } from "../scheduler";
-import {
-  assertContentUsesMediaRefs,
-  canonicalizeLegacyMediaForWrite,
-} from "../media";
+import type { FsrsFields } from "../scheduler";
+import { canonicalizeLegacyMediaForWrite } from "../media";
+import { createFlashcardRecord } from "../flashcards";
 import { ankiHtmlToMarkdown } from "./html";
 import { hasClozeMarkers, renderTemplate } from "./template";
 
@@ -1383,116 +1380,35 @@ export async function commitAnkiImport(
   };
 }
 
-const CARD_CHUNK = 200;
-
 async function writeDeck(
   ctx: ServiceContext,
   name: string,
   parsedNotes: ParsedNote[],
   keepScheduling: boolean,
 ): Promise<string> {
-  const { decks, reviewUnits, flashcards, flashcardTags } = schema;
+  const { decks } = schema;
 
   return ctx.db.transaction((tx) => {
     const deck = tx.insert(decks).values({ name }).returning().get();
     const deckId = deck!.id;
 
-    // Resolve the tag set once for the whole deck (case-insensitive, deduped).
-    const tagIdByLower = resolveTags(tx, parsedNotes);
-
-    const noteTagRows: { flashcardId: string; tagId: string }[] = [];
-    const noteValues: {
-      id: string;
-      deckId: string;
-      type: string;
-      content: string;
-    }[] = [];
-    const cardValues = [];
-
     for (const parsedNote of parsedNotes) {
-      const flashcardId = randomUUID();
       const content = canonicalizeLegacyMediaForWrite(
         ctx.profileId,
         parsedNote.type,
         parsedNote.content,
       );
-      assertContentUsesMediaRefs(parsedNote.type, content);
-      noteValues.push({
-        id: flashcardId,
+      createFlashcardRecord(tx, {
         deckId,
         type: parsedNote.type,
-        content: serializeContent(content),
-      });
-      for (const tag of parsedNote.tags) {
-        const tagId = tagIdByLower.get(tag.toLocaleLowerCase());
-        if (tagId) noteTagRows.push({ flashcardId, tagId });
-      }
-      for (const item of generateReviewUnits(
-        parsedNote.type,
         content,
-      )) {
-        cardValues.push({
-          id: randomUUID(),
-          flashcardId,
-          deckId,
-          subKey: item.subKey,
-          front: item.front,
-          back: item.back,
-          ...(keepScheduling && parsedNote.schedules.get(item.subKey)
-            ? parsedNote.schedules.get(item.subKey)!
-            : newReviewUnitFields()),
-        });
-      }
-    }
-
-    for (let i = 0; i < noteValues.length; i += CARD_CHUNK) {
-      tx.insert(flashcards)
-        .values(noteValues.slice(i, i + CARD_CHUNK))
-        .run();
-    }
-    for (let i = 0; i < cardValues.length; i += CARD_CHUNK) {
-      tx.insert(reviewUnits)
-        .values(cardValues.slice(i, i + CARD_CHUNK))
-        .run();
-    }
-    for (let i = 0; i < noteTagRows.length; i += CARD_CHUNK) {
-      tx.insert(flashcardTags)
-        .values(noteTagRows.slice(i, i + CARD_CHUNK))
-        .onConflictDoNothing()
-        .run();
+        tags: parsedNote.tags,
+        reviewUnitSchedules: keepScheduling ? parsedNote.schedules : undefined,
+      });
     }
 
     return deckId;
   });
-}
-
-type TxLike = Parameters<Parameters<ServiceContext["db"]["transaction"]>[0]>[0];
-
-/** Ensure every tag used in the deck exists; return a lower-name → id map. */
-function resolveTags(
-  tx: TxLike,
-  parsedNotes: ParsedNote[],
-): Map<string, string> {
-  const { tags } = schema;
-  const byLower = new Map<string, string>();
-  const wanted = new Map<string, string>(); // lower → display
-  for (const note of parsedNotes) {
-    for (const tag of note.tags) {
-      const lower = tag.toLocaleLowerCase();
-      if (!wanted.has(lower)) wanted.set(lower, tag);
-    }
-  }
-  if (wanted.size === 0) return byLower;
-
-  const existing = tx.select().from(tags).all();
-  for (const row of existing) byLower.set(row.name.toLocaleLowerCase(), row.id);
-
-  for (const [lower, display] of wanted) {
-    if (byLower.has(lower)) continue;
-    const created = tx.insert(tags).values({ name: display }).returning().get();
-    byLower.set(lower, created!.id);
-  }
-  return byLower;
 }
 
 function plural(count: number, word: string): string {

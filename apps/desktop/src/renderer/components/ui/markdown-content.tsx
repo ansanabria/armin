@@ -9,10 +9,11 @@ import { cn } from "@/lib/utils";
 import { mediaDisplayUrl } from "@/lib/media";
 import { parseImageWidth, stripImageWidth } from "@/lib/image-size";
 import { ImageZoomDialog } from "@/components/ui/image-zoom-dialog";
+import { parseMediaRef } from "../../../shared/media-ref";
 
 /** Card images are stored as profile-relative Flashcard media references. */
 const cardUrlTransform: UrlTransform = (url, key) => {
-  if (key === "src" && /^armin-media:/i.test(url)) {
+  if (key === "src" && parseMediaRef(url)) {
     return mediaDisplayUrl(url);
   }
   return defaultUrlTransform(url);

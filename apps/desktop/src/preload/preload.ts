@@ -5,6 +5,10 @@ import {
   ipcEvents,
   type IpcChannel,
 } from "../shared/ipc-channels";
+import {
+  mediaRefFromProfileUrl,
+  mediaUrlForProfileRef,
+} from "../shared/media-ref";
 
 const invoke = (command: IpcChannel, payload?: unknown) =>
   ipcRenderer.invoke(command.channel, payload);
@@ -19,29 +23,13 @@ function currentProfileId(): string | null {
 }
 
 const profileId = currentProfileId();
-const mediaRefRe =
-  /^armin-media:([a-f0-9]{64}\.(?:png|jpg|gif|webp|svg|bmp|avif))$/;
 
 function mediaUrl(ref: string): string {
-  const match = ref.match(mediaRefRe);
-  if (!match || !profileId) return ref;
-  return `armin-media://${encodeURIComponent(profileId)}/${match[1]}`;
+  return mediaUrlForProfileRef(profileId, ref);
 }
 
 function mediaRefFromUrl(url: string): string | null {
-  if (!profileId) return null;
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "armin-media:") return null;
-    if (decodeURIComponent(parsed.hostname) !== profileId) return null;
-    const fileName = parsed.pathname.replace(/^\//, "");
-    if (!/^[a-f0-9]{64}\.(?:png|jpg|gif|webp|svg|bmp|avif)$/.test(fileName)) {
-      return null;
-    }
-    return `armin-media:${fileName}`;
-  } catch {
-    return null;
-  }
+  return mediaRefFromProfileUrl(profileId, url);
 }
 
 const api = {
