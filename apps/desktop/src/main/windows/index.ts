@@ -17,20 +17,6 @@ export function getProfileIdForWebContents(webContentsId: number) {
   return null;
 }
 
-export function getMainWindow() {
-  const focused = BrowserWindow.getFocusedWindow();
-  if (focused && !focused.isDestroyed()) {
-    for (const win of profileWindows.values()) {
-      if (win === focused) return win;
-    }
-  }
-  return profileWindows.values().next().value ?? null;
-}
-
-export function getProfilePickerWindow() {
-  return profilePickerWindow;
-}
-
 function dismissProfilePicker() {
   if (!profilePickerWindow || profilePickerWindow.isDestroyed()) return;
   profilePickerWindow.hide();
@@ -87,10 +73,15 @@ function publishAnyOpenProfileForMcp() {
   clearMcpSession(app.getPath("userData"));
 }
 
-function shellOptions() {
-  const isMac = process.platform === "darwin";
-  const isLinux = process.platform === "linux";
-  return { isMac, isLinux };
+function windowFrameOptions() {
+  if (process.platform === "darwin") {
+    return { titleBarStyle: "hiddenInset" as const };
+  }
+
+  return {
+    frame: false,
+    ...(process.platform === "linux" && { hasShadow: false }),
+  };
 }
 
 function rendererWebPreferences(profileId?: string) {
@@ -142,13 +133,21 @@ function wireMainWindowEvents(win: BrowserWindow) {
   win.on("unmaximize", () => notifyMaximized(false));
 }
 
+function showWhenReady(win: BrowserWindow) {
+  win.once("ready-to-show", () => {
+    try {
+      if (!win.isDestroyed()) win.show();
+    } catch {
+      // Window torn down while ready-to-show was queued (e.g. dev server stop).
+    }
+  });
+}
+
 export function openProfilePicker() {
   if (profilePickerWindow && !profilePickerWindow.isDestroyed()) {
     profilePickerWindow.focus();
     return profilePickerWindow;
   }
-
-  const { isMac, isLinux } = shellOptions();
 
   profilePickerWindow = new BrowserWindow({
     width: 420,
@@ -161,24 +160,11 @@ export function openProfilePicker() {
     resizable: false,
     show: false,
     icon: getAppIcon(),
-    ...(isMac
-      ? { titleBarStyle: "hiddenInset" as const }
-      : {
-          frame: false,
-          ...(isLinux && { hasShadow: false }),
-        }),
+    ...windowFrameOptions(),
     webPreferences: rendererWebPreferences(),
   });
   attachWindowIcon(profilePickerWindow);
-
-  profilePickerWindow.once("ready-to-show", () => {
-    const picker = profilePickerWindow;
-    try {
-      if (picker && !picker.isDestroyed()) picker.show();
-    } catch {
-      // Window torn down while ready-to-show was queued (e.g. dev server stop).
-    }
-  });
+  showWhenReady(profilePickerWindow);
 
   profilePickerWindow.on("closed", () => {
     profilePickerWindow = null;
@@ -204,20 +190,13 @@ export async function openMainWindow(profileId: string, profileName?: string) {
     return existing;
   }
 
-  const { isMac, isLinux } = shellOptions();
-
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
     icon: getAppIcon(),
     title: profileName ? `${profileName} — Armin` : "Armin",
-    ...(isMac
-      ? { titleBarStyle: "hiddenInset" as const }
-      : {
-          frame: false,
-          ...(isLinux && { hasShadow: false }),
-        }),
+    ...windowFrameOptions(),
     webPreferences: rendererWebPreferences(profileId),
   });
   attachWindowIcon(win);
@@ -226,13 +205,7 @@ export async function openMainWindow(profileId: string, profileName?: string) {
   if (profileName) profileNames.set(profileId, profileName);
   publishMcpSession(profileId);
 
-  win.once("ready-to-show", () => {
-    try {
-      if (!win.isDestroyed()) win.show();
-    } catch {
-      // Window torn down while ready-to-show was queued (e.g. dev server stop).
-    }
-  });
+  showWhenReady(win);
 
   win.on("closed", () => {
     profileWindows.delete(profileId);

@@ -7,6 +7,7 @@ import {
 } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
+import * as prerequisiteState from "./prerequisite-state";
 import * as flashcards from "./flashcards";
 import * as review from "./review";
 
@@ -61,11 +62,11 @@ describe("moveFlashcard", () => {
 
     await flashcards.moveFlashcard(ctx, middle.id, target.id);
 
-    expect(await graph.getPrereqIds(ctx, middle.id)).toEqual([]);
-    expect(await graph.getDependentIds(ctx, middle.id)).toEqual([]);
+    expect(await prerequisiteState.getPrereqIds(ctx, middle.id)).toEqual([]);
+    expect(await prerequisiteState.getDependentIds(ctx, middle.id)).toEqual([]);
     // The surrounding cards no longer reference the moved one.
-    expect(await graph.getDependentIds(ctx, prereq.id)).toEqual([]);
-    expect(await graph.getPrereqIds(ctx, dependent.id)).toEqual([]);
+    expect(await prerequisiteState.getDependentIds(ctx, prereq.id)).toEqual([]);
+    expect(await prerequisiteState.getPrereqIds(ctx, dependent.id)).toEqual([]);
   });
 
   it("move recomputes lock state for the moved flashcard and prior dependents", async () => {

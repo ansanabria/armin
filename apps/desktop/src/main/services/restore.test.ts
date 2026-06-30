@@ -27,13 +27,11 @@ vi.mock("electron", () => ({
 
 import {
   closeDb,
-  getDb,
-  initDb,
   profileMediaDir,
   schema,
   setDbRootForTests,
 } from "../db";
-import { runMigrations } from "../db/migrate";
+import { ensureProfileReady, resetProfileRuntime } from "../profiles/runtime";
 import { getLocalSchemaVersion } from "../db/schema-version";
 import type { ServiceContext } from "./context";
 import * as decks from "./decks";
@@ -55,15 +53,14 @@ beforeEach(() => {
 
 afterEach(() => {
   closeDb();
+  resetProfileRuntime();
   setDbRootForTests(null);
   userData.set("");
   fs.rmSync(root, { recursive: true, force: true });
 });
 
 async function makeCtx(profileId: string): Promise<ServiceContext> {
-  await initDb(profileId);
-  await runMigrations(profileId);
-  return { profileId, db: getDb(profileId) };
+  return ensureProfileReady(profileId);
 }
 
 function tableCount(
@@ -127,10 +124,7 @@ describe("restoreProfileFromZip", () => {
     expect(result.profile.name).toBe("Restored: Calc Profile");
     expect(listProfiles().map((p) => p.id)).toContain(result.profile.id);
 
-    const restored: ServiceContext = {
-      profileId: result.profile.id,
-      db: getDb(result.profile.id),
-    };
+    const restored = await ensureProfileReady(result.profile.id);
     expect({
       decks: tableCount(restored, schema.decks),
       flashcards: tableCount(restored, schema.flashcards),

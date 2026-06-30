@@ -4,7 +4,7 @@ import { app } from "electron";
 import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { getDb } from "./index";
-import { refreshAllLockedStates } from "../services/graph";
+import { refreshAllLockedStates } from "../services/prerequisite-state";
 
 function hasMigrations(folder: string) {
   return fs.existsSync(path.join(folder, "meta", "_journal.json"));

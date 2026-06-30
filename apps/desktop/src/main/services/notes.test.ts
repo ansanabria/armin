@@ -10,6 +10,7 @@ import {
 } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
+import * as prerequisiteState from "./prerequisite-state";
 import * as flashcards from "./flashcards";
 import * as review from "./review";
 import { State } from "./scheduler";
@@ -256,7 +257,7 @@ describe("deleteFlashcard", () => {
 
     const [bCard] = reviewUnitsForFlashcard(ctx, prereqB.id);
     await secureReviewUnit(ctx, bCard.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, prereqB.id);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, prereqB.id);
 
     expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
       false,
@@ -283,15 +284,15 @@ describe("Flashcard-level securing", () => {
     });
     await graph.addPrereq(ctx, prereq.id, dependent.id);
 
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(false);
 
     const prereqReviewUnits = reviewUnitsForFlashcard(ctx, prereq.id);
     await secureReviewUnit(ctx, prereqReviewUnits[0].id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(false);
 
     await secureReviewUnit(ctx, prereqReviewUnits[1].id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(true);
   });
 });

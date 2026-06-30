@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { BROWSE_SORT_KEYS } from "./browse";
 import { FLASHCARD_TYPES } from "./flashcard-types";
-import { ipcChannels } from "./ipc-channels";
+import { ipcCommandNames } from "./ipc-channels";
 import { SCHEDULING_PRESET_VALUES } from "./scheduling-presets";
 
 export type IpcCommand<TSchema extends z.ZodType = z.ZodType> = {
@@ -38,49 +38,49 @@ const deckSettingsPatch = z.object({
 
 export const ipcCommands = {
   profiles: {
-    list: command(ipcChannels.profiles.list.channel, optionalVoid),
+    list: command(ipcCommandNames.profiles.list, optionalVoid),
     create: command(
-      ipcChannels.profiles.create.channel,
+      ipcCommandNames.profiles.create,
       z.object({ name: z.string().min(1) }),
     ),
     open: command(
-      ipcChannels.profiles.open.channel,
+      ipcCommandNames.profiles.open,
       z.object({ id: z.string(), name: z.string().optional() }),
     ),
-    getDefault: command(ipcChannels.profiles.getDefault.channel, optionalVoid),
-    setDefault: command(ipcChannels.profiles.setDefault.channel, id),
+    getDefault: command(ipcCommandNames.profiles.getDefault, optionalVoid),
+    setDefault: command(ipcCommandNames.profiles.setDefault, id),
     clearDefault: command(
-      ipcChannels.profiles.clearDefault.channel,
+      ipcCommandNames.profiles.clearDefault,
       optionalVoid,
     ),
-    delete: command(ipcChannels.profiles.delete.channel, id),
-    showPicker: command(ipcChannels.profiles.showPicker.channel, optionalVoid),
+    delete: command(ipcCommandNames.profiles.delete, id),
+    showPicker: command(ipcCommandNames.profiles.showPicker, optionalVoid),
   },
   decks: {
-    list: command(ipcChannels.decks.list.channel, optionalVoid),
-    get: command(ipcChannels.decks.get.channel, id),
+    list: command(ipcCommandNames.decks.list, optionalVoid),
+    get: command(ipcCommandNames.decks.get, id),
     create: command(
-      ipcChannels.decks.create.channel,
+      ipcCommandNames.decks.create,
       z.object({ name: z.string().min(1), description: z.string().nullish() }),
     ),
     update: command(
-      ipcChannels.decks.update.channel,
+      ipcCommandNames.decks.update,
       z.object({
         id: z.string(),
         name: z.string().min(1).optional(),
         description: z.string().nullish(),
       }),
     ),
-    delete: command(ipcChannels.decks.delete.channel, id),
+    delete: command(ipcCommandNames.decks.delete, id),
   },
   flashcards: {
     list: command(
-      ipcChannels.flashcards.list.channel,
+      ipcCommandNames.flashcards.list,
       z.object({ deckId: z.string() }),
     ),
-    listAll: command(ipcChannels.flashcards.listAll.channel, optionalVoid),
+    listAll: command(ipcCommandNames.flashcards.listAll, optionalVoid),
     browse: command(
-      ipcChannels.flashcards.browse.channel,
+      ipcCommandNames.flashcards.browse,
       z.object({
         offset: z.number().int().min(0),
         limit: z.number().int().min(1).max(100),
@@ -90,22 +90,22 @@ export const ipcCommands = {
         tags: z.array(z.string()).optional(),
       }),
     ),
-    listTags: command(ipcChannels.flashcards.listTags.channel, optionalVoid),
+    listTags: command(ipcCommandNames.flashcards.listTags, optionalVoid),
     listDeckTags: command(
-      ipcChannels.flashcards.listDeckTags.channel,
+      ipcCommandNames.flashcards.listDeckTags,
       z.object({ deckId: z.string() }),
     ),
-    get: command(ipcChannels.flashcards.get.channel, id),
+    get: command(ipcCommandNames.flashcards.get, id),
     deleteConsequences: command(
-      ipcChannels.flashcards.deleteConsequences.channel,
+      ipcCommandNames.flashcards.deleteConsequences,
       id,
     ),
     moveConsequences: command(
-      ipcChannels.flashcards.moveConsequences.channel,
+      ipcCommandNames.flashcards.moveConsequences,
       id,
     ),
     create: command(
-      ipcChannels.flashcards.create.channel,
+      ipcCommandNames.flashcards.create,
       z.object({
         deckId: z.string(),
         type: z.enum(FLASHCARD_TYPES),
@@ -114,7 +114,7 @@ export const ipcCommands = {
       }),
     ),
     update: command(
-      ipcChannels.flashcards.update.channel,
+      ipcCommandNames.flashcards.update,
       z.object({
         id: z.string(),
         type: z.enum(FLASHCARD_TYPES).optional(),
@@ -122,26 +122,26 @@ export const ipcCommands = {
         tags: z.array(z.string()).optional(),
       }),
     ),
-    delete: command(ipcChannels.flashcards.delete.channel, id),
+    delete: command(ipcCommandNames.flashcards.delete, id),
     archive: command(
-      ipcChannels.flashcards.archive.channel,
+      ipcCommandNames.flashcards.archive,
       z.object({ id: z.string(), archived: z.boolean() }),
     ),
     move: command(
-      ipcChannels.flashcards.move.channel,
+      ipcCommandNames.flashcards.move,
       z.object({ id: z.string(), targetDeckId: z.string() }),
     ),
   },
   import: {
     analyzeAnki: command(
-      ipcChannels.import.analyzeAnki.channel,
+      ipcCommandNames.import.analyzeAnki,
       z.object({
         bytes: z.instanceof(Uint8Array),
         fileName: z.string(),
       }),
     ),
     commitAnki: command(
-      ipcChannels.import.commitAnki.channel,
+      ipcCommandNames.import.commitAnki,
       z.object({
         importId: z.string(),
         deckName: z.string().min(1),
@@ -150,7 +150,7 @@ export const ipcCommands = {
       }),
     ),
     createDeckWithFlashcards: command(
-      ipcChannels.import.createDeckWithFlashcards.channel,
+      ipcCommandNames.import.createDeckWithFlashcards,
       z.object({
         name: z.string().min(1),
         description: z.string().nullish(),
@@ -167,12 +167,12 @@ export const ipcCommands = {
     ),
   },
   data: {
-    export: command(ipcChannels.data.export.channel, optionalVoid),
-    restore: command(ipcChannels.data.restore.channel, optionalVoid),
+    export: command(ipcCommandNames.data.export, optionalVoid),
+    restore: command(ipcCommandNames.data.restore, optionalVoid),
   },
   media: {
     importImage: command(
-      ipcChannels.media.importImage.channel,
+      ipcCommandNames.media.importImage,
       z.object({
         bytes: z.instanceof(Uint8Array),
         fileName: z.string().optional(),
@@ -182,29 +182,29 @@ export const ipcCommands = {
   },
   review: {
     queue: command(
-      ipcChannels.review.queue.channel,
+      ipcCommandNames.review.queue,
       z.object({ deckId: z.string() }),
     ),
-    queueAll: command(ipcChannels.review.queueAll.channel, optionalVoid),
+    queueAll: command(ipcCommandNames.review.queueAll, optionalVoid),
     preview: command(
-      ipcChannels.review.preview.channel,
+      ipcCommandNames.review.preview,
       z.object({ reviewUnitId: z.string() }),
     ),
     rate: command(
-      ipcChannels.review.rate.channel,
+      ipcCommandNames.review.rate,
       z.object({
         reviewUnitId: z.string(),
         rating: z.number().int().min(1).max(4),
       }),
     ),
     undo: command(
-      ipcChannels.review.undo.channel,
+      ipcCommandNames.review.undo,
       z.object({ reviewUnitId: z.string() }),
     ),
   },
   cram: {
     pool: command(
-      ipcChannels.cram.pool.channel,
+      ipcCommandNames.cram.pool,
       z.object({
         deckIds: z.array(z.string()).optional(),
         tags: z.array(z.string()).optional(),
@@ -214,13 +214,13 @@ export const ipcCommands = {
   },
   graph: {
     getDeck: command(
-      ipcChannels.graph.getDeck.channel,
+      ipcCommandNames.graph.getDeck,
       z.object({ deckId: z.string() }),
     ),
-    addPrereq: command(ipcChannels.graph.addPrereq.channel, graphEdge),
-    removePrereq: command(ipcChannels.graph.removePrereq.channel, graphEdge),
+    addPrereq: command(ipcCommandNames.graph.addPrereq, graphEdge),
+    removePrereq: command(ipcCommandNames.graph.removePrereq, graphEdge),
     saveLayout: command(
-      ipcChannels.graph.saveLayout.channel,
+      ipcCommandNames.graph.saveLayout,
       z.object({
         deckId: z.string(),
         placements: z.array(graphLayoutPlacement),
@@ -228,24 +228,24 @@ export const ipcCommands = {
     ),
   },
   mcp: {
-    getSetup: command(ipcChannels.mcp.getSetup.channel, optionalVoid),
-    getEnabled: command(ipcChannels.mcp.getEnabled.channel, optionalVoid),
+    getSetup: command(ipcCommandNames.mcp.getSetup, optionalVoid),
+    getEnabled: command(ipcCommandNames.mcp.getEnabled, optionalVoid),
     setEnabled: command(
-      ipcChannels.mcp.setEnabled.channel,
+      ipcCommandNames.mcp.setEnabled,
       z.object({ enabled: z.boolean() }),
     ),
-    getStatus: command(ipcChannels.mcp.getStatus.channel, optionalVoid),
-    getPort: command(ipcChannels.mcp.getPort.channel, optionalVoid),
+    getStatus: command(ipcCommandNames.mcp.getStatus, optionalVoid),
+    getPort: command(ipcCommandNames.mcp.getPort, optionalVoid),
     setPort: command(
-      ipcChannels.mcp.setPort.channel,
+      ipcCommandNames.mcp.setPort,
       z.object({ port: z.number().int().min(1024).max(65535) }),
     ),
-    retry: command(ipcChannels.mcp.retry.channel, optionalVoid),
+    retry: command(ipcCommandNames.mcp.retry, optionalVoid),
   },
   settings: {
-    get: command(ipcChannels.settings.get.channel, optionalVoid),
+    get: command(ipcCommandNames.settings.get, optionalVoid),
     update: command(
-      ipcChannels.settings.update.channel,
+      ipcCommandNames.settings.update,
       z.object({
         requestRetention: z.number().optional(),
         maximumInterval: z.number().int().optional(),
@@ -262,11 +262,11 @@ export const ipcCommands = {
       }),
     ),
     getDeck: command(
-      ipcChannels.settings.getDeck.channel,
+      ipcCommandNames.settings.getDeck,
       z.object({ deckId: z.string() }),
     ),
     updateDeck: command(
-      ipcChannels.settings.updateDeck.channel,
+      ipcCommandNames.settings.updateDeck,
       z.object({
         deckId: z.string(),
         patch: deckSettingsPatch,
@@ -274,10 +274,10 @@ export const ipcCommands = {
     ),
   },
   shell: {
-    minimize: command(ipcChannels.shell.minimize.channel, optionalVoid),
-    maximize: command(ipcChannels.shell.maximize.channel, optionalVoid),
-    close: command(ipcChannels.shell.close.channel, optionalVoid),
-    isMaximized: command(ipcChannels.shell.isMaximized.channel, optionalVoid),
+    minimize: command(ipcCommandNames.shell.minimize, optionalVoid),
+    maximize: command(ipcCommandNames.shell.maximize, optionalVoid),
+    close: command(ipcCommandNames.shell.close, optionalVoid),
+    isMaximized: command(ipcCommandNames.shell.isMaximized, optionalVoid),
   },
 } as const;
 

@@ -6,6 +6,12 @@ import { profileMediaDir, schema } from "../db";
 import type { Flashcard } from "../db/schema";
 import type { ServiceContext } from "./context";
 import {
+  isMediaRef,
+  isSafeMediaFileName,
+  mediaRefFromFileName,
+  replaceMediaRefs,
+} from "../../shared/media-ref";
+import {
   parseStoredContent,
   serializeContent,
   type FlashcardContent,
@@ -13,12 +19,8 @@ import {
   type ImageOcclusionContent,
 } from "./flashcard-types";
 
-export const MEDIA_REF_PREFIX = "armin-media:";
 export const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
 
-const MEDIA_FILE_RE = /^[a-f0-9]{64}\.(png|jpg|gif|webp|svg|bmp|avif)$/;
-const MEDIA_REF_RE =
-  /^armin-media:[a-f0-9]{64}\.(png|jpg|gif|webp|svg|bmp|avif)$/;
 const DATA_IMAGE_RE =
   /data:image\/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)/g;
 const MARKDOWN_IMAGE_RE = /!\[[^\]]*\]\(([^)\s]+)(?:\s+["'][^)]*["'])?\)/g;
@@ -56,28 +58,6 @@ export type StoredMedia = {
   mime: string;
   bytes: number;
 };
-
-export function isMediaRef(value: string): boolean {
-  return MEDIA_REF_RE.test(value);
-}
-
-export function mediaFileNameFromRef(ref: string): string {
-  if (!isMediaRef(ref)) {
-    throw new Error("Invalid Flashcard media reference.");
-  }
-  return ref.slice(MEDIA_REF_PREFIX.length);
-}
-
-export function mediaRefFromFileName(fileName: string): string {
-  if (!isSafeMediaFileName(fileName)) {
-    throw new Error("Invalid Flashcard media filename.");
-  }
-  return `${MEDIA_REF_PREFIX}${fileName}`;
-}
-
-export function isSafeMediaFileName(fileName: string): boolean {
-  return MEDIA_FILE_RE.test(fileName);
-}
 
 export function mimeForMediaFile(fileName: string): string | undefined {
   if (!isSafeMediaFileName(fileName)) return undefined;
@@ -164,13 +144,7 @@ export function assertContentUsesMediaRefs(
 }
 
 export function rewriteMarkdownMediaForExport(markdown: string): string {
-  return markdown.replace(
-    new RegExp(
-      `${MEDIA_REF_PREFIX}([a-f0-9]{64}\\.(?:png|jpg|gif|webp|svg|bmp|avif))`,
-      "g",
-    ),
-    "../../media/$1",
-  );
+  return replaceMediaRefs(markdown, (_ref, fileName) => `../../media/${fileName}`);
 }
 
 export function canonicalizeLegacyMediaInContent(
@@ -370,3 +344,10 @@ function assertMediaRef(value: string, label: string) {
   }
   throw new Error(`${label} must use armin-media:<sha256>.<ext> references.`);
 }
+
+export {
+  isMediaRef,
+  isSafeMediaFileName,
+  mediaFileNameFromRef,
+  mediaRefFromFileName,
+} from "../../shared/media-ref";

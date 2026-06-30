@@ -7,6 +7,7 @@ import {
 } from "../test/db";
 import * as decks from "./decks";
 import * as graph from "./graph";
+import * as prerequisiteState from "./prerequisite-state";
 import * as flashcards from "./flashcards";
 import * as settings from "./settings";
 import { isPendingSchedule } from "./scheduler";
@@ -41,7 +42,7 @@ describe("prerequisite edges", () => {
       "Prerequisites can only connect flashcards in the same deck.",
     );
 
-    expect(await graph.getPrereqIds(ctx, dependent.id)).toEqual([]);
+    expect(await prerequisiteState.getPrereqIds(ctx, dependent.id)).toEqual([]);
   });
 
   it("still prevents cycles within a deck", async () => {
@@ -90,20 +91,20 @@ describe("prerequisite edges", () => {
     await graph.addPrereq(ctx, a.id, b.id);
     await graph.addPrereq(ctx, b.id, c.id);
 
-    expect(await graph.isUnlocked(ctx, b.id)).toBe(false);
-    expect(await graph.isUnlocked(ctx, c.id)).toBe(false);
+    expect(await prerequisiteState.isUnlocked(ctx, b.id)).toBe(false);
+    expect(await prerequisiteState.isUnlocked(ctx, c.id)).toBe(false);
 
     await securePrereq(ctx, a.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, a.id);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, a.id);
 
-    expect(await graph.isUnlocked(ctx, b.id)).toBe(true);
+    expect(await prerequisiteState.isUnlocked(ctx, b.id)).toBe(true);
     // C still waits on B, which is unlocked but not secured.
-    expect(await graph.isUnlocked(ctx, c.id)).toBe(false);
+    expect(await prerequisiteState.isUnlocked(ctx, c.id)).toBe(false);
 
     await securePrereq(ctx, b.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, b.id);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, b.id);
 
-    expect(await graph.isUnlocked(ctx, c.id)).toBe(true);
+    expect(await prerequisiteState.isUnlocked(ctx, c.id)).toBe(true);
   });
 
   it("a dependent with multiple prereqs needs all of them secured", async () => {
@@ -116,12 +117,12 @@ describe("prerequisite edges", () => {
     await graph.addPrereq(ctx, b.id, dependent.id);
 
     await securePrereq(ctx, a.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, a.id);
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, a.id);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(false);
 
     await securePrereq(ctx, b.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, b.id);
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, b.id);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(true);
   });
 
   it("uses the deck's prerequisite stability floor and refreshes on change", async () => {
@@ -133,21 +134,21 @@ describe("prerequisite edges", () => {
 
     await graph.addPrereq(ctx, prereq.id, dependent.id);
     await securePrereq(ctx, prereq.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
+    await prerequisiteState.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
 
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(true);
 
     await settings.updateDeckSettings(ctx, deck.id, {
       prereqStabilityFloor: 3,
     });
 
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(false);
 
     await settings.updateDeckSettings(ctx, deck.id, {
       prereqStabilityFloor: null,
     });
 
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
+    expect(await prerequisiteState.isUnlocked(ctx, dependent.id)).toBe(true);
   });
 
   it("archive and unarchive of an unsecured prerequisite toggles dependent locking", async () => {

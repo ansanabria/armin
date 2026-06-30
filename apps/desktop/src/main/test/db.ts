@@ -3,17 +3,15 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach } from "vitest";
 import { count, eq } from "drizzle-orm";
-import { closeDb, getDb, initDb, schema, setDbRootForTests } from "../db";
-import { runMigrations } from "../db/migrate";
+import { closeDb, schema, setDbRootForTests } from "../db";
+import { ensureProfileReady, resetProfileRuntime } from "../profiles/runtime";
 import type { ServiceContext } from "../services/context";
 import { State } from "../services/scheduler";
 
 let root: string;
 
 export async function makeContext(profileId: string): Promise<ServiceContext> {
-  await initDb(profileId);
-  await runMigrations(profileId);
-  return { profileId, db: getDb(profileId) };
+  return ensureProfileReady(profileId);
 }
 
 /**
@@ -149,6 +147,7 @@ export function useTestDb() {
 
   afterEach(() => {
     closeDb();
+    resetProfileRuntime();
     setDbRootForTests(null);
     fs.rmSync(root, { recursive: true, force: true });
   });

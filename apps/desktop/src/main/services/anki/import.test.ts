@@ -7,13 +7,11 @@ import Database from "better-sqlite3";
 import { zipSync } from "fflate";
 import {
   closeDb,
-  getDb,
-  initDb,
   profileMediaDir,
   schema,
   setDbRootForTests,
 } from "../../db";
-import { runMigrations } from "../../db/migrate";
+import { ensureProfileReady, resetProfileRuntime } from "../../profiles/runtime";
 import type { ServiceContext } from "../context";
 import { analyzeAnkiPackage, commitAnkiImport } from "./import";
 
@@ -209,9 +207,7 @@ async function buildApkg(
 let root: string;
 
 async function makeContext(profileId: string): Promise<ServiceContext> {
-  await initDb(profileId);
-  await runMigrations(profileId);
-  return { profileId, db: getDb(profileId) };
+  return ensureProfileReady(profileId);
 }
 
 beforeEach(() => {
@@ -221,6 +217,7 @@ beforeEach(() => {
 
 afterEach(() => {
   closeDb();
+  resetProfileRuntime();
   setDbRootForTests(null);
   fs.rmSync(root, { recursive: true, force: true });
 });
