@@ -18,7 +18,7 @@
     "native:node": "npm rebuild better-sqlite3",
     "native:electron": "electron-rebuild -f -w better-sqlite3",
     "prestart": "npm run native:electron",
-    "start": "electron-forge start",
+    "start": "electron-forge start -- --no-sandbox",
     "prepackage": "npm run native:electron",
     "package": "electron-forge package",
     "premake": "npm run native:electron",
