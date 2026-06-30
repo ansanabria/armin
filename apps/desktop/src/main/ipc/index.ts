@@ -68,8 +68,7 @@ async function ensureDbReady(profileId: string) {
   if (dbReady.has(profileId)) return;
   await initDb(profileId);
   // runMigrations recomputes denormalized lock/scheduling state when migrations
-  // actually run (e.g. 0015 dropping cross-deck prerequisite edges), so no
-  // separate repair is needed here.
+  // actually run, so no separate repair is needed here.
   await runMigrations(profileId);
   await upgradeLegacyFlashcardMedia({ profileId, db: getDb(profileId) });
   dbReady.add(profileId);

@@ -6,45 +6,48 @@ databases by running the SQL files in `drizzle/` with Drizzle's SQLite migrator.
 ## Workflow
 
 1. Update the current schema in `src/main/db/schema.ts`.
-2. Generate a descriptively named migration for ordinary schema changes:
+2. Generate a descriptively named migration for schema changes:
    `npm run db:generate --workspace apps/desktop -- --name=<descriptive_snake_case_name>`.
 3. Review the generated SQL before committing it.
 4. Commit Drizzle's generated snapshot and journal changes with the SQL whenever
    `drizzle-kit generate` creates them.
-5. Hand-edit or hand-author SQL only when the upgrade semantics require it:
+5. Do not hand-edit or hand-author SQL unless the upgrade semantics require it:
    data backfills, table renames, SQLite table rebuild constraints, or preserving
    user history that generated DDL would lose.
-6. Manually verify hand-authored or materially hand-edited migrations against a
+6. Discuss the reason before manually changing migration SQL. After agreement,
+   generate a custom migration when appropriate and keep the hand-written SQL
+   limited to the behavior Drizzle cannot safely infer.
+7. Manually verify hand-authored or materially hand-edited migrations against a
    copied or temporary old-shape database before release.
-7. Run `npm run typecheck`, `npm run lint`, and `npm run test --workspace apps/desktop`.
+8. Run `npm run typecheck`, `npm run lint`, and `npm run test --workspace apps/desktop`.
 
 When a change touches migration discovery, packaging, or the bundled `drizzle/`
 folder, also run `npm run package --workspace apps/desktop` and
 `npm run check:package --workspace apps/desktop`.
 
-Agents may edit generated SQL directly when the semantic mapping is obvious from
-the code and domain model. If the mapping is ambiguous, ask before writing the
-backfill. Record the manual verification performed in the PR or issue instead of
-adding a one-off migration regression test by default.
+Agents must use Drizzle-generated migrations for ordinary schema changes. Manual
+SQL is an exception for cases Drizzle cannot express safely; discuss that reason
+before editing generated SQL or adding a custom migration. Record the manual
+verification performed in the PR or issue instead of adding a one-off migration
+regression test by default.
 
 ## Release Boundary
 
-Once a migration has appeared in any tagged release artifact, including alpha, do
-not rewrite it. Add a new migration that carries the fix forward.
+Once a migration may be someone else's durable upgrade path, do not rewrite it.
+Add a new migration that carries the fix forward.
 
-Before a tagged release, rewriting the newest local migration is acceptable only
-when it has not become someone else's durable upgrade path.
+Before production use, the history was reset to one generated initial schema
+because no external user data depended on the previous migration chain. Treat
+that as a one-time exception, not a normal cleanup tool.
 
 ## Drizzle Metadata
 
-The existing migration history has incomplete Drizzle snapshot metadata. Do not
-reconstruct old snapshots as cleanup. Runtime migration depends on the SQL files
-and `drizzle/meta/_journal.json`, and tests guard that bundle.
-
-For future generated migrations, keep Drizzle's generated snapshot metadata and
-journal changes with the SQL file. If a future migration is fully manual, update
-the journal and SQL deliberately rather than pretending the migration was
-generated.
+The migration history was reset before production use to a single generated
+initial schema. Runtime migration depends on the SQL files and
+`drizzle/meta/_journal.json`; keep Drizzle's generated snapshot metadata and
+journal changes with each generated SQL file. If a future migration is fully
+manual, update the journal and SQL deliberately rather than pretending the
+migration was generated.
 
 ## Naming
 

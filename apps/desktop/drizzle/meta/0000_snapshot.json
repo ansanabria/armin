@@ -1,11 +1,165 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f075857c-7c7b-4096-8876-ceb037729273",
+  "id": "9acfd4af-b149-460b-85c1-67da2bb10079",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "card_prereqs": {
-      "name": "card_prereqs",
+    "deck_settings": {
+      "name": "deck_settings",
+      "columns": {
+        "deck_id": {
+          "name": "deck_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "request_retention": {
+          "name": "request_retention",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "maximum_interval": {
+          "name": "maximum_interval",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "enable_fuzz": {
+          "name": "enable_fuzz",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "enable_short_term": {
+          "name": "enable_short_term",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "learning_steps": {
+          "name": "learning_steps",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "relearning_steps": {
+          "name": "relearning_steps",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "weights": {
+          "name": "weights",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "prereq_stability_floor": {
+          "name": "prereq_stability_floor",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "new_review_units_per_day": {
+          "name": "new_review_units_per_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "keep_sibling_review_units_together": {
+          "name": "keep_sibling_review_units_together",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(unixepoch() * 1000)"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "deck_settings_deck_id_decks_id_fk": {
+          "name": "deck_settings_deck_id_decks_id_fk",
+          "tableFrom": "deck_settings",
+          "tableTo": "decks",
+          "columnsFrom": [
+            "deck_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "decks": {
+      "name": "decks",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "flashcard_prereqs": {
+      "name": "flashcard_prereqs",
       "columns": {
         "prereq_id": {
           "name": "prereq_id",
@@ -22,41 +176,67 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "flashcard_prereqs_dependent_idx": {
+          "name": "flashcard_prereqs_dependent_idx",
+          "columns": [
+            "dependent_id"
+          ],
+          "isUnique": false
+        },
+        "flashcard_prereqs_prereq_idx": {
+          "name": "flashcard_prereqs_prereq_idx",
+          "columns": [
+            "prereq_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
-        "card_prereqs_prereq_id_cards_id_fk": {
-          "name": "card_prereqs_prereq_id_cards_id_fk",
-          "tableFrom": "card_prereqs",
-          "tableTo": "cards",
-          "columnsFrom": ["prereq_id"],
-          "columnsTo": ["id"],
+        "flashcard_prereqs_prereq_id_flashcards_id_fk": {
+          "name": "flashcard_prereqs_prereq_id_flashcards_id_fk",
+          "tableFrom": "flashcard_prereqs",
+          "tableTo": "flashcards",
+          "columnsFrom": [
+            "prereq_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "card_prereqs_dependent_id_cards_id_fk": {
-          "name": "card_prereqs_dependent_id_cards_id_fk",
-          "tableFrom": "card_prereqs",
-          "tableTo": "cards",
-          "columnsFrom": ["dependent_id"],
-          "columnsTo": ["id"],
+        "flashcard_prereqs_dependent_id_flashcards_id_fk": {
+          "name": "flashcard_prereqs_dependent_id_flashcards_id_fk",
+          "tableFrom": "flashcard_prereqs",
+          "tableTo": "flashcards",
+          "columnsFrom": [
+            "dependent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
-        "card_prereqs_prereq_id_dependent_id_pk": {
-          "columns": ["prereq_id", "dependent_id"],
-          "name": "card_prereqs_prereq_id_dependent_id_pk"
+        "flashcard_prereqs_prereq_id_dependent_id_pk": {
+          "columns": [
+            "prereq_id",
+            "dependent_id"
+          ],
+          "name": "flashcard_prereqs_prereq_id_dependent_id_pk"
         }
       },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "card_tags": {
-      "name": "card_tags",
+    "flashcard_tags": {
+      "name": "flashcard_tags",
       "columns": {
-        "card_id": {
-          "name": "card_id",
+        "flashcard_id": {
+          "name": "flashcard_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -70,38 +250,57 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "flashcard_tags_tag_id_idx": {
+          "name": "flashcard_tags_tag_id_idx",
+          "columns": [
+            "tag_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
-        "card_tags_card_id_cards_id_fk": {
-          "name": "card_tags_card_id_cards_id_fk",
-          "tableFrom": "card_tags",
-          "tableTo": "cards",
-          "columnsFrom": ["card_id"],
-          "columnsTo": ["id"],
+        "flashcard_tags_flashcard_id_flashcards_id_fk": {
+          "name": "flashcard_tags_flashcard_id_flashcards_id_fk",
+          "tableFrom": "flashcard_tags",
+          "tableTo": "flashcards",
+          "columnsFrom": [
+            "flashcard_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "card_tags_tag_id_tags_id_fk": {
-          "name": "card_tags_tag_id_tags_id_fk",
-          "tableFrom": "card_tags",
+        "flashcard_tags_tag_id_tags_id_fk": {
+          "name": "flashcard_tags_tag_id_tags_id_fk",
+          "tableFrom": "flashcard_tags",
           "tableTo": "tags",
-          "columnsFrom": ["tag_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "tag_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
-        "card_tags_card_id_tag_id_pk": {
-          "columns": ["card_id", "tag_id"],
-          "name": "card_tags_card_id_tag_id_pk"
+        "flashcard_tags_flashcard_id_tag_id_pk": {
+          "columns": [
+            "flashcard_id",
+            "tag_id"
+          ],
+          "name": "flashcard_tags_flashcard_id_tag_id_pk"
         }
       },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "cards": {
-      "name": "cards",
+    "flashcards": {
+      "name": "flashcards",
       "columns": {
         "id": {
           "name": "id",
@@ -117,6 +316,250 @@
           "notNull": true,
           "autoincrement": false
         },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'basic'"
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pos_x": {
+          "name": "pos_x",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "pos_y": {
+          "name": "pos_y",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "locked": {
+          "name": "locked",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "archived": {
+          "name": "archived",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "flashcards_deck_id_idx": {
+          "name": "flashcards_deck_id_idx",
+          "columns": [
+            "deck_id"
+          ],
+          "isUnique": false
+        },
+        "flashcards_deck_created_idx": {
+          "name": "flashcards_deck_created_idx",
+          "columns": [
+            "deck_id",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "flashcards_deck_locked_idx": {
+          "name": "flashcards_deck_locked_idx",
+          "columns": [
+            "deck_id",
+            "locked"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "flashcards_deck_id_decks_id_fk": {
+          "name": "flashcards_deck_id_decks_id_fk",
+          "tableFrom": "flashcards",
+          "tableTo": "decks",
+          "columnsFrom": [
+            "deck_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "review_logs": {
+      "name": "review_logs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "review_unit_id": {
+          "name": "review_unit_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rating": {
+          "name": "rating",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "due": {
+          "name": "due",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stability": {
+          "name": "stability",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "difficulty": {
+          "name": "difficulty",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "elapsed_days": {
+          "name": "elapsed_days",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_elapsed_days": {
+          "name": "last_elapsed_days",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "scheduled_days": {
+          "name": "scheduled_days",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "learning_steps": {
+          "name": "learning_steps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "review": {
+          "name": "review",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "review_logs_review_unit_id_review_units_id_fk": {
+          "name": "review_logs_review_unit_id_review_units_id_fk",
+          "tableFrom": "review_logs",
+          "tableTo": "review_units",
+          "columnsFrom": [
+            "review_unit_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "review_units": {
+      "name": "review_units",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "flashcard_id": {
+          "name": "flashcard_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "deck_id": {
+          "name": "deck_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sub_key": {
+          "name": "sub_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
         "front": {
           "name": "front",
           "type": "text",
@@ -130,14 +573,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'basic'"
         },
         "due": {
           "name": "due",
@@ -217,6 +652,22 @@
           "notNull": false,
           "autoincrement": false
         },
+        "locked": {
+          "name": "locked",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "archived": {
+          "name": "archived",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -232,163 +683,86 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "review_units_deck_id_idx": {
+          "name": "review_units_deck_id_idx",
+          "columns": [
+            "deck_id"
+          ],
+          "isUnique": false
+        },
+        "review_units_flashcard_id_idx": {
+          "name": "review_units_flashcard_id_idx",
+          "columns": [
+            "flashcard_id"
+          ],
+          "isUnique": false
+        },
+        "review_units_deck_created_idx": {
+          "name": "review_units_deck_created_idx",
+          "columns": [
+            "deck_id",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "review_units_deck_due_idx": {
+          "name": "review_units_deck_due_idx",
+          "columns": [
+            "deck_id",
+            "due"
+          ],
+          "isUnique": false
+        },
+        "review_units_deck_state_idx": {
+          "name": "review_units_deck_state_idx",
+          "columns": [
+            "deck_id",
+            "state"
+          ],
+          "isUnique": false
+        },
+        "review_units_deck_locked_idx": {
+          "name": "review_units_deck_locked_idx",
+          "columns": [
+            "deck_id",
+            "locked"
+          ],
+          "isUnique": false
+        },
+        "review_units_deck_archived_idx": {
+          "name": "review_units_deck_archived_idx",
+          "columns": [
+            "deck_id",
+            "archived"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
-        "cards_deck_id_decks_id_fk": {
-          "name": "cards_deck_id_decks_id_fk",
-          "tableFrom": "cards",
-          "tableTo": "decks",
-          "columnsFrom": ["deck_id"],
-          "columnsTo": ["id"],
+        "review_units_flashcard_id_flashcards_id_fk": {
+          "name": "review_units_flashcard_id_flashcards_id_fk",
+          "tableFrom": "review_units",
+          "tableTo": "flashcards",
+          "columnsFrom": [
+            "flashcard_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "decks": {
-      "name": "decks",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
         },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "review_logs": {
-      "name": "review_logs",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "card_id": {
-          "name": "card_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "rating": {
-          "name": "rating",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "state": {
-          "name": "state",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "due": {
-          "name": "due",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "stability": {
-          "name": "stability",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "difficulty": {
-          "name": "difficulty",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "elapsed_days": {
-          "name": "elapsed_days",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "last_elapsed_days": {
-          "name": "last_elapsed_days",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "scheduled_days": {
-          "name": "scheduled_days",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "learning_steps": {
-          "name": "learning_steps",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "review": {
-          "name": "review",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "review_logs_card_id_cards_id_fk": {
-          "name": "review_logs_card_id_cards_id_fk",
-          "tableFrom": "review_logs",
-          "tableTo": "cards",
-          "columnsFrom": ["card_id"],
-          "columnsTo": ["id"],
+        "review_units_deck_id_decks_id_fk": {
+          "name": "review_units_deck_id_decks_id_fk",
+          "tableFrom": "review_units",
+          "tableTo": "decks",
+          "columnsFrom": [
+            "deck_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -446,7 +820,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'1m,10m'"
+          "default": "'10m'"
         },
         "relearning_steps": {
           "name": "relearning_steps",
@@ -458,6 +832,45 @@
         },
         "weights": {
           "name": "weights",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "prereq_stability_floor": {
+          "name": "prereq_stability_floor",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 2
+        },
+        "new_review_units_per_day": {
+          "name": "new_review_units_per_day",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 10
+        },
+        "keep_sibling_review_units_together": {
+          "name": "keep_sibling_review_units_together",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "scheduling_preset": {
+          "name": "scheduling_preset",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'balanced'"
+        },
+        "keybindings": {
+          "name": "keybindings",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -506,7 +919,9 @@
       "indexes": {
         "tags_name_unique": {
           "name": "tags_name_unique",
-          "columns": ["name"],
+          "columns": [
+            "name"
+          ],
           "isUnique": true
         }
       },

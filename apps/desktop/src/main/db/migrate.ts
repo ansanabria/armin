@@ -57,13 +57,12 @@ export async function runMigrations(
   });
   const after = appliedMigrationCount(db);
 
-  // Some migrations (e.g. 0015, which deletes cross-deck prerequisite edges)
-  // change relationships that are denormalized into `flashcards.locked`,
-  // `review_units.locked`, and review-unit scheduling by service code. Recompute
-  // that derived state whenever migrations actually ran, regardless of which
-  // entry point (IPC, MCP, restore) triggered the upgrade, so dependents are not
-  // left locked by edges that no longer exist. Gating on an applied-count change
-  // keeps this off the hot path once a profile is already up to date.
+  // Some migrations can change relationships that are denormalized into
+  // `flashcards.locked`, `review_units.locked`, and review-unit scheduling by
+  // service code. Recompute that derived state whenever migrations actually ran,
+  // regardless of which entry point (IPC, MCP, restore) triggered the upgrade.
+  // Gating on an applied-count change keeps this off the hot path once a profile
+  // is already up to date.
   if (after > before) {
     await refreshAllLockedStates({ profileId, db });
   }

@@ -494,8 +494,8 @@ export async function deleteFlashcard(
   // Collect dependents before the delete cascades the prereq edges away.
   const dependentIds = await getDependentIds(ctx, id);
 
-  // review_units.flashcard_id has no DB-level FK on migrated databases, so
-  // remove the generated review units explicitly (review_logs cascade off them).
+  // Delete review units explicitly so dependent lock refresh observes a fully
+  // cleaned card even when SQLite foreign-key enforcement is disabled.
   ctx.db.transaction((tx) => {
     tx.delete(reviewUnits).where(eq(reviewUnits.flashcardId, id)).run();
     tx.delete(flashcards).where(eq(flashcards.id, id)).run();
