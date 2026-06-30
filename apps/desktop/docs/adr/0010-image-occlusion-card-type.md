@@ -18,12 +18,7 @@ true recall) or **Hide One, Guess One** (more context) — not a global setting,
 because different images warrant different modes.
 
 Anki import: Image Occlusion notes map faithfully onto this type (masks → masks,
-scheduling history preserved, reveal mode carried over). The previous fallback that
-silently coerced unmappable note types into `basic` is removed; recognized-but-
-unmappable notes are reported, never imported as something they are not. The exact
-Anki occlusion storage format (legacy IO Enhanced fields vs native IO since
-2.1.56+) is to be verified against current Anki docs at implementation time.
-
-Consequence: any existing `diagram` flashcards need a migration to the new model,
-and the type rename touches the schema, flashcard-types module, editor, and
-review UI.
+scheduling history preserved, reveal mode carried over), supporting both legacy IO
+Enhanced fields and native IO (2.1.56+). The previous fallback that silently
+coerced unmappable note types into `basic` is removed; recognized-but-unmappable
+notes are reported, never imported as something they are not.
