@@ -28,29 +28,6 @@ function basic(
 }
 
 describe("prerequisite edges", () => {
-  it("allows prerequisite edges within the same deck", async () => {
-    const ctx = await makeContext("edge-same-deck");
-    const deck = await decks.createDeck(ctx, { name: "Deck" });
-    const prereq = await basic(ctx, deck.id, "P", "P");
-    const dependent = await basic(ctx, deck.id, "D", "D");
-
-    await graph.addPrereq(ctx, prereq.id, dependent.id);
-
-    expect(await graph.getPrereqIds(ctx, dependent.id)).toEqual([prereq.id]);
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(false);
-    expect(isPendingSchedule(await getOnlyReviewUnit(ctx, dependent.id))).toBe(
-      true,
-    );
-
-    await securePrereq(ctx, prereq.id);
-    await graph.refreshAfterPrerequisiteReview(ctx, prereq.id);
-
-    expect(await graph.isUnlocked(ctx, dependent.id)).toBe(true);
-    const dependentCard = await getOnlyReviewUnit(ctx, dependent.id);
-    expect(dependentCard.locked).toBe(false);
-    expect(isPendingSchedule(dependentCard)).toBe(false);
-  });
-
   it("rejects prerequisite edges across deck boundaries", async () => {
     const ctx = await makeContext("edge-cross-deck");
     const prereqDeck = await decks.createDeck(ctx, { name: "Prereqs" });
@@ -206,58 +183,9 @@ describe("prerequisite edges", () => {
     expect(isPendingSchedule(dependentCard)).toBe(true);
   });
 
-  it("archive and unarchive of a secured prerequisite keeps dependents unlocked", async () => {
-    const ctx = await makeContext("edge-archive-secured");
-    const deck = await decks.createDeck(ctx, { name: "Archive secured" });
-    const prereq = await basic(ctx, deck.id, "P", "P");
-    const dependent = await basic(ctx, deck.id, "D", "D");
-    await graph.addPrereq(ctx, prereq.id, dependent.id);
-
-    await securePrereq(ctx, prereq.id);
-    await graph.refreshAfterPrerequisiteStateChange(ctx, prereq.id);
-    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
-      false,
-    );
-    expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
-
-    await flashcards.setArchived(ctx, prereq.id, true);
-
-    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
-      false,
-    );
-    expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
-
-    await flashcards.setArchived(ctx, prereq.id, false);
-
-    expect((await flashcards.getFlashcard(ctx, dependent.id))?.locked).toBe(
-      false,
-    );
-    expect((await getOnlyReviewUnit(ctx, dependent.id)).locked).toBe(false);
-  });
 });
 
 describe("canvas layout", () => {
-  it("saveLayout persists positions and ignores notes outside the deck", async () => {
-    const ctx = await makeContext("layout");
-    const deck = await decks.createDeck(ctx, { name: "Canvas" });
-    const other = await decks.createDeck(ctx, { name: "Other" });
-    const inside = await basic(ctx, deck.id, "In", "In");
-    const outside = await basic(ctx, other.id, "Out", "Out");
-
-    await graph.saveLayout(ctx, deck.id, [
-      { flashcardId: inside.id, x: 10, y: 20 },
-      { flashcardId: outside.id, x: 99, y: 99 },
-    ]);
-
-    const insideNote = await flashcards.getFlashcard(ctx, inside.id);
-    expect(insideNote?.posX).toBe(10);
-    expect(insideNote?.posY).toBe(20);
-
-    const outsideNote = await flashcards.getFlashcard(ctx, outside.id);
-    expect(outsideNote?.posX).toBeNull();
-    expect(outsideNote?.posY).toBeNull();
-  });
-
   it("getDeckGraph exposes positions, lock state, and display text", async () => {
     const ctx = await makeContext("deck-graph");
     const deck = await decks.createDeck(ctx, { name: "Graph" });

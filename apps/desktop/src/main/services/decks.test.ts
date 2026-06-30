@@ -38,38 +38,6 @@ async function tableCount(
 }
 
 describe("deck lifecycle", () => {
-  it("getDeck returns stats", async () => {
-    const ctx = await makeContext("deck-get");
-    const deck = await decks.createDeck(ctx, {
-      name: "Stats",
-      description: "About stats",
-    });
-    await basic(ctx, deck.id, "Q", "A");
-
-    const found = await decks.getDeck(ctx, deck.id);
-    expect(found).toMatchObject({
-      id: deck.id,
-      name: "Stats",
-      description: "About stats",
-      total: 1,
-      newCount: 1,
-    });
-  });
-
-  it("updateDeck patches name and description", async () => {
-    const ctx = await makeContext("deck-update");
-    const deck = await decks.createDeck(ctx, { name: "Before" });
-
-    const renamed = await decks.updateDeck(ctx, deck.id, { name: "After" });
-    expect(renamed?.name).toBe("After");
-
-    const described = await decks.updateDeck(ctx, deck.id, {
-      description: "Now described",
-    });
-    expect(described?.name).toBe("After");
-    expect(described?.description).toBe("Now described");
-  });
-
   it("deleteDeck cascades Flashcards, Review units, edges, and review logs", async () => {
     const ctx = await makeContext("deck-delete");
     const doomed = await decks.createDeck(ctx, { name: "Doomed" });

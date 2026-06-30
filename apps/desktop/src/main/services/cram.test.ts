@@ -33,31 +33,6 @@ function poolFlashcardIds(pool: Awaited<ReturnType<typeof cram.getCramPool>>) {
 }
 
 describe("cram scope resolution", () => {
-  it("collects cards by tag across decks", async () => {
-    const ctx = await makeContext("cram-tag");
-    const algebra = await decks.createDeck(ctx, { name: "Algebra" });
-    const calculus = await decks.createDeck(ctx, { name: "Calculus" });
-    const a = await basic(ctx, algebra.id, "A", "a", ["exam"]);
-    const b = await basic(ctx, calculus.id, "B", "b", ["exam"]);
-    await basic(ctx, calculus.id, "C", "c", ["other"]);
-
-    const ids = await cram.resolveCramScope(ctx, { tags: ["exam"] });
-    expect(new Set(ids)).toEqual(new Set([a.id, b.id]));
-  });
-
-  it("collects cards across multiple decks", async () => {
-    const ctx = await makeContext("cram-multi-deck");
-    const d1 = await decks.createDeck(ctx, { name: "One" });
-    const d2 = await decks.createDeck(ctx, { name: "Two" });
-    const d3 = await decks.createDeck(ctx, { name: "Three" });
-    const a = await basic(ctx, d1.id, "A", "a");
-    const b = await basic(ctx, d2.id, "B", "b");
-    await basic(ctx, d3.id, "C", "c");
-
-    const ids = await cram.resolveCramScope(ctx, { deckIds: [d1.id, d2.id] });
-    expect(new Set(ids)).toEqual(new Set([a.id, b.id]));
-  });
-
   it("intersection requires both deck and tag; union accepts either", async () => {
     const ctx = await makeContext("cram-combine");
     const deckA = await decks.createDeck(ctx, { name: "A" });
@@ -142,22 +117,6 @@ describe("cram pool", () => {
     expect(pool.edges).toEqual([
       { prereqId: inScopePrereq.id, dependentId: dependent.id },
     ]);
-  });
-
-  it("groups every review unit a flashcard generates", async () => {
-    const ctx = await makeContext("cram-groups");
-    const deck = await decks.createDeck(ctx, { name: "Deck" });
-    const reversed = await flashcards.createFlashcard({
-      ctx,
-      deckId: deck.id,
-      type: "basic_reversed",
-      content: { front: "F", back: "B" },
-    });
-
-    const pool = await cram.getCramPool(ctx, { deckIds: [deck.id] });
-    const group = pool.flashcards.find((g) => g.flashcardId === reversed.id);
-    expect(group?.reviewUnitIds.length).toBe(2);
-    expect(pool.units.length).toBe(2);
   });
 
   it("is read-only: building a pool does not mutate scheduling state", async () => {

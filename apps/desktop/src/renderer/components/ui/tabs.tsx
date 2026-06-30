@@ -25,7 +25,7 @@ function TabsList({ className, children, ...props }: TabsPrimitive.List.Props) {
       {children}
       <TabsPrimitive.Indicator
         data-slot="tabs-indicator"
-        className="absolute bottom-0 left-0 h-0.5 w-(--active-tab-width) translate-x-(--active-tab-left) bg-accent transition-[width,transform] duration-200 ease-out"
+        className="absolute bottom-0 left-0 h-0.5 w-(--active-tab-width) translate-x-(--active-tab-left) bg-accent transition-[width,translate] duration-200 ease-out"
       />
     </TabsPrimitive.List>
   );

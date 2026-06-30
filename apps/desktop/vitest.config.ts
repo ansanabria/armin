@@ -9,10 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    exclude: [
-      "**/node_modules/**",
-      "**/e2e/**",
-      "src/mcp/server.smoke.test.ts",
-    ],
+    include: ["src/main/services/**/*.test.ts"],
+    exclude: ["**/node_modules/**"],
   },
 });

@@ -14,8 +14,8 @@ databases by running the SQL files in `drizzle/` with Drizzle's SQLite migrator.
 5. Hand-edit or hand-author SQL only when the upgrade semantics require it:
    data backfills, table renames, SQLite table rebuild constraints, or preserving
    user history that generated DDL would lose.
-6. Add an isolated old-shape migration test for every hand-authored or materially
-   hand-edited migration.
+6. Manually verify hand-authored or materially hand-edited migrations against a
+   copied or temporary old-shape database before release.
 7. Run `npm run typecheck`, `npm run lint`, and `npm run test --workspace apps/desktop`.
 
 When a change touches migration discovery, packaging, or the bundled `drizzle/`
@@ -24,8 +24,8 @@ folder, also run `npm run package --workspace apps/desktop` and
 
 Agents may edit generated SQL directly when the semantic mapping is obvious from
 the code and domain model. If the mapping is ambiguous, ask before writing the
-backfill. In both cases, the old-shape migration test is the evidence that the
-upgrade preserves the intended data.
+backfill. Record the manual verification performed in the PR or issue instead of
+adding a one-off migration regression test by default.
 
 ## Release Boundary
 
@@ -67,17 +67,17 @@ Backup and restore compatibility also uses the journal entry count as the local
 schema version. A build can restore backups from its own schema version or older,
 but refuses backups from a newer journal count.
 
-## Testing Manual Migrations
+## Verifying Manual Migrations
 
-Manual and materially edited migrations must have an ephemeral old-shape test.
-The test should:
+Manual and materially edited migrations should be checked with an ephemeral
+old-shape database. The verification should:
 
 - create a temporary SQLite database
 - create the old schema shape directly
 - seed data that exercises the upgrade behavior
 - apply the migration SQL
-- assert that data, relationships, and history were preserved as intended
+- inspect that data, relationships, and history were preserved as intended
 - delete the temporary database afterward
 
-Add a full-chain `runMigrations` test when the migration is high-risk or depends
-on the surrounding migration sequence.
+Do not keep these checks as permanent tests unless the migration encodes a
+long-lived core service invariant rather than a one-time upgrade path.

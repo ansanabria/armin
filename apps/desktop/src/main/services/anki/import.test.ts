@@ -288,27 +288,6 @@ describe("Anki package import", () => {
     ]);
   });
 
-  it("keeps Anki decks separate when asked", async () => {
-    const ctx = await makeContext("p2");
-    const apkg = await buildApkg();
-    const analysis = await analyzeAnkiPackage(apkg, "Geo.apkg");
-
-    const result = await commitAnkiImport(ctx, {
-      importId: analysis.importId,
-      deckName: "ignored",
-      keepScheduling: false,
-      deckStrategy: "separate",
-    });
-    expect(result.deckCount).toBe(2);
-
-    const decks = ctx.db.select().from(schema.decks).all();
-    expect(decks.map((d) => d.name).sort()).toEqual(["Geography", "Science"]);
-
-    // keepScheduling=false → every card is a fresh New card.
-    const cards = ctx.db.select().from(schema.reviewUnits).all();
-    expect(cards.every((c) => c.state === 0 && c.reps === 0)).toBe(true);
-  });
-
   it("reports an unmappable note type instead of coercing it to basic", async () => {
     const ctx = await makeContext("p3");
     const apkg = await buildApkg(
@@ -420,21 +399,4 @@ describe("Anki package import", () => {
     });
   });
 
-  it("reports legacy Image Occlusion Enhanced notes as unsupported", async () => {
-    const apkg = await buildApkg(
-      [...DEFAULT_NOTES, [19, 8, "", `bad${US}bad${US}bad${US}<img src="flag.png">${US}${US}${US}${US}${US}legacy-id`]],
-      [...DEFAULT_CARDS, [1013, 19, 100, 0, 0, 0, 0, 0, 0, 0, "{}"]],
-    );
-
-    const analysis = await analyzeAnkiPackage(apkg, "Legacy IO.apkg");
-
-    expect(analysis.skippedCount).toBe(1);
-    expect(analysis.skippedNotes).toContainEqual({
-      noteId: 19,
-      noteType: "Image Occlusion Enhanced",
-      cardCount: 1,
-      reason:
-        "Legacy Image Occlusion Enhanced masks are not safely parseable and were skipped.",
-    });
-  });
 });

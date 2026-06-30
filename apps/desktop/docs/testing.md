@@ -1,18 +1,22 @@
 # Testing Philosophy
 
-Armin's tests protect persisted study-state invariants. The core contract is:
-given a Profile database, service operations must preserve the relationships
-between Flashcards, Review units, the Prerequisite graph, Frontier selection, and
-scheduling regardless of whether the caller is the UI, MCP, import, or future
-automation.
+Armin keeps a small test suite. Tests protect durable core service contracts, not
+every bug fix, branch, or UI helper. When a change needs confidence, prefer
+running the app, targeted manual verification, typecheck, lint, or the existing
+service/E2E tests before adding another test file.
+
+Do not add a test just because a bug was fixed. Add or change a test only when
+the behavior is a stable service invariant that should still be true after the
+implementation is rewritten.
 
 ## Center of Gravity
 
-Service tests against a real temporary SQLite Profile database are the default.
-They are the right place to test domain behavior because the highest-risk bugs
-are persisted-state bugs: a Locked flashcard entering review, a Secured
-prerequisite failing to unlock dependents, a Frontier cap being applied per Deck,
-or delete/archive leaving the Prerequisite graph inconsistent.
+Service tests against a real temporary SQLite Profile database are the unit test
+boundary. Vitest is configured to run only `src/main/services/**/*.test.ts`.
+These tests are worth keeping because the highest-risk bugs are persisted-state
+bugs: a Locked flashcard entering review, a Secured prerequisite failing to
+unlock dependents, a Frontier cap being applied per Deck, or delete/archive
+leaving the Prerequisite graph inconsistent.
 
 Prefer service tests for:
 
@@ -21,10 +25,19 @@ Prefer service tests for:
 - Secured and Locked flashcard transitions
 - Prerequisite graph edges, cycles, propagation, and layout persistence
 - Frontier selection
-- Profile isolation
+- Profile lifecycle and isolation
 - import, export, and restore behavior
-- MCP parity with UI behavior when the behavior is domain-owned
-- migrations and persisted shape changes
+
+Avoid unit tests for:
+
+- renderer components and local UI helpers
+- Electron user-data path wiring
+- migration bookkeeping and one-off backfills
+- bug regressions that do not describe a durable service contract
+
+MCP tests are the exception outside `src/main/services`: keep them in the
+separate `test:mcp` lane because the local agent interface is a first-class app
+surface.
 
 ## Database Setup
 
@@ -47,24 +60,17 @@ reached through a service operation.
 
 ## Renderer Tests
 
-Renderer tests are for local UI logic only. They should not duplicate service
-invariants.
-
-Use renderer tests for:
-
-- graph layout calculations
-- image occlusion reveal rules
-- keyboard or navigation state machines
-- form serialization or parsing owned by the renderer
-- canvas gesture orchestration that can be tested without Electron
-
-Do not use renderer tests to prove whether Locked flashcards are excluded from
-review, delete removes review history, Frontier caps are enforced, or Secured
-requires every Review unit. Those belong in service tests.
+Do not add renderer unit tests by default. Renderer behavior should be covered by
+manual verification or by the sparse E2E journeys when it is truly a critical
+user path. If renderer logic becomes complex enough to deserve unit coverage,
+first consider moving the durable rule into a main service or shared domain
+module; otherwise discuss the exception before adding the test.
 
 ## E2E Tests
 
-E2E tests provide wiring and journey confidence. Keep them sparse.
+E2E tests provide wiring and journey confidence. Keep them sparse and focused on
+flows that prove the packaged Electron app can move real data through preload,
+IPC, services, and the renderer.
 
 Use E2E tests to prove critical paths work across Electron, preload, IPC, and
 renderer:
@@ -74,30 +80,31 @@ renderer:
 - create a Flashcard
 - complete a review session
 - edit the Prerequisite graph through the canvas
-- archive or delete with visible consequence confirmation
-- import, export, or restore when those journeys are touched
+- archive or delete with visible consequence confirmation, if it becomes a
+  release-critical flow
+- import, export, or restore, if it becomes a release-critical flow
 
-Do not push every domain edge case through E2E. Domain edge cases belong in
-service tests because they are faster, clearer, and more deterministic.
+Do not add E2E tests for performance investigations, individual bug fixes, or
+domain edge cases. Domain contracts belong in service tests; everything else
+should be manually verified unless it is part of the app's core release smoke
+journey.
 
 ## Coverage
 
 Armin does not use numeric coverage targets as the definition of "tested".
-Coverage means the behavior's important scenarios and failure modes are asserted
-at the right layer.
+Coverage means the core service invariants are represented at least once in a
+clear, durable test. More tests are not automatically better.
 
-Add or update tests when a change touches:
+Before adding a test, ask:
 
-- Flashcard creation, update, archive, or delete
-- Review unit generation or scheduling
-- Secured or Locked flashcard transitions
-- Prerequisite graph edges or propagation
-- Frontier selection
-- Profile isolation
-- import, export, or restore
-- IPC, preload, or shared command contracts
-- MCP tools or UI parity
-- migrations
+- Is this a core service contract rather than a UI detail or implementation
+  branch?
+- Would this behavior still matter if the internals were rewritten?
+- Does an existing service test already cover the invariant?
+- Is this more useful than a manual check recorded in the PR or issue?
+
+If the answer is not clearly yes for the first two questions, do not add the
+test.
 
 ## Naming
 

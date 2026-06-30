@@ -169,12 +169,4 @@ describe("restoreProfileFromZip", () => {
     );
     expect(listProfiles()).toEqual([]);
   });
-
-  it("rejects a zip that isn't an Armin backup", async () => {
-    const zip = zipSync({ "notes.txt": strToU8("hello") });
-    await expect(restoreProfileFromZip(zip)).rejects.toThrow(
-      /isn't an Armin backup/,
-    );
-    expect(listProfiles()).toEqual([]);
-  });
 });

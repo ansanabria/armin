@@ -228,6 +228,7 @@ export default function SettingsPage() {
       <Tabs defaultValue="scheduling">
         <TabsList>
           <TabsTab value="scheduling">Scheduling</TabsTab>
+          <TabsTab value="keyboard">Keyboard</TabsTab>
           <TabsTab value="ai">AI</TabsTab>
           <TabsTab value="data">Data</TabsTab>
           <TabsTab value="appearance">Appearance</TabsTab>
@@ -400,14 +401,16 @@ export default function SettingsPage() {
         )}
         </TabsPanel>
 
-        <TabsPanel value="ai" className="space-y-10">
+        <TabsPanel value="keyboard" className="space-y-10">
         <Section
           title="Keyboard shortcuts"
           description="Rebind app-wide shortcuts for navigation, review, and cram. Only the ones you change are saved per profile."
         >
           <KeybindingSettings />
         </Section>
+        </TabsPanel>
 
+        <TabsPanel value="ai" className="space-y-10">
         <Section
           title="AI flashcard creation"
           description="Connect a coding agent to Armin's local MCP server so it can generate flashcards."

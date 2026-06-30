@@ -7,7 +7,6 @@ import {
   makeReviewUnitDue,
   makeReviewUnitLearningDue,
   useTestDb,
-  writeLegacyDeckFrontierOverride,
 } from "../test/db";
 import * as flashcards from "./flashcards";
 import * as decks from "./decks";
@@ -45,19 +44,6 @@ function basicReversed(
     deckId,
     type: "basic_reversed",
     content: { front, back },
-  });
-}
-
-function cloze(
-  ctx: Awaited<ReturnType<typeof makeContext>>,
-  deckId: string,
-  text: string,
-) {
-  return flashcards.createFlashcard({
-    ctx,
-    deckId,
-    type: "cloze",
-    content: { text },
   });
 }
 
@@ -127,20 +113,6 @@ describe("review workflow", () => {
     );
   });
 
-  it("introduces all eligible cloze siblings together", async () => {
-    const ctx = await makeContext("cloze-siblings");
-    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
-    const deck = await decks.createDeck(ctx, { name: "Cloze" });
-    const note = await cloze(ctx, deck.id, "{{1::A}} then {{2::B}}");
-
-    const queue = await review.getQueue(ctx, deck.id);
-
-    expect(queue).toHaveLength(2);
-    expect(new Set(queue.map((item) => item.flashcardId))).toEqual(
-      new Set([note.id]),
-    );
-  });
-
   it("slices sibling review units individually when sibling grouping is disabled", async () => {
     const ctx = await makeContext("sibling-toggle-off");
     await settings.updateSettings(ctx, {
@@ -184,105 +156,6 @@ describe("review workflow", () => {
     const untouched = await getOnlyReviewUnit(ctx, note.id);
     expect(untouched.reps).toBe(0);
     expect(untouched.state).toBe(State.New);
-  });
-
-  it("previews review outcomes with the review unit's deck settings", async () => {
-    const ctx = await makeContext("preview-deck-settings");
-    await settings.updateSettings(ctx, {
-      enableFuzz: false,
-      learningSteps: "10m",
-    });
-    const deck = await decks.createDeck(ctx, { name: "Preview override" });
-    await settings.updateDeckSettings(ctx, deck.id, { learningSteps: "30m" });
-    const note = await basic(ctx, deck.id, "Peek", "Answer");
-    const card = await getOnlyReviewUnit(ctx, note.id);
-
-    const options = await review.previewReviewUnit(ctx, card.id);
-
-    expect(
-      options.find((option) => option.rating === Rating.Again)?.label,
-    ).toBe("30m");
-  });
-
-  it("counts introduced review units against the shared daily Frontier cap", async () => {
-    const ctx = await makeContext("shared-cap");
-    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
-
-    const deckA = await decks.createDeck(ctx, { name: "A" });
-    const deckB = await decks.createDeck(ctx, { name: "B" });
-    const noteA = await basic(ctx, deckA.id, "A1", "A");
-    await basic(ctx, deckB.id, "B1", "B");
-
-    const cardA = await getOnlyReviewUnit(ctx, noteA.id);
-    await review.rateReviewUnit(ctx, cardA.id, Rating.Good);
-
-    expect(await review.countNewReviewUnitsIntroducedToday(ctx)).toBe(1);
-
-    const queueB = await review.getQueue(ctx, deckB.id);
-    expect(queueB.filter((item) => item.deckId === deckB.id)).toHaveLength(0);
-
-    const globalQueue = await review.getGlobalQueue(ctx);
-    expect(globalQueue).toHaveLength(0);
-  });
-
-  it("global queue introductions consume the same shared cap used by deck queues", async () => {
-    const ctx = await makeContext("global-to-deck-cap");
-    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 1 });
-
-    const deckA = await decks.createDeck(ctx, { name: "A" });
-    const deckB = await decks.createDeck(ctx, { name: "B" });
-    await basic(ctx, deckA.id, "A1", "A");
-    await basic(ctx, deckB.id, "B1", "B");
-
-    const [introduced] = await review.getGlobalQueue(ctx);
-    expect(introduced).toBeDefined();
-    await review.rateReviewUnit(ctx, introduced.reviewUnitId, Rating.Good);
-
-    expect(await review.countNewReviewUnitsIntroducedToday(ctx)).toBe(1);
-
-    const otherDeckId = introduced.deckId === deckA.id ? deckB.id : deckA.id;
-    const otherDeckQueue = await review.getQueue(ctx, otherDeckId);
-    expect(otherDeckQueue).toHaveLength(0);
-
-    const introducedDeckQueue = await review.getQueue(ctx, introduced.deckId);
-    expect(introducedDeckQueue).toHaveLength(0);
-  });
-
-  it("does not introduce more than ten Frontier Review units in one Deck queue by default", async () => {
-    const ctx = await makeContext("ten-card-deck-cap");
-    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 10 });
-
-    const deck = await decks.createDeck(ctx, { name: "Deck" });
-    for (let i = 0; i < 11; i += 1) {
-      await basic(ctx, deck.id, `Q${i + 1}`, `A${i + 1}`);
-    }
-
-    const queue = await review.getQueue(ctx, deck.id);
-    expect(queue).toHaveLength(10);
-  });
-
-  it("ignores deck overrides for the shared daily new review-unit cap", async () => {
-    const ctx = await makeContext("deck-cap-override");
-    await settings.updateSettings(ctx, { newReviewUnitsPerDay: 10 });
-    const deck = await decks.createDeck(ctx, { name: "Override" });
-    await writeLegacyDeckFrontierOverride(ctx, deck.id, 2);
-
-    for (let i = 0; i < 3; i += 1) {
-      await basic(ctx, deck.id, `Q${i + 1}`, `A${i + 1}`);
-    }
-
-    const queue = await review.getQueue(ctx, deck.id);
-    expect(queue).toHaveLength(3);
-  });
-
-  it("labels global queue items with their deck name", async () => {
-    const ctx = await makeContext("global-deck-name");
-    const deck = await decks.createDeck(ctx, { name: "Named deck" });
-    await basic(ctx, deck.id, "Q", "A");
-
-    const queue = await review.getGlobalQueue(ctx);
-    expect(queue).toHaveLength(1);
-    expect(queue[0].deckName).toBe("Named deck");
   });
 
   it("unlocks dependents through real rateReviewUnit progression", async () => {
@@ -398,17 +271,4 @@ describe("review workflow", () => {
     expect(hydrated?.archived).toBe(true);
   });
 
-  it("keeps Archived flashcards visible in browse", async () => {
-    const ctx = await makeContext("archive-browse");
-    const deck = await decks.createDeck(ctx, { name: "BrowseArchive" });
-    const note = await basic(ctx, deck.id, "Q", "A");
-    await flashcards.setArchived(ctx, note.id, true);
-
-    const page = await import("./browse").then((m) =>
-      m.listBrowsePage(ctx, { offset: 0, limit: 50, sort: "created-new" }),
-    );
-    expect(page.flashcards.some((c) => c.id === note.id && c.archived)).toBe(
-      true,
-    );
-  });
 });

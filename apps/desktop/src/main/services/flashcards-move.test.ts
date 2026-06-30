@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
-import { schema } from "../db";
 import {
   getOnlyReviewUnit,
   makeContext,
@@ -44,35 +42,8 @@ describe("moveFlashcard", () => {
     // The review unit and its logged history survive the move.
     const movedReviewUnit = await getOnlyReviewUnit(ctx, card.id);
     expect(movedReviewUnit.id).toBe(reviewUnit.id);
+    expect(movedReviewUnit.deckId).toBe(target.id);
     expect(await reviewLogsFor(ctx, reviewUnit.id)).toHaveLength(1);
-  });
-
-  it("move updates review-unit deckId", async () => {
-    const ctx = await makeContext("move-review-unit-deck");
-    const source = await decks.createDeck(ctx, { name: "Source" });
-    const target = await decks.createDeck(ctx, { name: "Target" });
-    const card = await basic(ctx, source.id, "Card");
-
-    await flashcards.moveFlashcard(ctx, card.id, target.id);
-
-    const reviewUnit = await getOnlyReviewUnit(ctx, card.id);
-    expect(reviewUnit.deckId).toBe(target.id);
-  });
-
-  it("move resets graph position", async () => {
-    const ctx = await makeContext("move-position");
-    const source = await decks.createDeck(ctx, { name: "Source" });
-    const target = await decks.createDeck(ctx, { name: "Target" });
-    const card = await basic(ctx, source.id, "Card");
-    await graph.saveLayout(ctx, source.id, [
-      { flashcardId: card.id, x: 5, y: 7 },
-    ]);
-
-    await flashcards.moveFlashcard(ctx, card.id, target.id);
-
-    const moved = await flashcards.getFlashcard(ctx, card.id);
-    expect(moved?.posX).toBeNull();
-    expect(moved?.posY).toBeNull();
   });
 
   it("connected flashcard move deletes incoming and outgoing prerequisite edges", async () => {
@@ -121,39 +92,4 @@ describe("moveFlashcard", () => {
     expect((await flashcards.getFlashcard(ctx, prereq.id))?.locked).toBe(false);
   });
 
-  it("same-deck no-op move does not delete edges", async () => {
-    const ctx = await makeContext("move-same-deck");
-    const deck = await decks.createDeck(ctx, { name: "Deck" });
-    const prereq = await basic(ctx, deck.id, "Prereq");
-    const dependent = await basic(ctx, deck.id, "Dependent");
-    await graph.addPrereq(ctx, prereq.id, dependent.id);
-
-    const moved = await flashcards.moveFlashcard(ctx, dependent.id, deck.id);
-    expect(moved?.id).toBe(dependent.id);
-
-    expect(await graph.getPrereqIds(ctx, dependent.id)).toEqual([prereq.id]);
-    const edges = ctx.db
-      .select()
-      .from(schema.flashcardPrereqs)
-      .where(eq(schema.flashcardPrereqs.dependentId, dependent.id))
-      .all();
-    expect(edges).toHaveLength(1);
-  });
-
-  it("returns undefined for a missing flashcard", async () => {
-    const ctx = await makeContext("move-missing");
-    const target = await decks.createDeck(ctx, { name: "Target" });
-    expect(
-      await flashcards.moveFlashcard(ctx, "nonexistent", target.id),
-    ).toBeUndefined();
-  });
-
-  it("throws when the target deck does not exist", async () => {
-    const ctx = await makeContext("move-bad-deck");
-    const source = await decks.createDeck(ctx, { name: "Source" });
-    const card = await basic(ctx, source.id, "Card");
-    await expect(
-      flashcards.moveFlashcard(ctx, card.id, "nonexistent"),
-    ).rejects.toThrow(/Deck not found/);
-  });
 });
