@@ -2,7 +2,7 @@
   "name": "armin",
   "productName": "Armin",
   "desktopName": "armin.desktop",
-  "version": "0.3.1-alpha",
+  "version": "0.4.0-beta",
   "description": "Local-first hierarchical spaced-repetition flashcards for desktop.",
   "main": ".vite/build/main.js",
   "private": true,
