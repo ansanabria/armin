@@ -23,6 +23,35 @@ import {
  * migration runs (see `refreshAllLockedStates`).
  */
 
+/**
+ * Build a temp migrations folder containing the bundled migrations up to and
+ * including `maxIdx`. Drizzle re-applies every journal entry newer than the
+ * recorded mark, so a test that re-runs an older idempotent data migration must
+ * exclude newer, non-idempotent schema migrations (e.g. an `ADD COLUMN` that
+ * fails once the column already exists). Runtime migration depends only on the
+ * SQL files and journal, so snapshots are not copied.
+ */
+function migrationsFolderThrough(maxIdx: number) {
+  const real = path.join(process.cwd(), "drizzle");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "armin-drizzle-"));
+  fs.mkdirSync(path.join(tmp, "meta"), { recursive: true });
+  const journal = JSON.parse(
+    fs.readFileSync(path.join(real, "meta", "_journal.json"), "utf8"),
+  ) as { entries: { idx: number; tag: string }[] };
+  journal.entries = journal.entries.filter((entry) => entry.idx <= maxIdx);
+  fs.writeFileSync(
+    path.join(tmp, "meta", "_journal.json"),
+    JSON.stringify(journal),
+  );
+  for (const entry of journal.entries) {
+    fs.copyFileSync(
+      path.join(real, `${entry.tag}.sql`),
+      path.join(tmp, `${entry.tag}.sql`),
+    );
+  }
+  return tmp;
+}
+
 describe("0015 cross-deck prereq edge deletion", () => {
   let dir: string;
   let client: Database.Database;
@@ -220,10 +249,16 @@ describe("cross-deck prereq lock repair", () => {
     // below 0015's journal time (1782300000000) so the next runMigrations call
     // re-applies only 0015 (its delete is idempotent) and, because a migration
     // was applied, runs the denormalized-state repair — exactly what any entry
-    // point (IPC, MCP, restore) triggers after an upgrade.
+    // point (IPC, MCP, restore) triggers after an upgrade. Re-apply against a
+    // folder that stops at 0015 so newer schema migrations don't re-run.
     ctx.db.run(sql`UPDATE __drizzle_migrations SET created_at = 1782299999999`);
 
-    await runMigrations(ctx.profileId);
+    const folder = migrationsFolderThrough(15);
+    try {
+      await runMigrations(ctx.profileId, { migrationsFolder: folder });
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
 
     // The cross-deck edge is gone and the stale lock flags were recomputed.
     expect(

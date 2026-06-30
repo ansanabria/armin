@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
@@ -42,8 +42,20 @@ import {
   sortDecks,
   type DeckSortKey,
 } from "@/lib/sort-decks";
-import { deckKeys, invalidateCoreData } from "@/lib/armin-query";
+import {
+  deckKeys,
+  flashcardKeys,
+  invalidateDeckScopedData,
+} from "@/lib/armin-query";
 import type { UiDeck } from "@/types/view-models";
+import type { BrowseFlashcard } from "@/types/window";
+import { BROWSE_PAGE_SIZE } from "../../shared/browse";
+
+type BrowsePageResult = {
+  flashcards: BrowseFlashcard[];
+  filteredTotal: number;
+  libraryTotal: number;
+};
 
 const IMPORT_TYPE_LABELS: Record<string, string> = {
   basic: "Basic",
@@ -88,6 +100,7 @@ export default function DecksPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingDeck, setDeletingDeck] = useState<UiDeck | null>(null);
   const [closingAfterDelete, setClosingAfterDelete] = useState(false);
+  const prefetchedDecksRef = useRef<Set<string>>(new Set());
 
   const decksQuery = useQuery({
     queryKey: deckKeys.all,
@@ -96,6 +109,41 @@ export default function DecksPage() {
 
   const decks = decksQuery.data ?? [];
   const sortedDecks = useMemo(() => sortDecks(decks, sort), [decks, sort]);
+
+  const prefetchDeck = (deckId: string) => {
+    if (prefetchedDecksRef.current.has(deckId)) return;
+    prefetchedDecksRef.current.add(deckId);
+
+    void queryClient.prefetchQuery({
+      queryKey: deckKeys.detail(deckId),
+      queryFn: () => window.armin.decks.get(deckId),
+    });
+    void queryClient.prefetchQuery({
+      queryKey: flashcardKeys.deckTags(deckId),
+      queryFn: () => window.armin.flashcards.listDeckTags(deckId),
+    });
+    void queryClient.prefetchInfiniteQuery({
+      queryKey: flashcardKeys.browse({ deckId, sort: "due-soon" }),
+      queryFn: ({ pageParam }) =>
+        window.armin.flashcards.browse({
+          offset: pageParam,
+          limit: BROWSE_PAGE_SIZE,
+          sort: "due-soon",
+          deckId,
+        }),
+      initialPageParam: 0,
+      getNextPageParam: (
+        lastPage: BrowsePageResult,
+        allPages: BrowsePageResult[],
+      ) => {
+        const loaded = allPages.reduce(
+          (count, page) => count + page.flashcards.length,
+          0,
+        );
+        return loaded < lastPage.filteredTotal ? loaded : undefined;
+      },
+    });
+  };
 
   const createDeck = useMutation({
     mutationFn: (input: { name: string; description?: string | null }) =>
@@ -116,7 +164,15 @@ export default function DecksPage() {
       window.armin.decks.update(input),
     onSuccess: (deck) => {
       if (!deck) return;
-      invalidateCoreData(queryClient, deck.id);
+      queryClient.setQueryData<UiDeck[]>(deckKeys.all, (current) =>
+        current?.map((cached) =>
+          cached.id === deck.id ? { ...cached, ...deck } : cached,
+        ),
+      );
+      queryClient.setQueryData(deckKeys.detail(deck.id), (current: UiDeck) =>
+        current ? { ...current, ...deck } : current,
+      );
+      invalidateDeckScopedData(queryClient, deck.id);
       toast({ tone: "success", title: "Deck renamed", description: deck.name });
       setClosingAfterRename(true);
       setRenameOpen(false);
@@ -129,7 +185,11 @@ export default function DecksPage() {
   const deleteDeck = useMutation({
     mutationFn: (id: string) => window.armin.decks.delete(id),
     onSuccess: (_result, id) => {
-      invalidateCoreData(queryClient, id);
+      queryClient.setQueryData<UiDeck[]>(deckKeys.all, (current) =>
+        current?.filter((deck) => deck.id !== id),
+      );
+      queryClient.removeQueries({ queryKey: deckKeys.detail(id) });
+      invalidateDeckScopedData(queryClient, id);
       toast({ tone: "success", title: "Deck deleted" });
       setClosingAfterDelete(true);
       setDeleteOpen(false);
@@ -256,6 +316,7 @@ export default function DecksPage() {
             <li key={deck.id}>
               <DeckTile
                 deck={deck}
+                onPrefetch={() => prefetchDeck(deck.id)}
                 onRename={() => {
                   setRenamingDeck(deck);
                   setRenameName(deck.name);
@@ -421,10 +482,12 @@ function DeckActionItems({
 
 function DeckTile({
   deck,
+  onPrefetch,
   onRename,
   onDelete,
 }: {
   deck: UiDeck;
+  onPrefetch: () => void;
   onRename: () => void;
   onDelete: () => void;
 }) {
@@ -433,7 +496,12 @@ function DeckTile({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger className="group relative flex h-full cursor-pointer flex-col border border-border bg-surface p-5 transition-colors duration-150 hover:border-border-strong hover:bg-surface-sunken">
+      <ContextMenuTrigger
+        className="group relative flex h-full cursor-pointer flex-col border border-border bg-surface p-5 transition-colors duration-150 hover:border-border-strong hover:bg-surface-sunken"
+        onPointerEnter={onPrefetch}
+        onFocus={onPrefetch}
+        onPointerDown={onPrefetch}
+      >
         <Link
           to="/deck/$deckId"
           params={{ deckId: deck.id }}

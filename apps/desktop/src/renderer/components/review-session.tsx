@@ -34,6 +34,7 @@ import {
   type CardFormValues,
 } from "@/components/flashcard-form-dialog";
 import { reviewKeys } from "@/lib/armin-query";
+import { useScope } from "@/keybindings/keybindings-provider";
 import type {
   FlashcardDeleteConsequences,
   Grade,
@@ -323,33 +324,52 @@ export function ReviewSession({
     setTyped("");
   }, [card?.id]);
 
+  const reviewActive = !isLoading && !isError && Boolean(card);
+
+  // Reveal (Space), rate (1–4), and step (←/→) are app-level Commands routed
+  // through the keybinding dispatcher; the bare-key-in-input suppression and
+  // modal isolation are handled centrally, so these only carry domain guards.
+  useScope(
+    "review",
+    {
+      "review.flip": () => {
+        if (!flipped) reveal();
+      },
+      "review.rate.again": () => {
+        if (flipped) void rate(1 as Grade);
+      },
+      "review.rate.hard": () => {
+        if (flipped) void rate(2 as Grade);
+      },
+      "review.rate.good": () => {
+        if (flipped) void rate(3 as Grade);
+      },
+      "review.rate.easy": () => {
+        if (flipped) void rate(4 as Grade);
+      },
+      "review.prev": () => {
+        if (!flipped) goPrev();
+      },
+      "review.next": () => {
+        if (!flipped) goNext();
+      },
+    },
+    { enabled: reviewActive },
+  );
+
+  // Enter-to-reveal stays an intrinsic convention (it also works while the
+  // type-answer field is focused, where the input submits on Enter).
   useEffect(() => {
-    if (isLoading || isError || !card) return;
+    if (!reviewActive) return;
     const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const inField =
-        target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
-      if (!flipped) {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          reveal();
-        } else if (e.key === " " && !inField) {
-          e.preventDefault();
-          reveal();
-        } else if (e.key === "ArrowLeft" && !inField) {
-          e.preventDefault();
-          goPrev();
-        } else if (e.key === "ArrowRight" && !inField) {
-          e.preventDefault();
-          goNext();
-        }
-      } else if (["1", "2", "3", "4"].includes(e.key) && !inField) {
-        void rate(Number(e.key) as Grade);
+      if (e.key === "Enter" && !flipped) {
+        e.preventDefault();
+        reveal();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isLoading, isError, card, flipped, rating, index, cards.length]);
+  }, [reviewActive, flipped]);
 
   return (
     <div className="mx-auto max-w-2xl">

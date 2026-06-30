@@ -258,6 +258,7 @@ export const ipcCommands = {
         newReviewUnitsPerDay: z.number().int().min(0).optional(),
         keepSiblingReviewUnitsTogether: z.boolean().optional(),
         schedulingPreset: z.enum(SCHEDULING_PRESET_VALUES).optional(),
+        keybindings: z.string().nullish(),
       }),
     ),
     getDeck: command(

@@ -58,7 +58,7 @@ export async function getSettings(ctx: ServiceContext): Promise<Settings> {
 }
 
 export type SettingsUpdate = Partial<SchedulingSettings> &
-  Partial<Pick<Settings, "schedulingPreset">>;
+  Partial<Pick<Settings, "schedulingPreset" | "keybindings">>;
 
 type DeckSettingOverrideKey = Exclude<
   keyof SchedulingSettings,

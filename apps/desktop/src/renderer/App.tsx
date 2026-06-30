@@ -5,7 +5,7 @@ import { queryClient } from "@/lib/query";
 import { router } from "@/router";
 import { ToastProvider } from "@/components/ui/toast";
 import { ThemeProvider } from "@/theme/theme-provider";
-import { ViewTransitionsProvider } from "@/theme/view-transitions-provider";
+import { KeybindingsProvider } from "@/keybindings/keybindings-provider";
 
 export default function App() {
   // Refresh all cached data when the main process signals a change
@@ -20,11 +20,11 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <ViewTransitionsProvider>
-          <ToastProvider>
+        <ToastProvider>
+          <KeybindingsProvider>
             <RouterProvider router={router} />
-          </ToastProvider>
-        </ViewTransitionsProvider>
+          </KeybindingsProvider>
+        </ToastProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
