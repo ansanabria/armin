@@ -71,3 +71,20 @@ A flashcard the learner has reversibly set aside: excluded from review and inert
 in the prerequisite graph, but still visible in browse and with all content and
 history preserved. The reversible counterpart to deletion.
 _Avoid_: Suspended, trashed, hidden
+
+**Assistant**:
+The in-app AI collaborator shown in the right sidebar. It helps the learner
+create and manage decks, flashcards, and prerequisite graphs by reading the
+active Profile, applying Armin's card-writing guidance, producing drafts, and
+calling the same study services used by the UI and MCP server.
+_Avoid_: Bot, copilot
+
+**Assistant conversation**:
+A Profile-scoped local chat history between the learner and the Assistant. It is
+part of the Profile's local study data and does not carry across Profiles.
+_Avoid_: Global chat, account history
+
+**Assistant draft**:
+A proposed study-data change prepared by the Assistant for learner review before
+it is applied, such as a deck outline, flashcard batch, or prerequisite graph.
+_Avoid_: Uncommitted database row, temporary flashcard
