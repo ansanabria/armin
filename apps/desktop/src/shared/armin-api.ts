@@ -18,6 +18,13 @@ import type { CramPool, CramScope } from "../main/services/cram";
 import type { DeckGraph } from "../main/services/graph";
 import type { McpSetup } from "./mcp";
 import type {
+  AssistantConversation,
+  AssistantProvider,
+  AssistantSendMessageInput,
+  AssistantSendMessageResult,
+  AssistantStreamEvent,
+} from "./assistant";
+import type {
   AnkiAnalysis,
   AnkiImportResult,
 } from "../main/services/anki/import";
@@ -154,6 +161,14 @@ export interface ArminApi {
       error: string | null;
     }>;
   };
+  assistant: {
+    listProviders(): Promise<AssistantProvider[]>;
+    openProviderUrl(providerId: string): Promise<{ ok: true }>;
+    listConversations(): Promise<AssistantConversation[]>;
+    sendMessage(input: AssistantSendMessageInput): Promise<AssistantSendMessageResult>;
+    cancel(conversationId: string): Promise<{ ok: true }>;
+    onStream(cb: (event: AssistantStreamEvent) => void): () => void;
+  };
   import: {
     analyzeAnki(bytes: Uint8Array, fileName: string): Promise<AnkiAnalysis>;
     commitAnki(input: {
@@ -226,4 +241,9 @@ export type {
   CramPool,
   CramScope,
   DeckGraph,
+  AssistantProvider,
+  AssistantConversation,
+  AssistantSendMessageInput,
+  AssistantSendMessageResult,
+  AssistantStreamEvent,
 };

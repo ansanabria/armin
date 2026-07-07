@@ -46,6 +46,11 @@ export const mcpKeys = {
   enabled: ["mcp", "enabled"] as const,
 };
 
+export const assistantKeys = {
+  providers: ["assistant", "providers"] as const,
+  conversations: ["assistant", "conversations"] as const,
+};
+
 function browseQueryIncludesDeck(queryKey: readonly unknown[], deckId: string) {
   if (queryKey[0] !== "flashcards" || queryKey[1] !== "browse") return false;
   const filters = queryKey[2] as BrowseQueryFilters | undefined;

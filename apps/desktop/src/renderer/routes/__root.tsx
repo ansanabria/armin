@@ -4,14 +4,16 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { Dumbbell, Layers, Library, Settings } from "lucide-react";
+import { Bot, Dumbbell, Layers, Library, Settings } from "lucide-react";
 import { useEffect, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
+import { AssistantSidebar } from "@/components/assistant-sidebar";
 import { useScope } from "@/keybindings/keybindings-provider";
 import { KeyboardOverlays } from "@/components/keyboard-overlays";
 import { ProfileSwitcher } from "@/components/profile-switcher";
 import { ReviewNavLink } from "@/components/review-nav-link";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
 import { WindowControls } from "@/components/window-controls";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +31,7 @@ export default function RootLayout() {
   const [optimisticPathname, setOptimisticPathname] = useState<string | null>(
     null,
   );
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const activePathname = optimisticPathname ?? pathname;
 
   useEffect(() => {
@@ -145,20 +148,36 @@ export default function RootLayout() {
         </nav>
 
         <div className="flex items-center justify-self-end">
+          <Button
+            type="button"
+            variant={assistantOpen ? "subtle" : "ghost"}
+            size="icon-sm"
+            className="titlebar-no-drag"
+            aria-label={assistantOpen ? "Close Assistant" : "Open Assistant"}
+            aria-pressed={assistantOpen}
+            onClick={() => setAssistantOpen((open) => !open)}
+          >
+            <Bot className="h-4 w-4" strokeWidth={1.5} />
+          </Button>
           <ThemeToggle />
           <ProfileSwitcher />
           <ReviewNavLink />
           <WindowControls />
         </div>
       </header>
-      <main className="route-view flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-        {/* Layout (centered vs. full-bleed) follows the rendered page via the
-            `route-pad`/`route-scroll` `:has([data-fullbleed])` rules. */}
-        <div className="route-scroll armin-scrollbar armin-scrollbar-gutter-bg notebook-bg min-h-0 flex-1 overflow-y-auto">
-          <div className="route-pad mx-auto w-full max-w-5xl px-6 py-8">
-            <Outlet />
+      <main className="route-view flex min-h-0 w-full flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* Layout (centered vs. full-bleed) follows the rendered page via the
+              `route-pad`/`route-scroll` `:has([data-fullbleed])` rules. */}
+          <div className="route-scroll armin-scrollbar armin-scrollbar-gutter-bg notebook-bg min-h-0 flex-1 overflow-y-auto">
+            <div className="route-pad mx-auto w-full max-w-5xl px-6 py-8">
+              <Outlet />
+            </div>
           </div>
         </div>
+        {assistantOpen && (
+          <AssistantSidebar onClose={() => setAssistantOpen(false)} />
+        )}
       </main>
       <KeyboardOverlays />
     </div>

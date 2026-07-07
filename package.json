@@ -32,7 +32,7 @@
     "electron@41.7.2": true,
     "esbuild@0.18.20": true,
     "esbuild@0.25.12": true,
-    "esbuild@0.28.0": true
+    "esbuild@0.28.1": true
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.62.0",

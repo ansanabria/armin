@@ -72,6 +72,13 @@ export const ipcCommandNames = {
     setPort: "mcp:setPort",
     retry: "mcp:retry",
   },
+  assistant: {
+    listProviders: "assistant:listProviders",
+    openProviderUrl: "assistant:openProviderUrl",
+    listConversations: "assistant:listConversations",
+    sendMessage: "assistant:sendMessage",
+    cancel: "assistant:cancel",
+  },
   settings: {
     get: "settings:get",
     update: "settings:update",
@@ -162,6 +169,13 @@ export const ipcChannels = {
     setPort: channel(ipcCommandNames.mcp.setPort),
     retry: channel(ipcCommandNames.mcp.retry),
   },
+  assistant: {
+    listProviders: channel(ipcCommandNames.assistant.listProviders),
+    openProviderUrl: channel(ipcCommandNames.assistant.openProviderUrl),
+    listConversations: channel(ipcCommandNames.assistant.listConversations),
+    sendMessage: channel(ipcCommandNames.assistant.sendMessage),
+    cancel: channel(ipcCommandNames.assistant.cancel),
+  },
   settings: {
     get: channel(ipcCommandNames.settings.get),
     update: channel(ipcCommandNames.settings.update),
@@ -179,4 +193,5 @@ export const ipcChannels = {
 export const ipcEvents = {
   dataChanged: "armin:data-changed",
   shellMaximized: "shell:maximized",
+  assistantStream: "assistant:stream",
 } as const;

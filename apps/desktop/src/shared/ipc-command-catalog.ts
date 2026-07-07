@@ -3,6 +3,7 @@ import { BROWSE_SORT_KEYS } from "./browse";
 import { FLASHCARD_TYPES } from "./flashcard-types";
 import { ipcCommandNames } from "./ipc-channels";
 import { SCHEDULING_PRESET_VALUES } from "./scheduling-presets";
+import type { AssistantProviderId } from "./assistant";
 
 export type IpcCommand<TSchema extends z.ZodType = z.ZodType> = {
   channel: string;
@@ -35,6 +36,11 @@ const deckSettingsPatch = z.object({
   prereqStabilityFloor: z.number().nullable().optional(),
   keepSiblingReviewUnitsTogether: z.boolean().nullable().optional(),
 });
+const assistantProviderId = z.enum([
+  "codex",
+  "claude-code",
+  "opencode",
+] satisfies AssistantProviderId[]);
 
 export const ipcCommands = {
   profiles: {
@@ -241,6 +247,32 @@ export const ipcCommands = {
       z.object({ port: z.number().int().min(1024).max(65535) }),
     ),
     retry: command(ipcCommandNames.mcp.retry, optionalVoid),
+  },
+  assistant: {
+    listProviders: command(
+      ipcCommandNames.assistant.listProviders,
+      optionalVoid,
+    ),
+    openProviderUrl: command(
+      ipcCommandNames.assistant.openProviderUrl,
+      z.object({ providerId: z.string() }),
+    ),
+    listConversations: command(
+      ipcCommandNames.assistant.listConversations,
+      optionalVoid,
+    ),
+    sendMessage: command(
+      ipcCommandNames.assistant.sendMessage,
+      z.object({
+        conversationId: z.string().optional(),
+        providerId: assistantProviderId,
+        message: z.string().min(1),
+      }),
+    ),
+    cancel: command(
+      ipcCommandNames.assistant.cancel,
+      z.object({ conversationId: z.string() }),
+    ),
   },
   settings: {
     get: command(ipcCommandNames.settings.get, optionalVoid),

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ArminApi, ArminShell } from "../shared/armin-api";
+import type { AssistantStreamEvent } from "../shared/assistant";
 import {
   ipcChannels,
   ipcEvents,
@@ -108,6 +109,23 @@ const api = {
     getPort: () => invoke(c.mcp.getPort),
     setPort: (port: number) => invoke(c.mcp.setPort, { port }),
     retry: () => invoke(c.mcp.retry),
+  },
+  assistant: {
+    listProviders: () => invoke(c.assistant.listProviders),
+    openProviderUrl: (providerId: string) =>
+      invoke(c.assistant.openProviderUrl, { providerId }),
+    listConversations: () => invoke(c.assistant.listConversations),
+    sendMessage: (input: unknown) => invoke(c.assistant.sendMessage, input),
+    cancel: (conversationId: string) =>
+      invoke(c.assistant.cancel, { conversationId }),
+    onStream: (cb: (event: AssistantStreamEvent) => void) => {
+      const listener = (_event: unknown, streamEvent: AssistantStreamEvent) =>
+        cb(streamEvent);
+      ipcRenderer.on(ipcEvents.assistantStream, listener);
+      return () => {
+        ipcRenderer.removeListener(ipcEvents.assistantStream, listener);
+      };
+    },
   },
   import: {
     analyzeAnki: (bytes: Uint8Array, fileName: string) =>

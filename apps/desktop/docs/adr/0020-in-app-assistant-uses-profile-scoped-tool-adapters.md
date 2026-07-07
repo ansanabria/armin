@@ -15,17 +15,35 @@ adapter must therefore route writes through the existing service chokepoints
 described in ADR 0005 and expose primitive and batch operations consistent with
 ADR 0006.
 
-The first provider integrations are CLI-backed adapters for Codex and Claude
-Code. Users authenticate those tools outside Armin and Armin invokes the local
-authenticated runtime, so Armin does not custody API keys and users can rely on
-their own subscriptions. Provider-specific session, streaming, and tool-call
-mechanics stay behind a common Assistant provider interface.
+The first provider integrations are SDK-backed, provider-managed local adapters
+for Codex, Claude Code, and OpenCode. Armin detects whether each provider is
+installed or configured on the local machine, then invokes the selected harness
+through its SDK when it is ready. Armin does not install providers automatically
+in the first version; if a provider is missing, the Assistant links to that
+provider's official installation instructions and offers a way to check again
+after installation.
+
+Provider setup and authentication remain owned by the provider. Codex and Claude
+Code can use their own local authentication flows so learners can rely on their
+subscriptions without giving Armin subscription credentials. OpenCode is treated
+as a local multi-provider runtime: Armin detects whether it is installed and
+configured, but does not collect OpenCode provider API keys in the first version.
+Provider-specific installation, authentication, configuration, session,
+streaming, and tool-call mechanics stay behind a common Assistant provider
+interface.
 
 Assistant reads and conversations are scoped to the active Profile. The Assistant
 may read profile-wide study context by default while that Profile is active, but
 it must not read across other open Profiles unless the learner switches Profile
-context. Assistant conversations are persisted inside the Profile so they move
-with copied profile data and cannot bleed into other Profiles.
+context. Provider SDK sessions receive explicit Profile context from Armin and
+run from an empty per-Profile Assistant workspace, not from the app's global
+user-data directory or the directory containing Profile databases.
+
+Assistant conversations are persisted inside the Profile so they move with copied
+profile data and cannot bleed into other Profiles. Runtime provider session
+handles are not durable; after restart, Armin reloads the visible conversation
+history from the Profile database and sends recent history in the next provider
+prompt.
 
 The default write mode is Draft. In Draft mode, the Assistant proposes an
 Assistant draft and the learner applies it. Autonomous mode can be explicitly
@@ -44,3 +62,8 @@ Consequence: the MCP server remains the public integration contract for external
 agents, while the Assistant becomes the product-native contract for AI-assisted
 card creation. Both contracts share services and domain invariants rather than
 sharing transport.
+
+Consequence: the Assistant must model provider readiness explicitly. A provider
+can be missing, installed but not authenticated, installed but not configured,
+ready, or in an error state. Missing providers are setup states in the sidebar,
+not broken chat sessions.

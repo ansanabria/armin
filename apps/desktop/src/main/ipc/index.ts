@@ -3,6 +3,7 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  shell,
   type IpcMainInvokeEvent,
   type OpenDialogOptions,
   type SaveDialogOptions,
@@ -23,6 +24,15 @@ import * as cram from "../services/cram";
 import * as graph from "../services/graph";
 import * as settings from "../services/settings";
 import * as mcp from "../services/mcp";
+import {
+  getAssistantProviderUrl,
+  listAssistantProviders,
+} from "../services/assistant-providers";
+import {
+  cancelAssistantConversation,
+  listAssistantConversations,
+  sendAssistantMessage,
+} from "../services/assistant-chat";
 import { storeFlashcardMedia } from "../services/media";
 import { getAppSettings, setMcpEnabled, setMcpPort } from "../services/app-settings";
 import { startEmbeddedMcpServer, stopEmbeddedMcpServer } from "../mcp-http";
@@ -386,6 +396,27 @@ export function registerIpc() {
   register(c.mcp.retry, async () => {
     await startEmbeddedMcpServer();
     return mcp.getMcpStatus();
+  });
+
+  // --- assistant ---
+  register(c.assistant.listProviders, () => listAssistantProviders());
+  register(c.assistant.openProviderUrl, async ({ providerId }) => {
+    await shell.openExternal(getAssistantProviderUrl(providerId));
+    return { ok: true as const };
+  });
+  registerForProfile(c.assistant.listConversations, (ctx) =>
+    listAssistantConversations(ctx),
+  );
+  ipcMain.handle(c.assistant.sendMessage.channel, async (event, payload) => {
+    const ctx = await serviceContextForEvent(event);
+    const input = c.assistant.sendMessage.schema.parse(payload);
+    return sendAssistantMessage({ ctx, webContents: event.sender, input });
+  });
+  ipcMain.handle(c.assistant.cancel.channel, async (event, payload) => {
+    const ctx = await serviceContextForEvent(event);
+    const { conversationId } = c.assistant.cancel.schema.parse(payload);
+    await cancelAssistantConversation(ctx.profileId, conversationId);
+    return { ok: true as const };
   });
 
   // --- settings ---

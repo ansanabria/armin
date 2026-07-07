@@ -269,6 +269,21 @@
   .animate-bar-out {
     animation: a-bar-out 0.22s var(--ease-out-quart) both;
   }
+  @keyframes a-typing {
+    0%,
+    70%,
+    100% {
+      opacity: 0.25;
+      transform: translateY(0);
+    }
+    35% {
+      opacity: 0.9;
+      transform: translateY(-2px);
+    }
+  }
+  .animate-typing {
+    animation: a-typing 1.2s var(--ease-out-quart) infinite;
+  }
 
   .skeleton {
     background: linear-gradient(

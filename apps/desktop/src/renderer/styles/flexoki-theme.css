@@ -41,6 +41,7 @@
   --armin-relearning-bg: var(--flexoki-orange-50);
 
   --armin-shadow-overlay: 0 12px 40px -8px rgb(16 15 15 / 0.18);
+  --armin-shadow-sidebar: -18px 0 48px -20px rgb(16 15 15 / 0.16);
 
   --armin-grid-h: color-mix(in srgb, var(--flexoki-150) 42%, transparent);
   --armin-grid-v: color-mix(in srgb, var(--flexoki-100) 22%, transparent);
@@ -84,6 +85,7 @@
   --armin-relearning-bg: var(--flexoki-orange-950);
 
   --armin-shadow-overlay: 0 12px 40px -8px rgb(0 0 0 / 0.45);
+  --armin-shadow-sidebar: -18px 0 48px -20px rgb(0 0 0 / 0.55);
 
   --armin-grid-h: color-mix(in srgb, var(--flexoki-800) 38%, transparent);
   --armin-grid-v: color-mix(in srgb, var(--flexoki-900) 20%, transparent);

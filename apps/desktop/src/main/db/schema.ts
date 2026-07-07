@@ -242,6 +242,36 @@ export const deckSettings = sqliteTable("deck_settings", {
     .default(sql`(unixepoch() * 1000)`),
 });
 
+export const assistantConversations = sqliteTable(
+  "assistant_conversations",
+  {
+    id: uuid(),
+    providerId: text("provider_id").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("assistant_conversations_updated_idx").on(t.updatedAt)],
+);
+
+export const assistantMessages = sqliteTable(
+  "assistant_messages",
+  {
+    id: uuid(),
+    conversationId: text("conversation_id")
+      .notNull()
+      .references(() => assistantConversations.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    content: text("content").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("assistant_messages_conversation_created_idx").on(
+      t.conversationId,
+      t.createdAt,
+    ),
+  ],
+);
+
 export type Deck = typeof decks.$inferSelect;
 export type NewDeck = typeof decks.$inferInsert;
 export type Flashcard = typeof flashcards.$inferSelect;
@@ -252,3 +282,5 @@ export type ReviewLog = typeof reviewLogs.$inferSelect;
 export type Settings = typeof settings.$inferSelect;
 export type DeckSettings = typeof deckSettings.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
+export type AssistantConversationRow = typeof assistantConversations.$inferSelect;
+export type AssistantMessageRow = typeof assistantMessages.$inferSelect;
